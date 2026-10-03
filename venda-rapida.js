@@ -95,17 +95,22 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   }
 
   /**
-   * A caixa de confirmacao da venda, se o jogo mostrar alguma.
+   * A caixa de confirmacao da venda.
    *
-   * Nao deu para ver uma de perto: ela so' apareceria depois de uma venda de verdade, e nenhum
-   * pokemon foi vendido para descobrir. Por isso o reconhecimento e' pelo que a caixa *e'* — uma
-   * janela sobreposta que nao e' a loja, fala de venda e tem botao.
+   * Ela e' um `pokeidle-dialog-overlay`, e nao o `pokeidle-panel-overlay` das janelas do jogo, que
+   * era o que se procurava aqui no escuro — este codigo foi escrito sem nunca ter visto uma caixa
+   * de perto. Resultado: a extensao clicava em vender, nao reconhecia a caixa que abria na frente
+   * dela, e ficava esperando uma lista que nunca encolhia.
+   *
+   * Agora e' a caixa de verdade: "Confirmar venda", com os botoes Vender e Cancelar.
    */
+  const DIALOGO = '.pokeidle-dialog-overlay';
   function confirmacaoNaTela() {
-    for (const sobre of document.querySelectorAll(SOBREPOSTO)) {
-      if (sobre.querySelector(LOJA)) continue;
-      const texto = (sobre.innerText || '').toLowerCase();
-      if (/vend|confirm/.test(texto) && sobre.querySelector('button')) return sobre;
+    for (const sobre of document.querySelectorAll(DIALOGO)) {
+      if (sobre.getBoundingClientRect().width === 0) continue;
+      const textos = [...sobre.querySelectorAll('button')].map((b) => (b.textContent || '').trim());
+      if (textos.some((t) => /^(vender|confirmar|sim)$/i.test(t)) && textos.includes('Cancelar'))
+        return sobre;
     }
     return null;
   }
@@ -971,6 +976,10 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
    * Com um unico atalho nunca se sabe em que estado o painel esta' sem olhar — e quem aperta duas
    * vezes volta ao comeco. Alt+D esconde, Alt+F mostra, e apertar o mesmo de novo nao desfaz nada.
    */
+  /** Esconder tem de atravessar o F5: e' uma escolha da pessoa, nao um estado de tela. */
+  const mostrarPainel = (sim) => {
+    painel.style.display = sim ? '' : 'none';
+  };
   addEventListener('keydown', (evento) => {
     if (!evento.altKey) return;
     const tecla = evento.key.toLowerCase();
@@ -978,8 +987,14 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     // O Chrome usa Alt+D para a barra de endereco e Alt+F para o menu; dentro do LionMultInstance
     // nao ha' nem um nem outro. Pedir para o navegador nao agir e' o que da' para fazer daqui.
     evento.preventDefault();
-    painel.style.display = tecla === 'd' ? 'none' : '';
+    mostrarPainel(tecla === 'f');
+    globalThis.PPX?.anotar?.('venda-rapida', tecla === 'f');
   });
+  // Dentro do pacote quem manda e' o menu; sozinha, a extensao abre a vista como sempre abriu.
+  if (globalThis.PPX) {
+    globalThis.PPX.controlar?.('venda-rapida', mostrarPainel);
+    mostrarPainel(globalThis.PPX.visivel?.('venda-rapida') !== false);
+  }
 
   desenhar();
 });

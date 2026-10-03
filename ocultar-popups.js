@@ -41,6 +41,14 @@ PPX.modulo({ id: 'ocultar-popups', nome: 'Ocultar popups', atalhos: 'Alt+B escon
   };
   const aplicar = (ligado) => document.documentElement.classList.toggle(CLASSE, ligado);
   aplicar(ler());
+  // No pacote, o menu precisa saber em que estado isto esta' — e poder mudar. A chave continua
+  // sendo a daqui: ela existe ha' versoes e e' a mesma que os atalhos gravam.
+  globalThis.PPX?.anotar?.('ocultar-popups', ler());
+  globalThis.PPX?.controlar?.('ocultar-popups', (ocultar) => {
+    aplicar(ocultar);
+    gravar(ocultar);
+    if (ocultar && ESCONDER_ITENS) varrer();
+  });
 
   const combinacao = (atalho) => {
     const partes = atalho.split('+').map((p) => p.trim().toLowerCase());
@@ -86,6 +94,7 @@ PPX.modulo({ id: 'ocultar-popups', nome: 'Ocultar popups', atalhos: 'Alt+B escon
       e.stopImmediatePropagation();
       aplicar(esconder);
       gravar(esconder);
+      globalThis.PPX?.anotar?.('ocultar-popups', esconder);
       if (esconder && ESCONDER_ITENS) varrer();
       avisar(
         esconder ? `Popups ocultos (${ATALHO_ESCONDER})` : `Popups visíveis (${ATALHO_MOSTRAR})`,

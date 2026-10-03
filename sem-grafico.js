@@ -44,16 +44,44 @@ PPX.modulo({ id: 'sem-grafico', nome: 'Sem gráfico', atalhos: 'Alt+G desliga ·
       if (tecla !== 'g' && tecla !== 'h') return;
       e.preventDefault();
       e.stopPropagation();
-      ativo = tecla === 'g';
-      try {
-        localStorage.setItem(CHAVE, ativo ? '1' : '0');
-      } catch (err) {
-        /* janela sem armazenamento: vale so para esta sessao */
-      }
-      const sp = mapa();
-      if (sp) sp.visible = !ativo;
+      ligar(tecla === 'g');
       aviso(ativo ? 'Grafico do mapa desligado (Alt+G)' : 'Grafico do mapa ligado (Alt+H)');
     },
     true,
+  );
+
+  /**
+   * O menu do pacote mora no mundo isolado da extensao e nao alcanca este codigo por chamada de
+   * funcao. O que os dois lados partilham e' o DOM: o menu manda um evento, e este responde com
+   * outro, dizendo em que estado ficou.
+   */
+  function ligar(sim) {
+    ativo = sim;
+    try {
+      localStorage.setItem(CHAVE, ativo ? '1' : '0');
+    } catch (err) {
+      /* janela sem armazenamento: vale so para esta sessao */
+    }
+    const sp = mapa();
+    if (sp) sp.visible = !ativo;
+    document.dispatchEvent(
+      new CustomEvent('ppx-estado', {
+        detail: JSON.stringify({ id: 'sem-grafico', visivel: ativo }),
+      }),
+    );
+  }
+
+  document.addEventListener('ppx-visivel', (e) => {
+    try {
+      const pedido = JSON.parse(e.detail);
+      if (pedido.id === 'sem-grafico') ligar(pedido.mostrar);
+    } catch (err) {
+      /* recado malformado: nao e' motivo para derrubar a ferramenta */
+    }
+  });
+
+  // Conta ao menu, na carga, em que estado a chave desta ferramenta ja' estava.
+  document.dispatchEvent(
+    new CustomEvent('ppx-estado', { detail: JSON.stringify({ id: 'sem-grafico', visivel: ativo }) }),
   );
 });

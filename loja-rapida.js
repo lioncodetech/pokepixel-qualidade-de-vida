@@ -1344,16 +1344,27 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
    * vezes volta ao comeco. Alt+C esconde, Alt+V mostra — teclas vizinhas, como nas outras
    * extensoes —, e apertar o mesmo de novo nao desfaz nada.
    */
+  /** Esconder tem de atravessar o F5: e' uma escolha da pessoa, nao um estado de tela. */
+  const mostrarPainel = (sim) => {
+    painel.style.display = sim ? '' : 'none';
+  };
   addEventListener('keydown', (evento) => {
     if (!evento.altKey || evento.ctrlKey) return;
     if (evento.code === 'KeyC') {
       evento.preventDefault();
-      painel.style.display = 'none';
+      mostrarPainel(false);
+      globalThis.PPX?.anotar?.('loja-rapida', false);
     } else if (evento.code === 'KeyV') {
       evento.preventDefault();
-      painel.style.display = '';
+      mostrarPainel(true);
+      globalThis.PPX?.anotar?.('loja-rapida', true);
     }
   });
+  // Dentro do pacote quem manda e' o menu; sozinha, a extensao abre a vista como sempre abriu.
+  if (globalThis.PPX) {
+    globalThis.PPX.controlar?.('loja-rapida', mostrarPainel);
+    mostrarPainel(globalThis.PPX.visivel?.('loja-rapida') !== false);
+  }
 
   // A loja pode abrir por fora daqui: observar o DOM mantem o catalogo em dia sozinho.
   new MutationObserver(() => {

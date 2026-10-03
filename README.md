@@ -17,9 +17,30 @@ Cada uma é a mesma de sempre, com as mesmas telas e as mesmas configurações �
 já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
 quantidades da loja, posições dos painéis, usuário e senha atravessam a troca sem se perder.
 
-## Ligar e desligar
+## Os dois comandos de cada linha
 
-O interruptor vale **para esta janela**, como antes valia escolher quais extensões carregar nela.
+Cada ferramenta tem **dois** comandos no menu, e eles não são a mesma coisa:
+
+- **O botão do meio** mostra e esconde a janela daquela ferramenta (`à vista` / `oculta`). Nas duas
+  que não têm janela — ocultar popups e sem gráfico — ele liga e desliga o efeito delas
+  (`ligado` / `desligado`), que é tudo o que elas fazem.
+- **A chave verde** ativa ou desativa a ferramenta inteira nesta janela. Desativada, ela nem carrega.
+
+O que você escolher no botão do meio **atravessa o F5**: a janela que você mandou sumir continua
+sumida na próxima carga, e os atalhos de cada ferramenta (Alt+C, Alt+D…) gravam do mesmo jeito.
+
+Quando uma ferramenta ainda não se anunciou — porque está desativada, ou porque não carregou — o
+botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que não aconteceria.
+
+## Mover o menu
+
+Arraste pelo **⠿**. Minimizado, o botão `PokePixel` também se arrasta: puxe direto por ele. Andou
+mais que alguns pixels, é arrasto e o menu não abre; foi um toque parado, o menu abre. Os dois
+dividem o mesmo canto, então mover um leva o outro.
+
+## Ativar e desativar
+
+A chave verde vale **para esta janela**, como antes valia escolher quais extensões carregar nela.
 
 - **Ligar** acontece na hora.
 - **Desligar** vale a partir da próxima carga da página, e o menu oferece um `recarregar agora`.
@@ -28,6 +49,13 @@ O interruptor vale **para esta janela**, como antes valia escolher quais extens�
   aí que nasceriam os bugs. Recarregar faz isso de graça e sem engano.
 
 Quem nunca mexeu no menu fica com as cinco ligadas.
+
+## A caixa de confirmação
+
+Quando você deixa marcado "Confirmar sozinho", a extensão clica em **Vender** na caixa que o jogo
+abre. Até a venda rápida 1.2.2 ela não clicava: procurava a caixa no lugar errado — este código foi
+escrito sem nunca ter visto uma de perto —, não a reconhecia e ficava esperando uma lista que
+nunca encolhia. Agora é a caixa de verdade: "Confirmar venda", com os botões Vender e Cancelar.
 
 ## Uma quebrada não leva as outras
 

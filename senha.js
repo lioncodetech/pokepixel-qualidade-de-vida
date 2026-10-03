@@ -302,14 +302,24 @@ PPX.modulo({ id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' }, 
     if (pos && typeof pos.x === 'number') salva = pos;
   });
 
+  // Escondida pelo menu, a caixa nao volta sozinha quando a tela de login aparece: a escolha da
+  // pessoa vale mais do que a regra de so' aparecer no login.
+  let permitida = globalThis.PPX?.visivel?.('senha') !== false;
+  globalThis.PPX?.controlar?.('senha', (sim) => {
+    permitida = sim;
+    visivel = false;
+    conferir();
+  });
+
   // O par de botoes so aparece onde ha senha para digitar, para nao atrapalhar o jogo.
   let visivel = false;
-  setInterval(() => {
-    const deveAparecer = !!campoSenha();
+  function conferir() {
+    const deveAparecer = permitida && !!campoSenha();
     if (deveAparecer === visivel) return;
     visivel = deveAparecer;
     caixa.style.display = deveAparecer ? 'flex' : 'none';
     if (deveAparecer && salva) posicionar(salva.x, salva.y);
     if (!deveAparecer) fecharCampos();
-  }, 1000);
+  }
+  setInterval(conferir, 1000);
 });

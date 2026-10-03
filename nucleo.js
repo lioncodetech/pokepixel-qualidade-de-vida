@@ -13,6 +13,7 @@
   const CHAVE_LIGADOS = 'lioncode:pokepixel:modulos';
   const CHAVE_POS = 'lioncode:pokepixel:menu-pos';
   const CHAVE_ABERTO = 'lioncode:pokepixel:menu-aberto';
+  const CHAVE_VISIVEIS = 'lioncode:pokepixel:visiveis';
 
   const ler = (chave, padrao) => {
     try {
@@ -39,8 +40,23 @@
    * sem ela aqui, a unica ferramenta que nao daria para desligar seria justamente a que mais pesa.
    */
   const CATALOGO = [
-    { id: 'ocultar-popups', nome: 'Ocultar popups', atalhos: 'Alt+B esconde · Alt+N mostra' },
-    { id: 'sem-grafico', nome: 'Sem gráfico', atalhos: 'Alt+G desliga · Alt+H liga', externo: true },
+    // `efeito` troca o verbo do botao do meio: numa janela ele mostra e esconde, nestas duas ele
+    // liga e desliga o que a ferramenta faz com a pagina, que e' tudo o que elas tem.
+    {
+      id: 'ocultar-popups',
+      nome: 'Ocultar popups',
+      atalhos: 'Alt+B esconde · Alt+N mostra',
+      efeito: true,
+      proprio: true,
+    },
+    {
+      id: 'sem-grafico',
+      nome: 'Sem gráfico',
+      atalhos: 'Alt+G desliga · Alt+H liga',
+      efeito: true,
+      externo: true,
+      proprio: true,
+    },
     { id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' },
     { id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde · Alt+V mostra' },
     { id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde · Alt+F mostra' },
@@ -54,7 +70,52 @@
   const escolhas = () => ler(CHAVE_LIGADOS, {});
   const ligado = (id) => escolhas()[id] !== false;
 
+  /**
+   * Mostrar e esconder atravessa o F5.
+   *
+   * Uma janela que a pessoa mandou sumir tem de continuar sumida na proxima carga: e' o que ela
+   * pediu, e nao um estado de tela. Cada ferramenta le isto ao montar e obedece sem piscar.
+   */
+  const visiveis = () => ler(CHAVE_VISIVEIS, {});
+  /**
+   * Duas ferramentas ja' guardavam o seu estado antes deste menu existir, cada uma na sua chave, e
+   * os atalhos delas continuam gravando la'. Para o menu nao virar uma segunda verdade que
+   * discorda da primeira, dessas ele so' reflete o que elas informam (`proprio`).
+   */
+  const estaVisivel = (id) => {
+    const m = modulos.find((x) => x.id === id);
+    if (m && m.proprio) return m.estado === true;
+    return visiveis()[id] !== false;
+  };
+  /** Enquanto a ferramenta nao se anuncia, o menu nao tem o que dizer sobre ela. */
+  const sabido = (m) => !m.proprio || m.estado !== undefined;
+
   globalThis.PPX = {
+    /** A ferramenta entrega aqui como se mostra e se esconde; o menu passa a comandar isso. */
+    controlar(id, aplicar) {
+      const m = modulos.find((x) => x.id === id);
+      if (!m) return;
+      m.aplicar = aplicar;
+      desenhar();
+    },
+
+    /** O que ficou gravado da ultima vez, para a ferramenta ja' montar do jeito certo. */
+    visivel: estaVisivel,
+
+    /** A ferramenta avisa que mudou sozinha — por atalho, ou porque leu a propria chave. */
+    anotar(id, valor) {
+      const m = modulos.find((x) => x.id === id);
+      if (!m) return;
+      m.estado = valor !== false;
+      // O atalho da ferramenta vale tanto quanto o botao do menu: tambem tem de atravessar o F5.
+      if (!m.proprio) {
+        const atual = visiveis();
+        atual[id] = m.estado;
+        gravar(CHAVE_VISIVEIS, atual);
+      }
+      if (montado) desenhar();
+    },
+
     /**
      * Registra uma ferramenta. `iniciar` so' roda se ela estiver ligada nesta janela, e roda uma
      * vez so': os modulos foram escritos para montar na carga da pagina, nao para ir e voltar.
@@ -107,7 +168,12 @@
       padding: 6px 8px; border-bottom: 1px solid #3a4152; user-select: none;
     }
     .alca { color: #8b93a5; font-size: 15px; cursor: move; touch-action: none; }
-    .titulo { flex: 1; color: #8b93a5; }
+    .titulo { flex: 1; color: #e6e9ef; line-height: 1.1; }
+    .titulo small { display: block; color: #6f7789; font-size: 11px; }
+    .legenda {
+      padding: 4px 10px 0; color: #6f7789; font-size: 11px; line-height: 1.35;
+      border-top: 1px solid #2a3243; margin-top: 2px;
+    }
     .fechar {
       background: none; border: 0; color: #8b93a5; cursor: pointer; font: inherit;
       padding: 0 4px; border-radius: 6px;
@@ -119,6 +185,14 @@
     .nome { flex: 1; }
     .nome small { display: block; color: #6f7789; }
     .nome .erro { color: #f0a9a9; }
+    .olho {
+      flex: none; background: #2a3243; border: 1px solid #3a4152; color: #c3c9d6;
+      border-radius: 7px; padding: 2px 7px; cursor: pointer; font: inherit; font-size: 11px;
+      min-width: 62px;
+    }
+    .olho:hover:not(:disabled) { background: #333d52; color: #e6e9ef; }
+    .olho.apagado { color: #6f7789; background: #1a2030; }
+    .olho:disabled { opacity: .45; cursor: default; }
     .chave {
       flex: none; width: 34px; height: 18px; border-radius: 10px; border: 1px solid #3a4152;
       background: #11151d; cursor: pointer; padding: 0; position: relative;
@@ -147,10 +221,14 @@
   menu.innerHTML = `
     <div class="cabeca">
       <span class="alca" title="Arraste daqui para mover">⠿</span>
-      <span class="titulo">PokePixel</span>
+      <span class="titulo">PokePixel<small>qualidade de vida</small></span>
       <button class="fechar" title="Fechar o menu (Alt+Q)">—</button>
     </div>
     <ul></ul>
+    <div class="legenda">
+      O botão do meio mostra, esconde ou liga o efeito — e fica assim no próximo F5.
+      A chave verde ativa ou desativa a ferramenta inteira nesta janela.
+    </div>
     <div class="rodape"></div>`;
   const lista = menu.querySelector('ul');
   const rodape = menu.querySelector('.rodape');
@@ -170,7 +248,6 @@
     pintar();
     gravar(CHAVE_ABERTO, sim);
   };
-  aba.onclick = () => abrir(true);
   menu.querySelector('.fechar').onclick = () => abrir(false);
 
   function desenhar() {
@@ -184,16 +261,74 @@
       sub.textContent = m.erro ? `erro: ${m.erro}` : m.atalhos || '';
       if (m.erro) sub.className = 'erro';
       nome.appendChild(sub);
+
+      // Dois comandos por ferramenta, e eles nao sao a mesma coisa: o do meio mostra e esconde
+      // (ou liga e desliga o efeito) sem tirar a ferramenta do ar; a chave desinstala da janela.
+      const olho = document.createElement('button');
+      olho.className = 'olho';
+      const vendo = estaVisivel(m.id);
+      const conhecido = sabido(m);
+      olho.textContent = !conhecido
+        ? '—'
+        : m.efeito
+          ? vendo
+            ? 'ligado'
+            : 'desligado'
+          : vendo
+            ? 'à vista'
+            : 'oculta';
+      olho.classList.toggle('apagado', !vendo);
+      // Sem a ferramenta no ar nao ha' o que mostrar nem o que esconder: o botao fica apagado em
+      // vez de prometer uma acao que nao aconteceria.
+      olho.disabled = !ligado(m.id) || !!m.erro || !conhecido || (!m.aplicar && !m.externo);
+      olho.title = m.efeito
+        ? 'Liga e desliga o efeito nesta janela'
+        : 'Mostra e esconde a janela desta ferramenta';
+      olho.onclick = () => alternarVisivel(m);
+
       const chave = document.createElement('button');
       chave.className = 'chave';
       chave.setAttribute('role', 'switch');
       chave.setAttribute('aria-checked', String(ligado(m.id)));
-      chave.title = ligado(m.id) ? 'Desligar nesta janela' : 'Ligar nesta janela';
+      chave.title = ligado(m.id)
+        ? 'Desativar a ferramenta nesta janela'
+        : 'Ativar a ferramenta nesta janela';
       chave.appendChild(document.createElement('span'));
       chave.onclick = () => alternar(m);
-      li.append(nome, chave);
+
+      li.append(nome, olho, chave);
       lista.appendChild(li);
     }
+  }
+
+  /**
+   * Mostra ou esconde, e grava.
+   *
+   * A ferramenta que roda no mundo da pagina nao e' alcancavel daqui por chamada de funcao: o
+   * recado vai por um evento no DOM, que os dois mundos partilham.
+   */
+  function alternarVisivel(m) {
+    const mostrar = !estaVisivel(m.id);
+    if (m.proprio) {
+      // Quem guarda e' a propria ferramenta, na chave dela; aqui so' se manda aplicar.
+      m.estado = mostrar;
+    } else {
+      const atual = visiveis();
+      atual[m.id] = mostrar;
+      gravar(CHAVE_VISIVEIS, atual);
+    }
+    if (m.aplicar) {
+      try {
+        m.aplicar(mostrar);
+      } catch (e) {
+        m.erro = String((e && e.message) || e).slice(0, 80);
+      }
+    } else if (m.externo) {
+      document.dispatchEvent(
+        new CustomEvent('ppx-visivel', { detail: JSON.stringify({ id: m.id, mostrar }) }),
+      );
+    }
+    desenhar();
   }
 
   /**
@@ -233,35 +368,58 @@
     dentro(aba, pos.x, pos.y);
   };
 
-  const alca = menu.querySelector('.alca');
-  let dx = 0;
-  let dy = 0;
-  let arrastando = false;
-  alca.addEventListener('pointerdown', (e) => {
-    const r = menu.getBoundingClientRect();
-    dx = e.clientX - r.left;
-    dy = e.clientY - r.top;
-    arrastando = true;
-    alca.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  alca.addEventListener('pointermove', (e) => {
-    if (arrastando) dentro(menu, e.clientX - dx, e.clientY - dy);
-  });
-  const soltar = (e) => {
-    if (!arrastando) return;
-    arrastando = false;
-    try {
-      alca.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ponteiro ja solto */
-    }
-    pos = { x: parseFloat(menu.style.left), y: parseFloat(menu.style.top) };
-    gravar(CHAVE_POS, pos);
-    colocar();
-  };
-  alca.addEventListener('pointerup', soltar);
-  alca.addEventListener('pointercancel', soltar);
+  /**
+   * Arrastar, tanto pelo ⠿ do menu aberto quanto pelo proprio botao quando ele esta' minimizado.
+   *
+   * No botao nao da' para ter uma alca separada — ele e' do tamanho do texto. Entao ele e' as duas
+   * coisas, e quem decide e' a distancia: andou menos de 4px, foi um clique e o menu abre; andou
+   * mais, foi arrasto e o clique nao conta.
+   */
+  function arrastavel(pegador, movido, aoClicar) {
+    let dx = 0;
+    let dy = 0;
+    let partida = null;
+    let andou = false;
+    pegador.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const r = movido.getBoundingClientRect();
+      dx = e.clientX - r.left;
+      dy = e.clientY - r.top;
+      partida = { x: e.clientX, y: e.clientY };
+      andou = false;
+      pegador.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    pegador.addEventListener('pointermove', (e) => {
+      if (!partida) return;
+      if (!andou && Math.abs(e.clientX - partida.x) + Math.abs(e.clientY - partida.y) < 4) return;
+      andou = true;
+      dentro(movido, e.clientX - dx, e.clientY - dy);
+    });
+    const soltar = (e) => {
+      if (!partida) return;
+      partida = null;
+      try {
+        pegador.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ponteiro ja solto */
+      }
+      if (!andou) {
+        if (aoClicar) aoClicar();
+        return;
+      }
+      pos = { x: parseFloat(movido.style.left), y: parseFloat(movido.style.top) };
+      gravar(CHAVE_POS, pos);
+      colocar();
+    };
+    pegador.addEventListener('pointerup', soltar);
+    pegador.addEventListener('pointercancel', soltar);
+  }
+
+  arrastavel(menu.querySelector('.alca'), menu);
+  // O menu e o botao partilham o mesmo canto guardado: arrastar um leva o outro junto, senao
+  // minimizar faria a janelinha reaparecer longe de onde o menu estava.
+  arrastavel(aba, aba, () => abrir(true));
 
   // Rearranjar as views muda o tamanho da janela; sem isto o menu ficaria pendurado para fora.
   let ajuste = 0;
@@ -315,6 +473,17 @@
     clearTimeout(relogio);
     relogio = setTimeout(montar, 200);
   }
+
+  // O mundo da pagina nao alcanca este `globalThis`, so' o DOM: e' por ele que a ferramenta de la'
+  // conta em que estado esta'.
+  document.addEventListener('ppx-estado', (e) => {
+    try {
+      const { id, visivel } = JSON.parse(e.detail);
+      globalThis.PPX.anotar(id, visivel);
+    } catch {
+      /* recado malformado: nao e' motivo para derrubar o menu */
+    }
+  });
 
   // Sem nenhuma ferramenta registrada — todas desligadas, ou todas com erro — o menu ainda precisa
   // aparecer: e' por ele que se liga qualquer uma de volta.
