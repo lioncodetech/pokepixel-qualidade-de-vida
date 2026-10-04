@@ -128,8 +128,14 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
     if (confirmacaoNaTela()) return;
     for (const banner of document.querySelectorAll('.pokeidle-promo-banner__close')) banner.click();
     for (const sobre of document.querySelectorAll(SOBREPOSTO)) {
+      // Janela ja' fechada continua no DOM, invisivel, com o botao de fechar dentro. Clicar nesse
+      // botao de uma janela que ja' nao esta' na tela deixa o jogo convencido de que ha' uma janela
+      // aberta, e a partir dai' ele recusa qualquer outra com "Nao foi possivel abrir esta janela
+      // agora" ate' um F5. Medido no jogo: fechar o inventario e clicar no X dele de novo basta.
+      if (!sobre.getBoundingClientRect().width) continue;
       if (sobre.querySelector(`${LOJA}, ${INVENTARIO}`)) continue;
-      sobre.querySelector('.pokeidle-panel__close')?.click();
+      const fechar = sobre.querySelector('.pokeidle-panel__close');
+      if (fechar && fechar.getBoundingClientRect().width) fechar.click();
     }
   }
 
@@ -159,6 +165,24 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
   }
 
   /**
+   * A aba, quando ela existir.
+   *
+   * A janela da loja entra no DOM antes do conteudo dela: medido no jogo, a janela aparece em
+   * ~25 ms e as abas so' em ~310 ms. Procurar a aba uma unica vez, no instante em que a janela
+   * existe, nao achava nada - e a compra parava com "a loja nao esta na aba de comprar itens",
+   * com a loja aberta na frente, na aba errada. Por isso espera em vez de desistir na primeira.
+   */
+  async function aguardarAba(janela, rotulo, prazo = 5000) {
+    const fim = Date.now() + prazo;
+    for (;;) {
+      const aba = alvoComTexto(janela, rotulo);
+      if (aba) return aba;
+      if (Date.now() >= fim) return null;
+      await espera(100);
+    }
+  }
+
+  /**
    * Poe a loja na aba onde se compra.
    *
    * A loja do Mark tem abas a esquerda — comprar itens, vender itens, vender pokemon, recomprar — e
@@ -167,7 +191,7 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
    */
   async function prepararLoja(janela) {
     if (cartoes(janela).length) return true;
-    const aba = alvoComTexto(janela, 'Comprar itens');
+    const aba = await aguardarAba(janela, 'Comprar itens');
     if (!aba) return false;
     aba.click();
     const fim = Date.now() + 3000;
@@ -274,6 +298,31 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
       );
   }
 
+  /**
+   * Poe a mochila na aba "Todos" antes de ler.
+   *
+   * O jogo reabre o inventario na ultima categoria usada, e cada categoria mostra so' os itens
+   * dela: lida em "Pokebolas", a mochila parece nao ter pocao nenhuma, e a compra acha que falta
+   * tudo. Com a leitura inteira valendo zero para o que nao aparece, ler na aba errada seria
+   * comprar o alvo cheio de meia loja.
+   */
+  async function abaTodos(janela, prazo = 4000) {
+    const fim = Date.now() + prazo;
+    for (;;) {
+      const abas = [...janela.querySelectorAll('.inventory-category-tab')];
+      const todos = abas.find((t) => (t.textContent || '').trim() === 'Todos');
+      if (todos) {
+        if (todos.classList.contains('is-active')) return true;
+        todos.click();
+        await espera(400);
+        if (todos.classList.contains('is-active')) return true;
+      }
+      // Sem as abas no DOM ainda: a janela entra antes do conteudo, como a da loja.
+      if (Date.now() >= fim) return !abas.length;
+      await espera(100);
+    }
+  }
+
   async function atualizarEstoque(avisar) {
     fecharPopups();
     const jaAberto = Boolean(inventarioAberto());
@@ -289,6 +338,15 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
         return;
       }
       await espera(400);
+    }
+    const janela = inventarioAberto();
+    if (janela && !(await abaTodos(janela))) {
+      avisar('a mochila nao esta na aba Todos');
+      if (!jaAberto) {
+        fecharInventario();
+        await espera(500);
+      }
+      return;
     }
     const certo = anotarEstoque();
     if (!jaAberto) {
@@ -453,9 +511,22 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
    * Devolve `null` quando nao ha leitura da mochila: sem saber quanto se tem, "ate' ter X" nao e'
    * uma conta que se possa fazer, e chutar compraria demais.
    */
+  /**
+   * Quanto se tem de um item, ou `undefined` quando nao da' para saber.
+   *
+   * A mochila so' lista o que existe: item com zero nao aparece nela. Tratar "nao apareceu" como
+   * "nao sei" fazia justamente os itens acabados — os que mais precisam de compra — serem os
+   * unicos que nunca eram comprados. Sem leitura nenhuma, porem, continua sendo "nao sei": ai
+   * "nao apareceu" valeria para tudo, e o alvo inteiro seria comprado por engano.
+   */
+  function quantoTenho(itens, nome) {
+    if (!itens || !Object.keys(itens).length) return undefined;
+    return itens[nome] ?? 0;
+  }
+
   function faltaPara(nome, alvo, itens) {
     if (!alvo) return 0;
-    const tenho = itens?.[nome];
+    const tenho = quantoTenho(itens, nome);
     if (tenho === undefined) return null;
     const margem = (Math.random() * 2 - 1) * (variacaoPct() / 100);
     return Math.max(0, Math.round(alvo * (1 + margem)) - tenho);
@@ -486,8 +557,10 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
       return;
     }
     // So' agora o relogio comeca: abrir a loja nao entra na conta dos 5 a 20 segundos.
-    await comprarNaLoja(janela, nome, falta, avisar);
+    const comprou = await comprarNaLoja(janela, nome, falta, avisar);
     if (abriEu) fecharLoja(janela);
+    // Releitura pelo mesmo motivo do lote: o numero da tela tem de ser o de depois da compra.
+    if (comprou) await atualizarEstoque(avisar);
   }
 
   let parar = false;
@@ -512,9 +585,11 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
       return;
     }
     const itens = ler(CHAVE_ESTOQUE, {}).itens;
+    // `filter(quantidade)` tambem descartava os `null`, entao o aviso de "sem leitura" nunca
+    // chegava a aparecer: o item sumia do lote sem dizer nada. Zero sai aqui, `null` sobrevive.
     const pedido = comAlvo
       .map((item) => ({ ...item, quantidade: faltaPara(item.nome, item.alvo, itens) }))
-      .filter((item) => item.quantidade);
+      .filter((item) => item.quantidade !== 0);
     const semLeitura = pedido.filter((item) => item.quantidade === null).map((item) => item.nome);
     const aComprar = pedido.filter((item) => item.quantidade !== null);
     if (!aComprar.length) {
@@ -550,6 +625,9 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
         ? `parado em ${feitos}/${aComprar.length}${sobra}`
         : `pronto: ${aComprar.length} itens${sobra}`,
     );
+    // A mochila guardada e' a de antes da compra: sem reler, o painel continua mostrando o que
+    // havia na abertura e a proxima rodada decide em cima de um numero que ja' envelheceu.
+    if (feitos) await atualizarEstoque(avisar);
   }
 
   /** Guarda o catalogo para os botoes existirem mesmo com a loja fechada. */
@@ -825,7 +903,7 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
         nome.title = item.nome;
         const unidade = document.createElement('span');
         unidade.className = 'item__unidade';
-        const tenho = estoque.itens?.[item.nome];
+        const tenho = quantoTenho(estoque.itens, item.nome);
         // O rotulo saiu daqui para o cabecalho das colunas: repetir "tenho" em cada linha so'
         // roubava espaco do nome e atrapalhava comparar os numeros de cima a baixo.
         unidade.textContent = tenho === undefined ? '—' : moeda(tenho);

@@ -57,6 +57,55 @@ abre. Até a venda rápida 1.2.2 ela não clicava: procurava a caixa no lugar er
 escrito sem nunca ter visto uma de perto —, não a reconhecia e ficava esperando uma lista que
 nunca encolhia. Agora é a caixa de verdade: "Confirmar venda", com os botões Vender e Cancelar.
 
+## Vender itens
+
+A venda rápida tem um **"Vender itens também"**, desmarcado de fábrica. Ligado, depois de vender os
+pokémon ela troca para a aba "Vender itens" e usa o **"Selecionar todos" do próprio jogo** — quem
+decide o que é vendável é ele, que já deixa de fora o que está vinculado à loja. Fazer a nossa
+própria lista seria inventar uma segunda regra, que discordaria da dele no dia em que ele mudar.
+
+Entre a venda dos pokémon e a dos itens há uma pausa de **4 a 12 segundos, sorteada a cada vez**.
+São duas vendas seguidas na mesma loja, e emendar uma na outra em meio segundo não se parece com
+ninguém clicando — além de não dar tempo de a tela da primeira assentar. O contador aparece no
+painel (`itens em 7s...`) e o **Parar** vale durante a espera, não só depois dela.
+
+Fica desmarcado por padrão porque "todos" é mesmo todos: na conta onde isto foi medido, eram **110
+tipos por 3,4 milhões** num clique. Ligar isso é uma decisão, não um padrão que se herda sem querer.
+
+## Esperar o que o jogo ainda não desenhou
+
+Três correções da 1.1.1 são a mesma lição, medida no jogo:
+
+- A janela da loja entra no DOM em ~25 ms, mas as abas só em ~310 ms. Procurar a aba uma vez, assim
+  que a janela existe, não achava nada — e a compra parava com "a loja nao esta na aba de comprar
+  itens", com a loja aberta na frente.
+- Marcar a lista inteira de itens não termina num tempo fixo. O sinal de que acabou é o botão do
+  jogo virar "Vender N tipo(s) por X" — é ele que a extensão espera, não um relógio.
+- A mochila reabre na última categoria usada, e cada categoria esconde o resto. Lida em
+  "Pokébolas", ela parece não ter poção nenhuma. Agora a extensão põe a aba **Todos** antes de ler,
+  e não lê se não conseguir.
+
+## O que não aparece na mochila é zero
+
+A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como
+"não sei quanto tenho" e pulava o item — então justamente o que acabou, que é o que mais precisa de
+reposição, era o único que nunca era comprado. Agora, **com a mochila lida**, o que não aparece vale
+zero. Sem leitura nenhuma continua sendo "não sei": aí a ausência valeria para tudo, e o alvo
+inteiro seria comprado por engano.
+
+Depois de comprar, a mochila é lida de novo. Sem isso o painel seguiria mostrando os números de
+antes da compra, e a rodada seguinte decidiria em cima deles.
+
+## Janela já fechada não se fecha de novo
+
+O jogo deixa a janela fechada no DOM, invisível, com o botão de fechar ainda dentro. Clicar nesse
+`✕` de uma janela que já saiu da tela convence o jogo de que há uma janela aberta, e a partir daí
+ele recusa qualquer outra — Caçadas, Inventário, Pacote — com *"Não foi possível abrir esta janela
+agora"*, até um F5.
+
+As duas extensões faziam isso ao limpar popups antes de agir. Agora só fecham o que está mesmo na
+tela: o painel precisa ter largura, e o `✕` também.
+
 ## Uma quebrada não leva as outras
 
 Cada ferramenta continua sendo o seu próprio arquivo, carregado pelo navegador por conta própria, e

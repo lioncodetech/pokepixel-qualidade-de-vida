@@ -1,23 +1,44 @@
 {
   "manifest_version": 3,
   "name": "PokePixel - qualidade de vida",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "As cinco ferramentas de qualidade de vida do PokePixel num pacote so, com um menu para ligar e desligar cada uma. Alt+Q abre o menu.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://pokepixel.nietore.com/*", "https://poke.idleworld.online/*"],
-      "js": ["nucleo.js", "ocultar-popups.js"],
+      "matches": [
+        "https://pokepixel.nietore.com/*",
+        "https://poke.idleworld.online/*"
+      ],
+      "js": [
+        "nucleo.js",
+        "ocultar-popups.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://pokepixel.nietore.com/*", "https://poke.idleworld.online/*"],
-      "js": ["senha.js", "loja-rapida.js", "venda-rapida.js"],
+      "matches": [
+        "https://pokepixel.nietore.com/*",
+        "https://poke.idleworld.online/*"
+      ],
+      "js": [
+        "senha.js",
+        "loja-rapida.js",
+        "venda-rapida.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://pokepixel.nietore.com/*", "https://poke.idleworld.online/*"],
-      "js": ["nucleo-main.js", "sem-grafico.js"],
+      "matches": [
+        "https://pokepixel.nietore.com/*",
+        "https://poke.idleworld.online/*"
+      ],
+      "js": [
+        "nucleo-main.js",
+        "sem-grafico.js"
+      ],
       "run_at": "document_idle",
       "world": "MAIN"
     }

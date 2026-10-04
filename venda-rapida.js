@@ -15,6 +15,7 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   const CHAVE_TETO = 'lioncode:venda-rapida:teto';
   const CHAVE_LOTE = 'lioncode:venda-rapida:lote';
   const CHAVE_CONFIRMA = 'lioncode:venda-rapida:confirmar';
+  const CHAVE_ITENS = 'lioncode:venda-rapida:itens';
   const CHAVE_AUTO = 'lioncode:venda-rapida:auto';
   const CHAVE_POS = 'lioncode:venda-rapida:posicao';
   const CHAVE_TAM = 'lioncode:venda-rapida:tamanho';
@@ -39,6 +40,19 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   // mesmos na aba de vender itens, entao nao distinguem uma aba da outra.
   const FILTROS_RARIDADE = '.npc-shop__quality-filters';
   const BOTAO_VENDER = '.npc-shop__sell-button';
+  // A aba "Vender itens" usa `sell-row`; a de pokemon usa `pokemon-row`. E' o que distingue as duas
+  // depois de abertas, ja' que o rodape e o "Selecionar todos" sao iguais nas duas.
+  /**
+   * A pausa entre acabar de vender pokemon e comecar a vender itens, sorteada a cada vez.
+   *
+   * Sao duas vendas seguidas na mesma loja: emendar uma na outra em meio segundo nao se parece com
+   * ninguem clicando, e ainda nao da' tempo de a tela da primeira venda assentar. Sorteado, e nao
+   * fixo, pelo mesmo motivo das outras esperas destas extensoes — um intervalo sempre igual e' tao
+   * reconhecivel quanto nenhum.
+   */
+  const PAUSA_ITENS = [4000, 12000];
+  const LINHA_ITEM = '.npc-shop__row.npc-shop__sell-row';
+  const SELECIONAR_TODOS = '.npc-shop__select-all';
   const SOBREPOSTO = '.pokeidle-panel-overlay';
   const TETO_PADRAO = 2;
   // 500 e' o maximo que a propria loja vende de uma vez: o lote nao passa disso porque o jogo nao deixa.
@@ -127,8 +141,14 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     if (confirmacaoNaTela()) return;
     for (const banner of document.querySelectorAll('.pokeidle-promo-banner__close')) banner.click();
     for (const sobre of document.querySelectorAll(SOBREPOSTO)) {
+      // Janela ja' fechada continua no DOM, invisivel, com o botao de fechar dentro. Clicar nesse
+      // botao de uma janela que ja' nao esta' na tela deixa o jogo convencido de que ha' uma janela
+      // aberta, e a partir dai' ele recusa qualquer outra com "Nao foi possivel abrir esta janela
+      // agora" ate' um F5. Medido no jogo: fechar o inventario e clicar no X dele de novo basta.
+      if (!sobre.getBoundingClientRect().width) continue;
       if (sobre.querySelector(LOJA)) continue;
-      sobre.querySelector('.pokeidle-panel__close')?.click();
+      const fechar = sobre.querySelector('.pokeidle-panel__close');
+      if (fechar && fechar.getBoundingClientRect().width) fechar.click();
     }
   }
 
@@ -167,10 +187,24 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
    */
   async function abaDeVenda(janela) {
     if (janela.querySelector(FILTROS_RARIDADE)) return true;
-    const aba = alvoComTexto(janela, 'Vender Pokémon');
+    // A janela entra no DOM antes do conteudo dela: medido no jogo, a janela aparece em ~25 ms e
+    // as abas so' em ~310 ms. Procurar a aba uma unica vez, no instante em que a janela existe,
+    // nao achava nada e a venda parava com a loja aberta na frente, na aba errada.
+    const aba = await aguardarAba(janela, 'Vender Pokémon');
     if (!aba) return false;
     aba.click();
     return Boolean(await aguardarDentro(janela, FILTROS_RARIDADE, 5000));
+  }
+
+  /** A aba, quando ela existir: a loja demora a desenhar o proprio conteudo. */
+  async function aguardarAba(janela, rotulo, prazo = 5000) {
+    const fim = Date.now() + prazo;
+    for (;;) {
+      const aba = alvoComTexto(janela, rotulo);
+      if (aba) return aba;
+      if (Date.now() >= fim) return null;
+      await espera(100);
+    }
   }
 
   const botoesDeRaridade = (janela) =>
@@ -381,9 +415,87 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       return 0;
     }
     const sairam = await venderNaLoja(janela, avisar);
+    // Os itens vao depois dos pokemon, e so' se voce ligou: e' outra aba e outra lista, entao a
+    // venda de pokemon termina inteira antes de a loja mudar de aba debaixo dela.
+    if (!parar && ler(CHAVE_ITENS, false)) {
+      const pausa = Math.round(PAUSA_ITENS[0] + Math.random() * (PAUSA_ITENS[1] - PAUSA_ITENS[0]));
+      // O `Parar` tem de valer durante a espera tambem, senao ele so' seria obedecido depois de a
+      // venda de itens ja' ter comecado — que e' justamente a que voce iria querer interromper.
+      for (let falta = pausa; falta > 0 && !parar; falta -= 500) {
+        avisar(`itens em ${Math.ceil(falta / 1000)}s...`);
+        await espera(Math.min(500, falta));
+      }
+      if (!parar) await venderItens(janela, avisar);
+    }
     if (abriEu) fecharLoja(janela);
     desenhar();
     return sairam;
+  }
+
+  /**
+   * Poe a loja na aba de vender itens, que e' outra lista, com outras linhas.
+   */
+  async function abaDeItens(janela) {
+    if (janela.querySelector(LINHA_ITEM)) return true;
+    const aba = await aguardarAba(janela, 'Vender itens');
+    if (!aba) return false;
+    aba.click();
+    return Boolean(await aguardarDentro(janela, LINHA_ITEM, 5000));
+  }
+
+  /**
+   * Vende os itens, que e' o que o "Selecionar todos" do jogo marcar.
+   *
+   * Nao escolhemos item por item de proposito: quem decide o que e' vendavel e' o jogo, e ele ja'
+   * deixa de fora o que esta' vinculado a' loja. Fazer a nossa propria lista seria inventar uma
+   * segunda regra que discorda da dele no dia em que ele mudar.
+   *
+   * O clique vai no `<label>`, nunca no `<input>` de dentro: clicar no input dispara o proprio
+   * clique e mais o que o label repassa, os dois se anulam e a selecao nao muda. Medido no jogo —
+   * foi o que fez o "desmarcar" nao desmarcar nada.
+   */
+  async function venderItens(janela, avisar) {
+    if (!(await abaDeItens(janela))) {
+      avisar('nao achei a aba de vender itens');
+      return 0;
+    }
+    const rotulo = janela.querySelector(SELECIONAR_TODOS);
+    if (!rotulo) {
+      avisar('nao achei o "Selecionar todos"');
+      return 0;
+    }
+    if (!rotulo.querySelector('input[type="checkbox"]')?.checked) rotulo.click();
+    // Marcar a lista inteira leva um tempo que varia com o tamanho dela: medido, 110 tipos nem
+    // sempre terminam em 800 ms. Esperar o rotulo do botao virar "Vender N ..." e' o sinal certo,
+    // porque e' o proprio jogo dizendo que ja' contou tudo.
+    const marcados = await (async () => {
+      const fim = Date.now() + 8000;
+      for (;;) {
+        const botao = janela.querySelector(BOTAO_VENDER);
+        const quantos = [...janela.querySelectorAll(LINHA_ITEM)].filter(
+          (linha) => linha.querySelector('input[type="checkbox"]')?.checked,
+        ).length;
+        if (quantos && botao && !botao.disabled && /\d/.test(botao.textContent || '')) return quantos;
+        if (Date.now() >= fim) return quantos;
+        await espera(150);
+      }
+    })();
+    if (!marcados) {
+      avisar('nenhum item para vender');
+      return 0;
+    }
+    const botao = janela.querySelector(BOTAO_VENDER);
+    if (!botao || botao.disabled) {
+      avisar('o botao de vender itens nao ficou pronto');
+      return 0;
+    }
+    // O rotulo do botao traz quantos tipos e quanto rende: vale a pena dizer antes de clicar.
+    avisar(`itens: ${(botao.textContent || '').trim()}`);
+    botao.click();
+    if (!(await confirmarVenda(`${marcados} tipos de item`, avisar))) return 0;
+    await espera(1200);
+    avisar(`itens: ${marcados} tipos vendidos`);
+    return marcados;
   }
 
   /** So' le': abre a loja, conta quantos ha' de cada raridade e fecha. */
@@ -428,6 +540,7 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
         , no maximo <input type="number" data-lote min="1" max="500"> por vez
       </label>
       <label class="linha"><input type="checkbox" data-confirma> Confirmar sozinho</label>
+      <label class="linha"><input type="checkbox" data-itens> Vender itens tambem</label>
       <button type="button" class="vender" data-vender>Vender agora</button>
       <div class="rodape">
         <button type="button" data-atualizar>Atualizar lista</button>
@@ -741,6 +854,13 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   // Desmarcado por padrao: vender nao tem desfazer, entao a primeira confirmacao e' sua.
   confirma.checked = ler(CHAVE_CONFIRMA, false);
   confirma.addEventListener('change', () => gravar(CHAVE_CONFIRMA, confirma.checked));
+
+  const caixaItens = painel.querySelector('[data-itens]');
+  // Tambem desmarcado por padrao, e por um motivo mais forte: "Selecionar todos" na aba de itens
+  // marca a mochila inteira de uma vez — na conta em que isto foi medido, 110 tipos por 3,4 M.
+  // Ligar isso tem de ser um ato seu, nao um padrao herdado.
+  caixaItens.checked = ler(CHAVE_ITENS, false);
+  caixaItens.addEventListener('change', () => gravar(CHAVE_ITENS, caixaItens.checked));
 
   // Venda sozinha: desligada por padrao, e sempre pelo mesmo caminho do botao "Vender agora".
   const auto = painel.querySelector('[data-auto]');
