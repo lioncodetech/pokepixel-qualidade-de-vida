@@ -60,6 +60,11 @@
     { id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' },
     { id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde · Alt+V mostra' },
     { id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde · Alt+F mostra' },
+    {
+      id: 'layout-padrao',
+      nome: 'Layout padrão',
+      atalhos: 'Alt+Z esconde · Alt+X mostra · Alt+L arruma',
+    },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

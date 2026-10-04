@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-As cinco ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As seis ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -12,9 +12,10 @@ janela em que você está.
 | Senha | guarda usuário e senha e os cola no login | botões na tela de login |
 | Loja rápida | compra pokébolas, poções e revives sem abrir a loja | Alt+C esconde · Alt+V mostra |
 | Venda rápida | vende pokémon pelas raridades que você marcar | Alt+D esconde · Alt+F mostra |
+| Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+Z esconde · Alt+X mostra · Alt+L arruma |
 
-Cada uma é a mesma de sempre, com as mesmas telas e as mesmas configurações — inclusive as que você
-já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
+As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
+as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
 quantidades da loja, posições dos painéis, usuário e senha atravessam a troca sem se perder.
 
 ## Os dois comandos de cada linha
@@ -48,7 +49,7 @@ A chave verde vale **para esta janela**, como antes valia escolher quais extens�
   Desfazer tudo isso na ordem certa seria uma segunda implementação de cada uma — e é exatamente
   aí que nasceriam os bugs. Recarregar faz isso de graça e sem engano.
 
-Quem nunca mexeu no menu fica com as cinco ligadas.
+Quem nunca mexeu no menu fica com as seis ligadas.
 
 ## A caixa de confirmação
 
@@ -71,6 +72,64 @@ painel (`itens em 7s...`) e o **Parar** vale durante a espera, não só depois d
 
 Fica desmarcado por padrão porque "todos" é mesmo todos: na conta onde isto foi medido, eram **110
 tipos por 3,4 milhões** num clique. Ligar isso é uma decisão, não um padrão que se herda sem querer.
+
+## Layout padrão
+
+Um botão **Arrumar tudo** (ou **Alt+L**) e a tela inteira volta para o lugar: as janelas do jogo —
+Caçadas, Inventário, Loja do Mark, o que estiver aberto — mais os HUDs de equipe, chat, ações
+rápidas e a barra de ferramentas.
+
+O caminho é o mesmo que você faria à mão: arrume tudo como quiser uma vez, clique em **Salvar
+layout atual**, e daí em diante é um botão. O que está salvo aparece no painel: quantas peças, de
+que dia, e de que tamanho de tela.
+
+Como funciona por dentro: o jogo posiciona cada janela escrevendo `inset`, `width` e `height` no
+próprio elemento, e aceita que outro código escreva por cima — a janela vai para lá e fica, inclusive
+quando é fechada e reaberta, porque o jogo reaproveita o mesmo elemento. Nada é pedido ao servidor e
+nada é feito com cliques simulados.
+
+### Minimizado, só o botão
+
+O **–** do cabeçalho encolhe o painel até sobrar o que se usa o tempo todo: um botão **Arrumar**,
+com um **⤢** ao lado para abrir o painel de volta. A bolha e o painel dividem o mesmo canto —
+arrastar um leva o outro —, e arrastar a bolha não dispara o botão: andou menos de 4px é clique,
+mais que isso é arrasto.
+
+Minimizado não é escondido. Quem some com a ferramenta é a chave no menu do PokePixel (ou **Alt+Z**),
+e aí a bolha vai junto; **Alt+X** traz de volta. Com o painel fora de vista o resultado de cada
+arrumada aparece no título da bolha, para onde o mouse já está indo.
+
+### Arrumar ao abrir cada janela
+
+Marcado de fábrica. É o que torna o layout *padrão* de verdade: a janela já nasce no lugar, sem
+ninguém clicar em nada. Arrastar uma janela à mão continua valendo — o que já foi arrumado com o
+layout atual nesta tela não é mexido de novo, senão o seu arrasto seria desfeito meio segundo depois.
+
+### A mesma tela em janelas de tamanhos diferentes
+
+Cada janela do LionMultInstance é uma tela de tamanho diferente, e um layout em pixels tirado da tela
+inteira não cabe num quadrante. Por isso o que fica guardado é o layout **junto com a tela em que foi
+tirado**, e ao aplicar tudo é reescalado na mesma proporção, preso ao que cabe. Quem preferir os
+pixels crus desmarca **Ajustar ao tamanho desta janela**.
+
+Para levar o layout de uma janela do LMI para outra, abra **Levar para outra janela**: o texto do
+layout está ali, pronto para copiar e colar do outro lado. Não há sincronização automática, e isso
+não é esquecimento: cada janela do LMI é um perfil com armazenamento próprio, então uma extensão não
+alcança as outras. Copiar e colar é o único caminho que não promete o que não existe.
+
+### A aparência do jogo
+
+**Incluir a aparência do jogo** vem desmarcado. Ligado, entram no layout as preferências do próprio
+jogo — escala, tamanho de texto, opacidade das janelas, tema, posição da barra — e as posições
+iniciais que ele guarda. Elas são lidas por ele na carga da página, então valem a partir do próximo
+F5; o painel oferece um `recarregar agora`.
+
+### Janela fechada não é arrumada
+
+Janela fechada continua no DOM, invisível, medindo zero. Arrumar uma dessas seria guardar um tamanho
+nulo e mandá-la para um canto qualquer da próxima vez que ela abrisse — então só o que está na tela
+entra no layout e só o que está na tela é movido. É a mesma lição do `✕` da janela já fechada, logo
+abaixo.
 
 ## Esperar o que o jogo ainda não desenhou
 
