@@ -27,10 +27,19 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     { nome: 'Comum', classe: 'quality-common' },
     { nome: 'Incomum', classe: 'quality-uncommon' },
     { nome: 'Rara', classe: 'quality-rare' },
-    { nome: 'Épica', classe: 'quality-epic' },
-    { nome: 'Lendária', classe: 'quality-legendary' },
-    { nome: 'Mítica', classe: 'quality-mythical' },
+    { nome: 'Épica', classe: 'quality-epic', travada: true },
+    { nome: 'Lendária', classe: 'quality-legendary', travada: true },
+    { nome: 'Mítica', classe: 'quality-mythical', travada: true },
   ];
+
+  /**
+   * As raridades que esta extensao nao vende, nunca.
+   *
+   * Nao e' so' a caixa desmarcada: a trava esta' aqui, na leitura. Uma escolha antiga guardada
+   * antes desta versao, ou qualquer coisa escrita na chave por fora, e' descartada antes de
+   * chegar ao filtro da loja — e' o unico jeito de a trava nao depender da tela estar certa.
+   */
+  const TRAVADAS = new Set(RARIDADES.filter((r) => r.travada).map((r) => r.nome));
 
   // A loja premium usa as mesmas classes npc-shop, e o resumo da expedicao tambem se chama
   // `npc-shop-window` sem ser loja nenhuma. Os dois ficam de fora.
@@ -290,7 +299,7 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     };
   }
 
-  const escolhidas = () => ler(CHAVE_RARIDADES, []);
+  const escolhidas = () => ler(CHAVE_RARIDADES, []).filter((nome) => !TRAVADAS.has(nome));
   const teto = () => Math.max(1, Number(ler(CHAVE_TETO, TETO_PADRAO)) || TETO_PADRAO);
   const lote = () => Math.min(500, Math.max(1, Number(ler(CHAVE_LOTE, LOTE_PADRAO)) || LOTE_PADRAO));
 
@@ -596,6 +605,9 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       border-bottom: 1px solid #1a212c;
     }
     #lioncode-venda-rapida .raridade span { flex: 1; }
+    /* Travada continua na lista, apagada: sumir com a linha faria parecer que o jogo deixou de ter
+       essa raridade, em vez de a extensao ter deixado de vende-la. */
+    #lioncode-venda-rapida .raridade.travada { opacity: .45; cursor: not-allowed; }
     #lioncode-venda-rapida .raridade em {
       font-style: normal; color: #7d8697; font-size: 11px;
     }
@@ -672,7 +684,12 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       bloco.className = 'raridade';
       const caixa = document.createElement('input');
       caixa.type = 'checkbox';
-      caixa.checked = marcadas.includes(raridade.nome);
+      caixa.checked = !raridade.travada && marcadas.includes(raridade.nome);
+      caixa.disabled = !!raridade.travada;
+      if (raridade.travada) {
+        bloco.classList.add('travada');
+        bloco.title = 'Esta extensão não vende esta raridade.';
+      }
       const nome = document.createElement('span');
       nome.textContent = raridade.nome;
       const quantos = document.createElement('em');
@@ -680,6 +697,7 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       quantos.textContent = visto === undefined ? '—' : `${moeda(visto)} a venda`;
       quantos.title = lista.quando ? `Lista vista ${idade(lista.quando)}.` : 'Lista nunca lida.';
       caixa.addEventListener('change', () => {
+        if (raridade.travada) return;
         const atual = new Set(escolhidas());
         if (caixa.checked) atual.add(raridade.nome);
         else atual.delete(raridade.nome);

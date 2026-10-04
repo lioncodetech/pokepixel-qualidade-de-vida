@@ -58,6 +58,17 @@ abre. Até a venda rápida 1.2.2 ela não clicava: procurava a caixa no lugar er
 escrito sem nunca ter visto uma de perto —, não a reconhecia e ficava esperando uma lista que
 nunca encolhia. Agora é a caixa de verdade: "Confirmar venda", com os botões Vender e Cancelar.
 
+## Épica, lendária e mítica não se vendem
+
+As três raridades do topo aparecem na lista da venda rápida sempre desmarcadas e **sem poder ser
+marcadas**. Sumir com as linhas faria parecer que o jogo deixou de ter essas raridades, em vez de a
+extensão ter deixado de vendê-las.
+
+A trava não é a caixa desmarcada: ela está na leitura da escolha. Uma marcação guardada por uma
+versão anterior, ou escrita na chave por fora, é descartada antes de chegar ao filtro da loja — e o
+filtro do jogo é explicitamente **desligado** nessas três a cada venda. É o único jeito de a trava
+não depender de a tela estar certa.
+
 ## Vender itens
 
 A venda rápida tem um **"Vender itens também"**, desmarcado de fábrica. Ligado, depois de vender os
