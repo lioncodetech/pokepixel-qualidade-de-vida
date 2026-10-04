@@ -95,7 +95,69 @@
   /** Enquanto a ferramenta nao se anuncia, o menu nao tem o que dizer sobre ela. */
   const sabido = (m) => !m.proprio || m.estado !== undefined;
 
+  /**
+   * Posicao de janelinha flutuante que sobrevive a mudar o tamanho da janela.
+   *
+   * Pixels contados do canto de cima a esquerda nao sobrevivem: encolher a janela — rearranjar as
+   * views do LionMultInstance faz isso o tempo todo — joga a peca para fora, e o recorte que a traz
+   * de volta e' definitivo, entao crescer de novo nao a devolve ao canto onde ela estava. Pior: num
+   * quadrante baixo, uma peca guardada a 430px do topo simplesmente nao aparece.
+   *
+   * Por isso o que fica guardado e' a distancia ate' a borda mais proxima de cada eixo, e a posicao
+   * e' recontada a cada tamanho de tela. Quem estava no canto de baixo a direita fica no canto de
+   * baixo a direita, em qualquer quadrante, e voltar ao tamanho grande devolve tudo ao lugar.
+   */
+  const canto = {
+    /** Le a posicao atual do elemento como distancia ate' as bordas mais proximas. */
+    medir(el) {
+      const c = el.getBoundingClientRect();
+      const direita = c.left + c.width / 2 > innerWidth / 2;
+      const baixo = c.top + c.height / 2 > innerHeight / 2;
+      return {
+        x: Math.round(direita ? innerWidth - c.right : c.left),
+        y: Math.round(baixo ? innerHeight - c.bottom : c.top),
+        direita,
+        baixo,
+      };
+    },
+
+    /**
+     * Escreve `left`/`top` a partir do canto guardado, sempre dentro da tela.
+     *
+     * Devolve `false` quando nao havia o que aplicar: sem posicao guardada, ou com a peca
+     * escondida — escondida ela nao tem caixa, e posicionar pelo zero a mandaria para o canto
+     * errado. Quem chama reaplica quando ela volta a aparecer.
+     */
+    aplicar(el, guardado) {
+      const pos = canto.doGuardado(guardado);
+      if (!pos) return false;
+      const c = el.getBoundingClientRect();
+      if (!c.width && !c.height) return false;
+      const x = pos.direita ? innerWidth - pos.x - c.width : pos.x;
+      const y = pos.baixo ? innerHeight - pos.y - c.height : pos.y;
+      const limite = (v, folga) => Math.max(0, Math.min(Math.max(0, folga), Math.round(v)));
+      el.style.left = `${limite(x, innerWidth - c.width)}px`;
+      el.style.top = `${limite(y, innerHeight - c.height)}px`;
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      return true;
+    },
+
+    /** Aceita o formato antigo, em pixels do canto de cima a esquerda, gravado antes desta versao. */
+    doGuardado(v) {
+      if (!v) return null;
+      if (typeof v.direita === 'boolean') return v;
+      const x = parseFloat(v.x ?? v.left);
+      const y = parseFloat(v.y ?? v.top);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      return { x, y, direita: false, baixo: false };
+    },
+  };
+
   globalThis.PPX = {
+    /** O canto guardado, partilhado por todas as janelinhas do pacote. */
+    canto,
+
     /** A ferramenta entrega aqui como se mostra e se esconde; o menu passa a comandar isso. */
     controlar(id, aplicar) {
       const m = modulos.find((x) => x.id === id);
@@ -247,6 +309,8 @@
   const pintar = () => {
     menu.classList.toggle('aberto', aberto);
     aba.classList.toggle('aberta', !aberto);
+    // Quem acabou de aparecer so' agora tem medidas: e' aqui que ele vai para o canto guardado.
+    if (montado) colocar();
   };
   const abrir = (sim) => {
     aberto = sim;
@@ -367,10 +431,11 @@
     el.style.bottom = 'auto';
   };
   let pos = ler(CHAVE_POS, null);
+  // So' um dos dois esta' a vista de cada vez; o escondido nao tem caixa para medir, e por isso
+  // `pintar` reaplica assim que ele aparece.
   const colocar = () => {
-    if (!pos) return;
-    dentro(menu, pos.x, pos.y);
-    dentro(aba, pos.x, pos.y);
+    canto.aplicar(menu, pos);
+    canto.aplicar(aba, pos);
   };
 
   /**
@@ -413,7 +478,7 @@
         if (aoClicar) aoClicar();
         return;
       }
-      pos = { x: parseFloat(movido.style.left), y: parseFloat(movido.style.top) };
+      pos = canto.medir(movido);
       gravar(CHAVE_POS, pos);
       colocar();
     };

@@ -30,6 +30,11 @@ Cada ferramenta tem **dois** comandos no menu, e eles não são a mesma coisa:
 O que você escolher no botão do meio **atravessa o F5**: a janela que você mandou sumir continua
 sumida na próxima carga, e os atalhos de cada ferramenta (Alt+C, Alt+D…) gravam do mesmo jeito.
 
+O **×** do canto de cada janela é o mesmo comando: ele esconde a ferramenta de verdade, fica
+gravado, e o menu passa a mostrá-la como `oculta`. Antes ele só apagava o painel da tela — na carga
+seguinte a janela voltava sozinha, e enquanto isso o menu continuava dizendo que ela estava à
+vista.
+
 Quando uma ferramenta ainda não se anunciou — porque está desativada, ou porque não carregou — o
 botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que não aconteceria.
 
@@ -38,6 +43,20 @@ botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que n�
 Arraste pelo **⠿**. Minimizado, o botão `PokePixel` também se arrasta: puxe direto por ele. Andou
 mais que alguns pixels, é arrasto e o menu não abre; foi um toque parado, o menu abre. Os dois
 dividem o mesmo canto, então mover um leva o outro.
+
+### Rearranjar as views não espalha as janelinhas
+
+O que fica guardado não é "a 1764 pixels da esquerda": é **a distância até a borda mais próxima** —
+16px da direita, 120px de baixo. Toda janelinha do pacote (o menu, o botão `Arrumar`, a venda e a
+loja) é recolocada por essa medida sempre que a janela muda de tamanho.
+
+Isso resolve duas coisas de uma vez. Num quadrante pequeno nada mais desaparece para fora da tela,
+nem fica preso num `430px` do topo que simplesmente não existe numa janela de 290px de altura. E
+voltar à tela inteira devolve cada janelinha **exatamente** ao lugar de onde ela saiu — recortar
+pela borda, como era antes, é definitivo: encolhia uma vez e a posição original estava perdida.
+
+Quem estava escondido não tem medidas para recolocar; por isso a conta é refeita no instante em que
+a janelinha reaparece, e não enquanto ela está invisível.
 
 ## Ativar e desativar
 

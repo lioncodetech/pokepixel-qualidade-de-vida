@@ -474,6 +474,8 @@ PPX.modulo(
     const pintar = () => {
       painel.style.display = aVista && !minimizado ? '' : 'none';
       bolha.style.display = aVista && minimizado ? 'flex' : 'none';
+      // Escondido nao tem caixa para medir: quem acabou de aparecer so' agora pode ir para o canto.
+      recolocar();
     };
     const minimizar = (sim) => {
       minimizado = sim;
@@ -518,6 +520,7 @@ PPX.modulo(
         movido.style.left = `${x}px`;
         movido.style.top = `${y}px`;
         movido.style.right = 'auto';
+        movido.style.bottom = 'auto';
       });
       const soltar = () => {
         if (!partida) return;
@@ -530,7 +533,7 @@ PPX.modulo(
           if (aoClicar) aoClicar(alvo);
           return;
         }
-        aoGravar({ left: movido.style.left, top: movido.style.top });
+        aoGravar(movido);
       };
       pegador.addEventListener('pointerup', soltar);
       pegador.addEventListener('pointercancel', soltar);
@@ -544,22 +547,24 @@ PPX.modulo(
      */
     const colocarNoCanto = (pos) => {
       for (const el of [painel, bolha]) {
-        if (!pos?.left) {
-          el.style.right = '16px';
-          el.style.top = '430px';
-          continue;
-        }
-        el.style.left = pos.left;
-        el.style.top = pos.top;
-        el.style.right = 'auto';
+        if (PPX.canto.aplicar(el, pos)) continue;
+        // Sem canto guardado — ou com a peca escondida, que nao tem medidas. O padrao fica preso a'
+        // borda de baixo a direita, acima do botao do menu, porque assim acompanha a janela
+        // sozinho: um `top` em pixels desaparecia para fora de um quadrante baixo.
+        el.style.left = 'auto';
+        el.style.top = 'auto';
+        el.style.right = '16px';
+        el.style.bottom = '104px';
       }
     };
-    const gravarCanto = (pos) => {
+    const recolocar = () => colocarNoCanto(ler(CHAVE_POS, null));
+    const gravarCanto = (movido) => {
+      const pos = PPX.canto.medir(movido);
       gravar(CHAVE_POS, pos);
       colocarNoCanto(pos);
     };
 
-    colocarNoCanto(ler(CHAVE_POS, null));
+    recolocar();
 
     document.documentElement.append(estilo, painel, bolha);
     arrastavel(painel.querySelector('header'), painel, gravarCanto);
@@ -626,6 +631,9 @@ PPX.modulo(
     // foi aplicado, entao ele deixa de valer sozinho e tudo e' reescalado na medida nova.
     let aoRedimensionar = 0;
     addEventListener('resize', () => {
+      // O painel e a bolha voltam ao canto deles sempre, mesmo com o arrumar automatico desligado:
+      // sem isto a bolha ficava pendurada para fora e nao havia como chamar a ferramenta de volta.
+      recolocar();
       if (ler(CHAVE_AUTO, true) === false) return;
       clearTimeout(aoRedimensionar);
       aoRedimensionar = setTimeout(() => arrumar(ler(CHAVE_PERFIL, null), { soNovos: true }), 250);

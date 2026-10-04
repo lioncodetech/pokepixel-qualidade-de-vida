@@ -730,11 +730,12 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       painel.style.left = `${x}px`;
       painel.style.top = `${y}px`;
       painel.style.right = 'auto';
+      painel.style.bottom = 'auto';
     });
     const soltar = () => {
       if (!partida) return;
       partida = null;
-      gravar(CHAVE_POS, { left: painel.style.left, top: painel.style.top });
+      gravar(CHAVE_POS, PPX.canto.medir(painel));
     };
     cabecalho.addEventListener('pointerup', soltar);
     cabecalho.addEventListener('pointercancel', soltar);
@@ -765,25 +766,29 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       painel.style.height = `${Math.max(minA, Math.min(innerHeight - 8, Math.round(alvoA)))}px`;
       painel.style.maxHeight = 'none';
     }
-    if (painel.style.left) {
-      const caixa = painel.getBoundingClientRect();
-      const x = Math.max(0, Math.min(innerWidth - caixa.width, parseFloat(painel.style.left) || 0));
-      const fundo = Math.max(0, innerHeight - caixa.height);
-      const y = Math.max(0, Math.min(fundo, parseFloat(painel.style.top) || 0));
-      painel.style.left = `${x}px`;
-      painel.style.top = `${y}px`;
-    }
+    // Encolher a janela deixaria o painel pendurado para fora. Ele volta pela distancia ate' a
+    // borda que ficou mais perto quando a pessoa o largou, e nao pelos pixels do canto de cima a
+    // esquerda: assim um painel do lado direito continua do lado direito num quadrante estreito, e
+    // voltar ao tamanho grande o devolve exatamente ao lugar de onde ele saiu.
+    recolocar();
     ultimoAjuste = Date.now();
   }
 
-  const posicao = ler(CHAVE_POS, null);
-  if (posicao?.left) {
-    painel.style.left = posicao.left;
-    painel.style.top = posicao.top;
-  } else {
+  /**
+   * Leva o painel ao canto guardado, se houver e se ele estiver a vista.
+   *
+   * Escondido ele nao tem medidas, e posicionar pelo zero o mandaria para o canto errado; por isso
+   * `mostrarPainel` chama isto de novo quando ele reaparece. Sem nada guardado fica o padrao, preso
+   * a direita e ao alto por `right`/`top` do proprio navegador, que ja' acompanham a janela.
+   */
+  const recolocar = () => {
+    if (PPX.canto.aplicar(painel, ler(CHAVE_POS, null))) return;
+    painel.style.left = 'auto';
+    painel.style.bottom = 'auto';
     painel.style.right = '16px';
     painel.style.top = '150px';
-  }
+  };
+  recolocar();
 
   document.documentElement.append(estilo, painel);
   ajustarAoViewport();
@@ -1104,8 +1109,12 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   else desenharAuto();
   setInterval(desenharAuto, 1000);
 
+  // O × e' esconder, igual ao atalho: fica gravado, atravessa o F5 e o menu do pacote passa a
+  // mostrar a ferramenta como oculta. Antes ele so' apagava o painel da tela — na carga seguinte
+  // ele voltava sozinho, e enquanto isso o menu continuava a dizer que estava a' vista.
   painel.querySelector('[data-fechar]').addEventListener('click', () => {
-    painel.style.display = 'none';
+    mostrarPainel(false);
+    globalThis.PPX?.anotar?.('venda-rapida', false);
   });
 
   /**
@@ -1117,6 +1126,9 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   /** Esconder tem de atravessar o F5: e' uma escolha da pessoa, nao um estado de tela. */
   const mostrarPainel = (sim) => {
     painel.style.display = sim ? '' : 'none';
+    // So' agora ele tem medidas: se a janela mudou de tamanho enquanto estava escondido, e' aqui
+    // que ele volta ao canto certo.
+    if (sim) recolocar();
   };
   addEventListener('keydown', (evento) => {
     if (!evento.altKey) return;
