@@ -463,16 +463,33 @@ PPX.modulo(
       }
     };
 
-    /** O botao que confirma o resumo — pela classe, ou pelo texto, o que aparecer. */
-    const botaoDoResumo = () => {
-      const porClasse = document.querySelector('.regional-cinema__skip');
-      if (visivel(porClasse)) return porClasse;
-      return (
-        [...document.querySelectorAll('button')].find(
-          (b) => visivel(b) && /^(continuar|confirmar|ok)$/i.test((b.textContent || '').trim()),
-        ) || null
-      );
+    /**
+     * Um controlo esta' mesmo clicavel? Nao basta estar na tela.
+     *
+     * **Esta e' a parte que faltava.** O `Continuar` do resumo nasce desligado enquanto o jogo
+     * confirma o resultado — e' o que diz a propria tela, mesmo por cima dele: "Resultado e
+     * recompensas confirmados". Clicar nele nesse intervalo nao faz nada, e a ferramenta ia-se
+     * embora convencida de que tinha clicado.
+     */
+    const clicavel = (el) => {
+      if (!visivel(el)) return false;
+      if (el.disabled) return false;
+      if (el.getAttribute('aria-disabled') === 'true') return false;
+      if (el.className.includes('is-disabled') || el.className.includes('is-loading')) return false;
+      const estilo = getComputedStyle(el);
+      return estilo.pointerEvents !== 'none' && estilo.visibility !== 'hidden';
     };
+
+    /** Tudo o que se parece com o botao de confirmar o resumo, clicavel ou nao. */
+    const candidatosDoResumo = () => {
+      const porClasse = [...document.querySelectorAll('.regional-cinema__skip')];
+      const porTexto = [...document.querySelectorAll('button, [role="button"], a')].filter((e) =>
+        /^(continuar|confirmar|ok|fechar)$/i.test((e.textContent || '').trim()),
+      );
+      return [...new Set([...porClasse, ...porTexto])].filter(visivel);
+    };
+
+    const botaoDoResumo = () => candidatosDoResumo().find(clicavel) || null;
 
     /**
      * Fecha o resumo do combate — **esperando o botao nascer**.
@@ -487,16 +504,30 @@ PPX.modulo(
      * instante em que ele acaba de aparecer.
      */
     const continuarDoResumo = async (avisar) => {
-      const botao = await ate(botaoDoResumo, 20000);
-      if (!botao) return false;
       if (avisar) avisar('Lendo o resumo da partida…');
+      // Espera **ligar**, nao so' aparecer. Trinta segundos porque o que se espera aqui nao e' o
+      // desenho da tela, e' a confirmacao do resultado do outro lado.
+      const botao = await ate(botaoDoResumo, 30000);
+      if (!botao) return { ok: false, visto: candidatosDoResumo() };
+
+      // Ninguem confirma um resumo no instante em que ele fica clicavel.
       await dormir(Math.round(sorteio(3000, 7000)), avisar);
-      if (await clicarEEsperar(botao, () => !tituloDoResultado(), 8000)) return true;
-      // Segunda e ultima tentativa: o resumo pode ter trocado de botão entretanto.
-      const outro = botaoDoResumo();
-      if (!outro) return !tituloDoResultado();
-      await clicarHumano(outro);
-      return Boolean(await ate(() => !tituloDoResultado(), 6000));
+      if (parar) return { ok: false, visto: [] };
+
+      // Ate' quatro tentativas: o botao pode voltar a desligar-se entre o olhar e a mao, e um
+      // clique a mais num botao de fechar nao estraga nada — a tela ja' nao existe depois do
+      // primeiro que pegar.
+      for (let volta = 0; volta < 4; volta += 1) {
+        const agora = botaoDoResumo();
+        if (!agora) return { ok: !tituloDoResultado(), visto: candidatosDoResumo() };
+        if (avisar && volta) avisar(`Confirmando o resumo… (${volta + 1}ª)`);
+        await clicarHumano(agora);
+        if (await ate(() => !tituloDoResultado(), 4000)) return { ok: true };
+        agora.click(); // a reserva de sempre, para onde o ponteiro completo nao serve
+        if (await ate(() => !tituloDoResultado(), 3000)) return { ok: true };
+        await espera(Math.round(sorteio(1500, 3000)));
+      }
+      return { ok: false, visto: candidatosDoResumo() };
     };
 
     /**
@@ -592,6 +623,7 @@ PPX.modulo(
     painel.innerHTML = `
       <header>
         <strong data-titulo>Ginásio do dia</strong>
+        <button type="button" data-recarregar title="Atualizar a lista de times">↻</button>
         <button type="button" data-minimizar title="Minimizar">–</button>
         <button type="button" data-fechar title="Esconder (Alt+G)">×</button>
       </header>
@@ -653,6 +685,9 @@ PPX.modulo(
       #lioncode-gym.minimizado .corpo { display: none; }
       #lioncode-gym.minimizado header { border-bottom: 0; padding: 6px 8px; }
       #lioncode-gym.minimizado header strong { font-size: 12px; letter-spacing: .06em; }
+      /* Minimizado e' para nao tapar o jogo: o botao de atualizar a lista nao tem sentido sem a
+         lista a' vista. */
+      #lioncode-gym.minimizado [data-recarregar] { display: none; }
     `;
     painel.append(estilo);
     document.body.append(painel);
@@ -684,6 +719,10 @@ PPX.modulo(
         ['[data-time-volta]', guardado.timeVolta],
       ]) {
         const lista = campo(seletor);
+        // O que esta' na tela vale mais do que o que esta' guardado: encher as listas outra vez
+        // nao pode desfazer uma escolha que o utilizador acabou de fazer.
+        const naTela = lista.value;
+        const manter = nomes.includes(naTela) ? naTela : escolhido;
         lista.innerHTML = '';
         if (!nomes.length) {
           const vazio = document.createElement('option');
@@ -696,11 +735,12 @@ PPX.modulo(
           const opcao = document.createElement('option');
           opcao.value = nome;
           opcao.textContent = nome;
-          if (nome === escolhido) opcao.selected = true;
+          if (nome === manter) opcao.selected = true;
           lista.append(opcao);
         }
       }
       campo('[data-regiao]').value = guardado.regiao || 'KANTO';
+      return nomes;
     };
 
     const guardarEscolhas = () =>
@@ -713,6 +753,27 @@ PPX.modulo(
     for (const seletor of ['[data-regiao]', '[data-time-gym]', '[data-time-volta]'])
       campo(seletor).addEventListener('change', guardarEscolhas);
 
+    /**
+     * Reler os times sem recarregar a pagina.
+     *
+     * As listas sao enchidas uma vez, quando o painel sobe. Um time guardado **depois** disso nao
+     * aparecia aqui ate' um F5 — e um F5 e' caro no meio de uma caçada. O botao `↻` no cabecalho
+     * volta a perguntar ao Times, e so' isso: nada no jogo é tocado.
+     */
+    campo('[data-recarregar]').addEventListener('click', () => {
+      if (!globalThis.PPX?.times?.nomes) {
+        dizer('A ferramenta Times não está ligada — ligue-a no menu (Alt+Q).', true);
+        return;
+      }
+      const antes = [...campo('[data-time-gym]').options].map((o) => o.value).filter(Boolean);
+      const nomes = encherTimes();
+      guardarEscolhas();
+      const novos = nomes.filter((n) => !antes.includes(n));
+      if (!nomes.length) dizer('O Times não tem nenhum time guardado ainda.', true);
+      else if (novos.length) celebrar(`Lista atualizada: ${novos.join(', ')}.`);
+      else dizer(`Lista atualizada — ${nomes.length} times, nenhum novo.`);
+    });
+
     // ------------------------------------------------------------- a sequencia
 
     let correndo = false;
@@ -723,6 +784,7 @@ PPX.modulo(
       campo('[data-ir]').disabled = sim;
       campo('[data-voltar]').disabled = sim;
       campo('[data-parar]').hidden = !sim;
+      campo('[data-recarregar]').disabled = sim;
       for (const s of ['[data-regiao]', '[data-time-gym]', '[data-time-volta]'])
         campo(s).disabled = sim;
     };
@@ -892,10 +954,20 @@ PPX.modulo(
         // O combate nao sai de orcamento nenhum: o resumo e' lido e confirmado no seu proprio
         // tempo, sem o relogio da entrada a empurrar.
         fecharRitmo();
-        if (!(await continuarDoResumo((t) => dizer(t)))) {
+        const resumo = await continuarDoResumo((t) => dizer(t));
+        if (!resumo.ok) {
           // Nao se para a corrida por isto. Parar deixaria a tarefa na etapa `desafiar`, e a nova
           // tentativa daqui a dez minutos iria **desafiar outra vez** um ginasio ja' feito.
-          dizer('Não consegui confirmar o resumo da partida; sigo mesmo assim.', true);
+          //
+          // Mas diz-se o que **se viu**, como nos ginasios: foi a falta disto que fez perder uma
+          // publicacao inteira a adivinhar porque e' que o clique nao pegava.
+          const visto = (resumo.visto || [])
+            .map((e) => `${(e.textContent || '?').trim().slice(0, 12)}${clicavel(e) ? '' : ' (desligado)'}`)
+            .join(' | ');
+          dizer(
+            `Não consegui confirmar o resumo${visto ? ` — vi: ${visto}` : ' — não achei o botão'}; sigo mesmo assim.`,
+            true,
+          );
           await espera(Math.round(sorteio(1500, 3000)));
         }
         await fecharBanners();

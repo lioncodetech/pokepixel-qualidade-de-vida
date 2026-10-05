@@ -222,9 +222,9 @@ test('o tempo esta entre os cliques, e nao antes das etapas', () => {
 test('o resumo da partida e confirmado, e so depois se mexe no time', () => {
   // O título "Vitória!" entra antes do resto do resumo; o botão Continuar é o último a chegar.
   // Procurar uma vez só não encontrava nada, e a ferramenta seguia com o resumo aberto por cima.
-  assert.match(codigo, /const botao = await ate\(botaoDoResumo, 20000\)/);
+  assert.match(codigo, /const botao = await ate\(botaoDoResumo, 30000\)/);
   // Aceita o botão pela classe ou pelo texto.
-  assert.match(codigo, /\^\(continuar\|confirmar\|ok\)\$/i);
+  assert.match(codigo, /\^\(continuar\|confirmar\|ok\|fechar\)\$/i);
   // E ninguém confirma um resumo no instante em que ele aparece.
   assert.match(codigo, /await dormir\(Math\.round\(sorteio\(3000, 7000\)\), avisar\)/);
   // A confirmação acontece antes da etapa do time de volta, que é a seguinte na lista.
@@ -241,4 +241,32 @@ test('entre o resumo e a mochila ha uma pausa', () => {
   assert.match(codigo, /'time-volta': 1,/);
   const bloco = codigo.slice(codigo.indexOf("etapa === 'time-volta'"));
   assert.match(bloco.slice(0, 300), /await respirarAntesDoClique\(/);
+});
+
+test('a lista de times pode ser relida sem recarregar a pagina', () => {
+  // Um time guardado depois de o painel subir não aparecia aqui até um F5 — e um F5 no meio de
+  // uma caçada é caro.
+  assert.match(codigo, /data-recarregar/);
+  const bloco = codigo.slice(codigo.indexOf("campo('[data-recarregar]').addEventListener"));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    });'));
+  assert.match(corpo, /encherTimes\(\)/);
+  // Reler não pode tocar no jogo, nem recarregar nada.
+  assert.doesNotMatch(corpo, /location\.reload|clicarHumano|clicar\(/);
+  // E uma escolha feita na tela não pode ser desfeita por encher as listas outra vez.
+  assert.match(codigo, /const manter = nomes\.includes\(naTela\) \? naTela : escolhido;/);
+  // Durante uma corrida o botão fica travado, como os outros.
+  assert.match(codigo, /campo\('\[data-recarregar\]'\)\.disabled = sim;/);
+});
+
+test('o botao de confirmar o resumo so serve se estiver ligado', () => {
+  // Relatado na prática: "a tela de confirmação quando ganha o gym não está sendo clicada". A tela
+  // diz, por cima do botão, "Resultado e recompensas confirmados" — ele nasce desligado enquanto o
+  // jogo confirma. Esperar o botão APARECER não chega; tem de se esperar que ele LIGUE.
+  assert.match(codigo, /if \(el\.disabled\) return false;/);
+  assert.match(codigo, /aria-disabled'\) === 'true'/);
+  assert.match(codigo, /const botaoDoResumo = \(\) => candidatosDoResumo\(\)\.find\(clicavel\)/);
+  // E insiste: o botão pode voltar a desligar-se entre o olhar e a mão.
+  assert.match(codigo, /for \(let volta = 0; volta < 4; volta \+= 1\)/);
+  // Falhar aqui diz o que viu, com a marca de desligado — como nos ginásios.
+  assert.match(codigo, /\(desligado\)/);
 });

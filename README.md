@@ -486,15 +486,42 @@ duração, insígnia e drops ainda estão a ser desenhadas, e o botão de confir
 Procurar uma única vez, no instante em que o título aparece, não encontrava nada — e seguia-se com
 o resumo aberto por cima.
 
-Agora espera-se o botão nascer (até 20 s), aceita-se pela classe **ou** pelo texto
-(`Continuar`/`Confirmar`/`OK`), e antes de clicar há uma pausa de 3 a 7 s — o tempo de ler o que se
-ganhou. Depois disso ainda há outra pausa antes de a mochila abrir.
+Esperar o botão **aparecer** não chegou. Relatado outra vez, depois dessa correção: *"a tela de
+confirmação quando ganha o gym não está sendo clicada"*.
+
+A resposta estava escrita na própria tela, mesmo por cima do botão: **"Resultado e recompensas
+confirmados"**. O `Continuar` nasce **desligado** enquanto o jogo confirma o resultado. Clicar nesse
+intervalo não faz nada — e a ferramenta ia-se embora convencida de que tinha clicado.
+
+Agora espera-se que ele **ligue**, não que apareça: visível, sem `disabled`, sem `aria-disabled`,
+sem `is-disabled`/`is-loading`, sem `pointer-events: none`. Até 30 s, porque o que se espera aqui
+não é o desenho da tela, é a confirmação do outro lado. Aceita-se pela classe **ou** pelo texto
+(`Continuar`/`Confirmar`/`OK`/`Fechar`), em `button`, `[role=button]` ou `a`.
+
+Antes de clicar há uma pausa de 3 a 7 s — o tempo de ler o que se ganhou —, e depois até quatro
+tentativas, porque o botão pode voltar a desligar-se entre o olhar e a mão. Depois disso ainda há
+outra pausa antes de a mochila abrir.
+
+E a falha diz o que viu, com a marca que importa: *"vi: Continuar (desligado)"*.
 
 Se mesmo assim o resumo não fechar, a corrida **não** pára: parar deixaria a tarefa na etapa
 `desafiar`, e a tentativa dos dez minutos desafiaria outra vez um ginásio já feito. Diz-se na tela e
 segue-se.
 
-A banca cobre este caso: no jogo de mentira o botão `Continuar` só nasce **2,5 s** depois do título.
+A banca cobre os dois casos: no jogo de mentira o botão `Continuar` só nasce **2,5 s** depois do
+título, e nasce **desligado** por mais 6 s.
+
+### O botão `↻`: times novos sem recarregar a página
+
+As duas listas de times são enchidas uma vez, quando o painel sobe. Um time guardado **depois**
+disso só aparecia aqui com um F5 — e um F5 no meio de uma caçada é caro.
+
+O `↻` no cabeçalho volta a perguntar ao Times e enche as listas outra vez. Só isso: nada no jogo
+é tocado, nada é recarregado. Ele diz o que encontrou — *"Lista atualizada: Gym Hoenn."* ou
+*"Lista atualizada — 4 times, nenhum novo."* —, e uma escolha já feita na tela não é desfeita se o
+time continuar a existir.
+
+Fica travado durante uma corrida, como os outros botões, e desaparece no modo minimizado.
 
 ### Minimizado, só a etiqueta GYM
 

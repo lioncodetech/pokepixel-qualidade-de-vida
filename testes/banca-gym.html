@@ -162,6 +162,13 @@
               const skip = document.createElement('button');
               skip.className = 'regional-cinema__skip';
               skip.textContent = 'Continuar';
+              // **O segundo ponto do teste.** O botão nasce DESLIGADO, enquanto o jogo confirma o
+              // resultado — é o que a própria tela diz por cima dele, "Resultado e recompensas
+              // confirmados". Clicar aqui dentro não faz nada, e era isso que acontecia.
+              skip.disabled = true;
+              setTimeout(() => {
+                skip.disabled = false;
+              }, 6000);
               skip.addEventListener('click', () => {
                 anotar('continuar');
                 t.remove();
