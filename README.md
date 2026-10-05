@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-As sete ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As nove ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -620,6 +620,41 @@ painel mesmo por cima do botão — ignorá-lo era a interface prometer uma cois
 Se você já estiver numa caçada, ele troca o time e para por aí: não faz sentido reentrar no que já
 se está. E segue o mesmo orçamento de 2 a 3 minutos do fim de um ginásio, porque é a mesma
 sequência, feita à mão.
+
+## Caçadas: atalhos para voltar numa tecla
+
+Guarda as caçadas que você usa e leva até qualquer uma num clique. Quantas quiser.
+
+`Guardar a caçada atual` grava a que está correndo — nome, região e modo. Cada linha ganha um
+`Ir`, e a que está acontecendo agora aparece marcada com **você está aqui**. Guardar a mesma
+caçada outra vez atualiza em vez de duplicar: dois atalhos com o mesmo nome seriam
+indistinguíveis.
+
+### Por que o nome não se edita
+
+Ao contrário dos Pokémon, que carregam `data-creature-id`, **as caçadas não têm identificador
+nenhum no DOM** — nem a que está correndo, nem as linhas da lista. O único elo entre as duas telas
+é o texto visível. O nome guardado não é um rótulo: é a chave de busca, e um apelido editável
+quebraria a ida em silêncio.
+
+### As três armadilhas do caminho
+
+Todas já medidas noutras ferramentas deste pacote, e todas montadas na banca
+(`testes/banca-cacadas.html?jogo=1`):
+
+1. **A janela reabre na última região usada.** Procurar uma caçada de Hoenn numa aba de Kanto não
+   acha nada — então a região é escolhida de propósito antes de procurar a linha.
+2. **A lista chega depois da janela.** Quinta ocorrência desta lição: as abas da loja (~285 ms), a
+   grade do inventário, os ginásios do mapa, o resumo do combate. Espera-se por ela, e a falha diz
+   o que viu: *"não achei X entre as 4 caçadas de Hoenn"* ou *"a lista não chegou a aparecer"*.
+3. **A barra de cima quebra com o ponteiro completo.** Ali vai `click()` cru; no resto, clique de
+   gente, com o ponteiro chegando e hesitando antes.
+
+Na banca, com as três ligadas ao mesmo tempo, o percurso foi:
+*Abrindo as caçadas… → Indo para Hoenn… → Caçando em "Caça de Ralts".*
+
+A ferramenta também abre a porta `PPX.cacadas` (`nomes`, `atual`, `ir`), igual à do Times — quem
+chama recebe o resultado em vez de adivinhar lendo a tela.
 
 ## O que não aparece na mochila é zero
 

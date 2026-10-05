@@ -1,0 +1,151 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca das Caçadas</title>
+<!--
+  Banca do painel de atalhos para cacadas, fora do jogo.
+
+  Com `?jogo=1` monta um jogo de mentira com as tres armadilhas que este caminho tem de verdade,
+  todas medidas no jogo e ja' documentadas noutras ferramentas deste pacote:
+
+    1. a janela entra no DOM **antes** da lista — as linhas so' aparecem 2,5 s depois;
+    2. a janela reabre na **ultima regiao usada**, e nao na que se quer;
+    3. a cacada em curso so' existe no DOM enquanto corre.
+
+  Abra pelo servidor estatico do projeto; por `file://` o navegador recusa carregar `../cacadas.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: #2d5a3d;
+    font-family: system-ui, sans-serif;
+    color: #d8e6dc;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 28em;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    background: #0003;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #0004;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 30em;
+    white-space: pre-wrap;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca das <b>Caçadas</b>. Com <code>?jogo=1</code> há uma janela de caçadas de mentira: a lista
+    só aparece <b>2,5 s</b> depois da janela, e ela abre sempre na aba <b>Kanto</b>, mesmo quando a
+    caçada procurada é de Hoenn.
+  </p>
+  <pre data-saida>—</pre>
+</div>
+<script>
+  window.PPX = { modulo: (meta, fn) => fn() };
+
+  if (new URLSearchParams(location.search).has('jogo')) {
+    const CACADAS = {
+      Kanto: ['Caça de Pidgey', 'Caça de Rattata'],
+      Hoenn: ['Caça de Ralts', 'Caça de Kirlia'],
+    };
+    let emCurso = null;
+
+    const pintarCacada = () => {
+      document.querySelector('.platform-hunt')?.remove();
+      if (!emCurso) return;
+      const caixa = document.createElement('div');
+      caixa.className = 'platform-hunt';
+      caixa.style.cssText = 'position:fixed;left:10px;bottom:10px;color:#fff';
+      const nome = document.createElement('div');
+      nome.className = 'platform-hunt__zone-name';
+      nome.textContent = emCurso.nome;
+      const meta = document.createElement('div');
+      meta.className = 'platform-hunt__zone-meta';
+      meta.textContent = `${emCurso.regiao} · Modo plataforma`;
+      caixa.append(nome, meta);
+      document.body.append(caixa);
+    };
+
+    const barra = document.createElement('div');
+    barra.style.cssText = 'position:fixed;top:0;left:0;right:0;height:34px;background:#1a2130';
+    const botao = document.createElement('button');
+    botao.className = 'pokeidle-top-toolbar__btn';
+    botao.dataset.menuId = 'hunts';
+    botao.textContent = 'Caçadas';
+    barra.append(botao);
+    document.body.append(barra);
+
+    botao.addEventListener('click', () => {
+      if (document.querySelector('.pokeidle-panel')) return;
+      const janela = document.createElement('div');
+      janela.className = 'pokeidle-panel';
+      janela.style.cssText =
+        'position:fixed;right:280px;bottom:10px;width:320px;background:#1a2130;color:#e7edf6;padding:8px;border-radius:8px';
+      const titulo = document.createElement('div');
+      titulo.className = 'pokeidle-panel__title';
+      titulo.textContent = 'CAÇADAS';
+      janela.append(titulo);
+
+      // A janela sempre reabre em Kanto: é a armadilha da "última região usada".
+      let regiaoAberta = 'Kanto';
+      const corpo = document.createElement('div');
+      const abas = document.createElement('div');
+
+      const pintarLista = () => {
+        corpo.innerHTML = '';
+        for (const nome of CACADAS[regiaoAberta]) {
+          const linha = document.createElement('div');
+          linha.className = 'hunt-list-row';
+          const texto = document.createElement('span');
+          texto.textContent = nome + ' ';
+          const cacar = document.createElement('button');
+          cacar.textContent = 'Caçar';
+          cacar.addEventListener('click', () => {
+            emCurso = { nome, regiao: regiaoAberta };
+            pintarCacada();
+            janela.remove();
+          });
+          linha.append(texto, cacar);
+          corpo.append(linha);
+        }
+      };
+
+      for (const regiao of Object.keys(CACADAS)) {
+        const aba = document.createElement('button');
+        aba.className = 'hunt-list-world-tab' + (regiao === regiaoAberta ? ' is-active' : '');
+        aba.textContent = regiao;
+        aba.addEventListener('click', () => {
+          regiaoAberta = regiao;
+          for (const outra of abas.children)
+            outra.className =
+              'hunt-list-world-tab' + (outra.textContent === regiao ? ' is-active' : '');
+          pintarLista();
+        });
+        abas.append(aba);
+      }
+      janela.append(abas, corpo);
+      document.body.append(janela);
+
+      // **O ponto do teste.** A lista chega depois da janela.
+      setTimeout(pintarLista, 2500);
+    });
+
+    emCurso = { nome: 'Caça de Ralts', regiao: 'Hoenn' };
+    pintarCacada();
+  }
+
+  const script = document.createElement('script');
+  script.src = `../cacadas.js?t=${Date.now()}`;
+  document.head.append(script);
+</script>
