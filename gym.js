@@ -434,7 +434,27 @@ PPX.modulo(
         12000,
       );
 
-    const tituloDoResultado = () => document.querySelector('.regional-cinema__title');
+    /**
+     * **Ha' dois cinemas, e nao um.** Medido no jogo, com a captura do DOM durante uma corrida:
+     *
+     *   1. antes da luta: titulo "Desafio de ginásio", botao `.regional-cinema__skip` =
+     *      "Entrar na arena";
+     *   2. depois dela: titulo "Vitória!" ou "Derrota!", com o botao de confirmar.
+     *
+     * Os dois usam as **mesmas classes**. Tomar o primeiro pelo segundo era a raiz do defeito que
+     * passou tres versoes por consertar: a ferramenta via o titulo da entrada, concluia que a
+     * partida tinha acabado, marcava **derrota** (porque "Desafio de ginásio" nao casa com
+     * "vitória") e ia montar o time de volta — enquanto a luta ainda nem tinha comecado. A tela
+     * de vitória chegava depois, sem ninguem para a confirmar.
+     *
+     * Por isso o resultado e' reconhecido pelo **texto**, e nao pela presenca do elemento.
+     */
+    const RESULTADO = /(vit[óo]ria|derrota|empate)/i;
+    const cinema = () => document.querySelector('.regional-cinema__title');
+    const textoDoCinema = () => (cinema()?.textContent || '').trim();
+    const tituloDoResultado = () => (RESULTADO.test(textoDoCinema()) ? cinema() : null);
+    /** O cinema de entrada: ha' um cinema na tela, e ele ainda nao e' o do resultado. */
+    const noCinemaDeEntrada = () => Boolean(cinema()) && !RESULTADO.test(textoDoCinema());
     const combateEmCurso = () => Boolean(document.querySelector('.pvp-battle-clock'));
     const relogioDoCombate = () =>
       document.querySelector('.pvp-battle-clock')?.textContent?.trim() || '';
@@ -450,19 +470,48 @@ PPX.modulo(
      * um F5 dado a' mao) nao pode deixar a ferramenta presa para sempre, e por isso ha' tambem um
      * teto de tempo.
      */
+    /**
+     * O cinema de entrada pede um clique para a luta comecar: "Entrar na arena".
+     *
+     * Se ele nao aparecer, nao e' erro — pode haver desafio que va' direto para a arena. O que
+     * nao pode e' tratar este botao como se fosse o de confirmar o resultado.
+     */
+    const entrarNaArena = async (avisar) => {
+      const botao = await ate(() => {
+        if (!noCinemaDeEntrada()) return null;
+        const b = document.querySelector('.regional-cinema__skip');
+        return b && visivel(b) && !b.disabled ? b : null;
+      }, 15000);
+      if (!botao) return false;
+      avisar(`“${textoDoCinema()}” — entrando na arena…`);
+      await espera(Math.round(sorteio(1200, 2600)));
+      await clicarHumano(botao);
+      return true;
+    };
+
+    /** Nada na tela — nem cinema, nem cronometro, nem resultado — por tanto tempo e' desistir. */
+    const PACIENCIA_SEM_SINAL = 90000;
+
     const esperarOCombate = async (avisar) => {
       const inicio = Date.now();
+      let viuOCombate = false;
+      let semSinalDesde = Date.now();
       for (;;) {
         const titulo = tituloDoResultado();
         if (titulo) {
           const texto = (titulo.textContent || '').trim();
           return { acabou: true, venceu: /vit[óo]ria/i.test(texto), texto };
         }
-        if (!combateEmCurso())
+        const lutando = combateEmCurso();
+        if (lutando) viuOCombate = true;
+        if (lutando || noCinemaDeEntrada()) semSinalDesde = Date.now();
+        else if (viuOCombate)
           return { acabou: false, erro: 'o combate saiu da tela sem mostrar o resultado' };
+        else if (Date.now() - semSinalDesde >= PACIENCIA_SEM_SINAL)
+          return { acabou: false, erro: 'a arena não abriu depois do desafio' };
         if (Date.now() - inicio >= TETO_DO_COMBATE)
           return { acabou: false, erro: `o combate passou de ${Math.round(TETO_DO_COMBATE / 60000)} min sem acabar` };
-        avisar(`Lutando… ${relogioDoCombate()}`);
+        avisar(lutando ? `Lutando… ${relogioDoCombate()}` : 'Esperando a arena…');
         await espera(1000);
       }
     };
@@ -1205,8 +1254,18 @@ PPX.modulo(
         // Este e' o ultimo clique da fase de entrada, entao a pausa dele leva o que sobrou do
         // orcamento: e' o momento em que um jogador leria as condicoes antes de carregar no botao.
         dizer('Desafiando…');
-        if (!(await clicarEEsperar(desafiar, () => combateEmCurso() || tituloDoResultado(), 15000)))
+        // O cinema de entrada tambem conta como "o desafio pegou": e' ele que vem primeiro.
+        if (
+          !(await clicarEEsperar(
+            desafiar,
+            () => combateEmCurso() || noCinemaDeEntrada() || tituloDoResultado(),
+            15000,
+          ))
+        )
           return { ok: false, erro: 'cliquei em "Desafiar agora" e o combate não começou' };
+
+        // O cinema de entrada vem primeiro, e e' preciso carregar nele para a luta comecar.
+        await entrarNaArena((t) => dizer(t));
 
         const luta = await esperarOCombate((t) => dizer(t));
         if (!luta.acabou) return { ok: false, erro: luta.erro };

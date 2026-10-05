@@ -144,6 +144,26 @@
         desafiar.textContent = 'DESAFIAR AGORA';
         desafiar.addEventListener('click', () => {
           anotar('desafiar');
+          // **Os dois cinemas**, com os textos medidos no jogo. O de entrada vem primeiro, usa as
+          // MESMAS classes do de resultado, e pede um clique em "Entrar na arena" para a luta
+          // começar. Foi por não distinguir os dois que a ferramenta marcava derrota antes da luta
+          // e deixava a tela de vitória sem ninguém para confirmar.
+          const entrada = document.createElement('h1');
+          entrada.className = 'regional-cinema__title';
+          entrada.textContent = 'Desafio de ginásio';
+          const entrar = document.createElement('button');
+          entrar.className = 'regional-cinema__skip';
+          entrar.textContent = 'Entrar na arena';
+          document.body.append(entrada, entrar);
+          entrar.addEventListener('click', () => {
+            anotar('entrar-na-arena');
+            entrada.remove();
+            entrar.remove();
+            comecarALuta();
+          });
+        });
+
+        const comecarALuta = () => {
           const relogio = document.createElement('div');
           relogio.className = 'pvp-battle-clock';
           relogio.textContent = '14:59';
@@ -177,7 +197,7 @@
               document.body.append(skip);
             }, 2500);
           }, 5000);
-        });
+        };
         janela.append(desafiar);
       }, 4000);
     });

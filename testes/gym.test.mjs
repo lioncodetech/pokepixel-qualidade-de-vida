@@ -28,7 +28,10 @@ test('o fim do combate e lido no resultado, nunca no cronometro', () => {
 
 test('a espera pelo combate tem saida para os dois casos tristes', () => {
   // Uma aba que caiu, ou um F5 dado à mão, não podem deixar a ferramenta presa para sempre.
-  assert.match(codigo, /if \(!combateEmCurso\(\)\)/);
+  // Só se desiste depois de **ter visto** o combate: antes dele há o cinema de entrada, e a
+  // ausência do cronômetro ali é normal, não é queda.
+  assert.match(codigo, /else if \(viuOCombate\)/);
+  assert.match(codigo, /PACIENCIA_SEM_SINAL/);
   assert.match(codigo, /TETO_DO_COMBATE/);
   // `.pvp-battle-clock` é o marcador de "ainda lutando": `.pokeidle-gym-battle` é a raiz do jogo
   // inteiro e existe sempre, então não serve para isto.
@@ -313,4 +316,25 @@ test('o sinal de cada regiao conta o dia do servidor, e nao o da maquina', () =>
   // Derrota nao e' erro: sao estados diferentes, com cores diferentes.
   assert.match(codigo, /dados\.venceu === false \? 'derrota' : 'vitoria'/);
   assert.match(codigo, /anotarPlacar\(dados\.regiao, 'erro', erro\)/);
+});
+
+test('os dois cinemas sao coisas diferentes', () => {
+  // Medido no jogo, com captura do DOM durante uma corrida de Johto: ANTES da luta o titulo e'
+  // "Desafio de ginásio" e o `.regional-cinema__skip` e' "Entrar na arena"; DEPOIS dela vem
+  // "Vitória!"/"Derrota!". Os dois usam as mesmas classes.
+  //
+  // Tomar o primeiro pelo segundo foi a raiz do defeito que passou tres versoes por consertar: a
+  // ferramenta via o titulo da entrada, marcava DERROTA (porque "Desafio de ginásio" nao casa
+  // com "vitória") e ia montar o time de volta antes de a luta comecar.
+  assert.match(codigo, /const RESULTADO = \/\(vit\[óo\]ria\|derrota\|empate\)\/i/);
+  assert.match(codigo, /const tituloDoResultado = \(\) => \(RESULTADO\.test\(textoDoCinema\(\)\) \? cinema\(\) : null\)/);
+  assert.match(codigo, /const noCinemaDeEntrada = \(\) => Boolean\(cinema\(\)\) && !RESULTADO\.test\(textoDoCinema\(\)\)/);
+  // O resultado NAO pode ser reconhecido pela mera presenca do elemento.
+  assert.doesNotMatch(codigo, /tituloDoResultado = \(\) => document\.querySelector/);
+  // E ha' um clique proprio para entrar na arena, que nao e' o de confirmar o resumo.
+  assert.match(codigo, /const entrarNaArena = async \(avisar\)/);
+  const desafiar = codigo.slice(codigo.indexOf("if (etapa === 'desafiar')"));
+  const entra = desafiar.indexOf('entrarNaArena(');
+  const espera = desafiar.indexOf('esperarOCombate(');
+  assert.ok(entra >= 0 && entra < espera, 'entra na arena antes de esperar o combate');
 });

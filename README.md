@@ -494,6 +494,28 @@ A banca cobre este caso: `testes/banca-gym.html?jogo=1` monta um jogo de mentira
 aparecem **4 segundos** depois da janela, e o ciclo inteiro corre contra ele — incluindo o F5, o
 combate e a leitura da vitória.
 
+### Os dois cinemas
+
+Medido no jogo, capturando o DOM durante uma corrida de Johto — e foi esta medição que explicou
+três versões de conserto errado:
+
+| momento | `.regional-cinema__title` | `.regional-cinema__skip` |
+|---|---|---|
+| antes da luta | `Desafio de ginásio` | `Entrar na arena` |
+| depois dela | `Vitória!` / `Derrota!` | `Continuar` |
+
+**São as mesmas classes.** A ferramenta procurava o elemento, achava o primeiro cinema, concluía
+que a partida tinha acabado e — como *"Desafio de ginásio"* não casa com *"vitória"* — marcava
+**derrota**, antes de a luta começar. Depois ia montar o time de volta. A tela de vitória chegava
+sem ninguém para a confirmar.
+
+Era isto o tempo todo. As duas correções anteriores — esperar o botão nascer, esperar ele ligar —
+atacavam o botão errado, e passavam na banca porque **eu tinha construído a banca com o modelo
+errado na cabeça**: um cinema só. A banca confirmava a minha suposição em vez de a testar.
+
+Agora o resultado é reconhecido pelo **texto**, nunca pela presença do elemento, e entrar na arena
+é um passo próprio, com o seu clique. A banca monta os dois cinemas, com os textos reais.
+
 ### O resumo da partida, e o botão que chega por último
 
 Terceiro erro relatado na prática: a tela de **Vitória!** apareceu e a ferramenta foi logo trocar o
