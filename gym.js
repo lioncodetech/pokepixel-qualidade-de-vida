@@ -59,8 +59,13 @@ PPX.modulo(
 
     const CICLO_PRE = [60000, 120000];
     const CICLO_SAIDA = [120000, 180000];
-    /** Nunca instantaneo; e nunca tanto tempo parado que pareca travado sem aviso. */
-    const PAUSA_MINIMA = 700;
+    /**
+     * O chao de **qualquer** clique da sequencia, mesmo com o orcamento ja' estourado.
+     *
+     * Um segundo e meio nao e' realismo nenhum por si so'; e' a garantia de que nunca saem dois
+     * cliques no mesmo instante, que foi o que se viu na tela da vitoria.
+     */
+    const PAUSA_ENTRE_CLIQUES = 1500;
     const PAUSA_MAXIMA = 40000;
 
     /** Dez minutos, como pedido: o intervalo entre uma tentativa que falhou e a seguinte. */
@@ -104,12 +109,8 @@ PPX.modulo(
      * tela que se esta' a esperar de proposito, a ferramenta pareceria travada, e o utilizador
      * carregaria no botão outra vez.
      */
-    const respirarAte = async (alvo, passosQueFaltam, avisar) => {
-      const justo = (alvo - Date.now()) / Math.max(1, passosQueFaltam);
-      const pausa = Math.round(
-        Math.min(PAUSA_MAXIMA, Math.max(PAUSA_MINIMA, justo * sorteio(0.65, 1.35))),
-      );
-      const fim = Date.now() + pausa;
+    const dormir = async (ms, avisar) => {
+      const fim = Date.now() + ms;
       while (Date.now() < fim) {
         if (parar) return;
         if (avisar) {
@@ -118,6 +119,41 @@ PPX.modulo(
         }
         await espera(Math.min(1000, fim - Date.now()));
       }
+    };
+
+    /**
+     * O ritmo corrente: um alvo no relogio e quantos **cliques** ainda faltam ate' la'.
+     *
+     * Antes o orcamento era repartido por etapas, e dentro de cada etapa os cliques saiam todos
+     * juntos: a ferramenta ficava parada um bom bocado e depois disparava quatro cliques num
+     * segundo. Relatado assim: "mal entrou a pagina de vitoria ja' disparou a troca de times".
+     * Um jogador nao faz isso — o tempo dele esta' **entre** os cliques, nao antes deles.
+     *
+     * Agora quem respira e' o proprio clique: cada um leva o que resta do orcamento a dividir
+     * pelos cliques que ainda faltam. Se o jogo demorar, as pausas encolhem sozinhas; se sobrar
+     * tempo, o ultimo clique da fase fica com ele todo.
+     */
+    const ritmo = { alvo: 0, cliques: 0 };
+    const abrirRitmo = (alvo, cliques) => {
+      ritmo.alvo = alvo || 0;
+      ritmo.cliques = cliques;
+    };
+    const fecharRitmo = () => {
+      ritmo.alvo = 0;
+      ritmo.cliques = 0;
+    };
+
+    const respirarAntesDoClique = async (avisar) => {
+      if (!ritmo.alvo) return;
+      const faltam = Math.max(1, ritmo.cliques);
+      ritmo.cliques = Math.max(0, ritmo.cliques - 1);
+      const justo = (ritmo.alvo - Date.now()) / faltam;
+      await dormir(
+        Math.round(
+          Math.min(PAUSA_MAXIMA, Math.max(PAUSA_ENTRE_CLIQUES, justo * sorteio(0.65, 1.35))),
+        ),
+        avisar || ((t) => dizer(t)),
+      );
     };
 
     const ate = async (condicao, limite) => {
@@ -188,6 +224,9 @@ PPX.modulo(
      * tempo de quem viu o alvo antes de clicar.
      */
     const clicarHumano = async (el) => {
+      // Primeiro o tempo de quem esta' a olhar para a tela, so' depois a mao.
+      await respirarAntesDoClique();
+      if (parar) return;
       const caixa = el.getBoundingClientRect();
       const base = {
         bubbles: true,
@@ -424,11 +463,40 @@ PPX.modulo(
       }
     };
 
-    /** Fecha o resumo do combate. */
-    const continuarDoResumo = async () => {
-      const botao = document.querySelector('.regional-cinema__skip');
+    /** O botao que confirma o resumo — pela classe, ou pelo texto, o que aparecer. */
+    const botaoDoResumo = () => {
+      const porClasse = document.querySelector('.regional-cinema__skip');
+      if (visivel(porClasse)) return porClasse;
+      return (
+        [...document.querySelectorAll('button')].find(
+          (b) => visivel(b) && /^(continuar|confirmar|ok)$/i.test((b.textContent || '').trim()),
+        ) || null
+      );
+    };
+
+    /**
+     * Fecha o resumo do combate — **esperando o botao nascer**.
+     *
+     * O titulo "Vitória!" entra na tela antes do resto do resumo: as caixas de duração, insígnia
+     * e drops ainda estao a ser desenhadas, e o botão Continuar e' o ultimo a chegar. Procurar uma
+     * unica vez, no instante em que o titulo aparece, nao encontrava nada — e a ferramenta seguia
+     * para a troca de times com o resumo aberto por cima. Relatado com captura, e e' a **quarta**
+     * vez que esta mesma licao aparece no pacote.
+     *
+     * Antes de clicar ha' uma pausa de gente a ler o que ganhou: ninguem confirma um resumo no
+     * instante em que ele acaba de aparecer.
+     */
+    const continuarDoResumo = async (avisar) => {
+      const botao = await ate(botaoDoResumo, 20000);
       if (!botao) return false;
-      return Boolean(await clicarEEsperar(botao, () => !tituloDoResultado(), 6000));
+      if (avisar) avisar('Lendo o resumo da partida…');
+      await dormir(Math.round(sorteio(3000, 7000)), avisar);
+      if (await clicarEEsperar(botao, () => !tituloDoResultado(), 8000)) return true;
+      // Segunda e ultima tentativa: o resumo pode ter trocado de botão entretanto.
+      const outro = botaoDoResumo();
+      if (!outro) return !tituloDoResultado();
+      await clicarHumano(outro);
+      return Boolean(await ate(() => !tituloDoResultado(), 6000));
     };
 
     /**
@@ -441,6 +509,10 @@ PPX.modulo(
     const voltarACacada = async (cacada, avisar) => {
       if (!cacada?.nome) return { ok: false, erro: 'não guardei de qual caçada você saiu' };
       await esperarTelaLimpa(10000, avisar);
+      // A barra de cima leva `click()` cru — a sequencia completa de ponteiro abre e fecha o menu
+      // na mesma rajada —, entao a pausa de gente tem de ser pedida a' mao aqui.
+      await respirarAntesDoClique(avisar);
+      if (parar) return { ok: false, erro: 'parado a pedido' };
       avisar('Abrindo as caçadas…');
       document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="hunts"]')?.click();
       const janela = await ate(() => janelaPorTitulo(/CA[ÇC]ADAS/i), 8000);
@@ -486,7 +558,25 @@ PPX.modulo(
     /** As etapas de cada orcamento. O combate fica fora: dura o que durar. */
     const DA_ENTRADA = ['sair', 'time-gym', 'recarregar', 'desafiar'];
     const DA_SAIDA = ['time-volta', 'voltar'];
-    const quantasFaltam = (fase, etapa) => fase.length - fase.indexOf(etapa);
+    /**
+     * Quantos cliques cada etapa ainda vai dar. E' a conta que reparte o orcamento.
+     *
+     * Nao precisa de ser exacta — serve para espalhar o tempo. As trocas de time valem zero
+     * porque quem clica la' e' o Times, com o ritmo de 20–30 s dele.
+     */
+    const CLIQUES = {
+      sair: 1,
+      // As trocas de time nao clicam nada aqui — quem clica e' o Times, com o ritmo de 20–30 s
+      // dele. O 1 e' o tempo **antes** de abrir a mochila: ninguem sai de um combate e abre a
+      // mochila no mesmo instante, que foi exactamente a queixa da tela da vitoria.
+      'time-gym': 1,
+      recarregar: 0,
+      desafiar: 4,
+      'time-volta': 1,
+      voltar: 3,
+    };
+    const cliquesQueFaltam = (fase, etapa) =>
+      fase.slice(fase.indexOf(etapa)).reduce((n, e) => n + (CLIQUES[e] || 0), 0);
 
     const tarefa = () => ler(CHAVE_TAREFA, null);
     const guardarTarefa = (dados) => gravar(CHAVE_TAREFA, dados);
@@ -690,13 +780,10 @@ PPX.modulo(
             dados.alvoSaida = Date.now() + sorteio(CICLO_SAIDA[0], CICLO_SAIDA[1]);
           }
           guardarTarefa(dados);
-          // A pausa pertence a' fase da **proxima** etapa, que e' a que ela esta' a preparar.
-          if (DA_ENTRADA.includes(seguinte))
-            await respirarAte(dados.alvoPre, quantasFaltam(DA_ENTRADA, seguinte), (t) => dizer(t));
-          else if (DA_SAIDA.includes(seguinte))
-            await respirarAte(dados.alvoSaida, quantasFaltam(DA_SAIDA, seguinte), (t) => dizer(t));
+          // Nao ha' pausa aqui: o tempo esta' todo **entre os cliques**, dentro das etapas.
         }
       } finally {
+        fecharRitmo();
         correndo = false;
         travarBotoes(Boolean(tarefa()));
       }
@@ -704,6 +791,14 @@ PPX.modulo(
 
     /** Um passo da sequencia. Devolve `{ok}`, e `{recarregou}` quando a pagina vai ser trocada. */
     async function executarEtapa(etapa, dados) {
+      // O orcamento da fase a que esta etapa pertence, repartido pelos cliques que ainda faltam
+      // nela. Refeito a cada etapa porque o F5 do meio leva consigo tudo o que estiver na memoria.
+      if (DA_ENTRADA.includes(etapa))
+        abrirRitmo(dados.alvoPre, cliquesQueFaltam(DA_ENTRADA, etapa));
+      else if (DA_SAIDA.includes(etapa))
+        abrirRitmo(dados.alvoSaida, cliquesQueFaltam(DA_SAIDA, etapa));
+      else fecharRitmo();
+
       if (etapa === 'sair') {
         if (!naCacada()) return { ok: true }; // ja' estava na cidade
         dizer('Saindo da caçada…');
@@ -715,6 +810,8 @@ PPX.modulo(
       }
 
       if (etapa === 'time-gym') {
+        await respirarAntesDoClique((t) => dizer(t));
+        if (parar) return { ok: true };
         dizer(`Montando o time "${dados.timeGym}"…`);
         const r = await trocarTime(dados.timeGym);
         return r.ok ? { ok: true } : { ok: false, erro: `não montei o time do ginásio: ${r.erro}` };
@@ -780,10 +877,8 @@ PPX.modulo(
           return { ok: false, erro: 'o botão "Desafiar agora" não está disponível (tentativas do dia?)' };
         }
 
-        // A ultima pausa antes de entrar na arena gasta o que sobrar do orcamento de entrada: e'
-        // o momento em que um jogador leria as condicoes antes de carregar no botao.
-        await respirarAte(dados.alvoPre || Date.now(), 1, (t) => dizer(t));
-
+        // Este e' o ultimo clique da fase de entrada, entao a pausa dele leva o que sobrou do
+        // orcamento: e' o momento em que um jogador leria as condicoes antes de carregar no botao.
         dizer('Desafiando…');
         if (!(await clicarEEsperar(desafiar, () => combateEmCurso() || tituloDoResultado(), 15000)))
           return { ok: false, erro: 'cliquei em "Desafiar agora" e o combate não começou' };
@@ -793,12 +888,24 @@ PPX.modulo(
         dados.resultado = luta.texto;
         dados.venceu = luta.venceu;
         guardarTarefa(dados);
-        await continuarDoResumo();
+
+        // O combate nao sai de orcamento nenhum: o resumo e' lido e confirmado no seu proprio
+        // tempo, sem o relogio da entrada a empurrar.
+        fecharRitmo();
+        if (!(await continuarDoResumo((t) => dizer(t)))) {
+          // Nao se para a corrida por isto. Parar deixaria a tarefa na etapa `desafiar`, e a nova
+          // tentativa daqui a dez minutos iria **desafiar outra vez** um ginasio ja' feito.
+          dizer('Não consegui confirmar o resumo da partida; sigo mesmo assim.', true);
+          await espera(Math.round(sorteio(1500, 3000)));
+        }
         await fecharBanners();
         return { ok: true };
       }
 
       if (etapa === 'time-volta') {
+        // A pausa que faltava: entre confirmar o resumo da partida e abrir a mochila.
+        await respirarAntesDoClique((t) => dizer(t));
+        if (parar) return { ok: true };
         dizer(`Montando o time "${dados.timeVolta}"…`);
         const r = await trocarTime(dados.timeVolta);
         // Uma falha aqui nao apaga o ginasio que ja' foi feito, mas tem de ser dita: seguir para a
@@ -935,12 +1042,15 @@ PPX.modulo(
         }
 
         if (parar) return;
-        await respirarAte(alvo, 1, (t) => dizer(t));
+        // Os tres cliques da volta repartem entre si o que resta do orcamento, como na maquina de
+        // estados: abrir as cacadas, escolher a regiao, carregar em Caçar.
+        abrirRitmo(alvo, CLIQUES.voltar);
         await fecharMenus();
         const r = await voltarACacada(cacada, (t) => dizer(t));
         if (r.ok) celebrar(`De volta à "${cacada.nome}" com o time "${paraOTime}".`);
         else dizer(`Parei: ${r.erro}`, true);
       } finally {
+        fecharRitmo();
         correndo = false;
         travarBotoes(false);
       }

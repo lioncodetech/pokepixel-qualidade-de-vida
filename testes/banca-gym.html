@@ -72,6 +72,11 @@
     times: {
       nomes: () => ['Hunt', 'Gym Kanto', 'Gym Johto'],
       usar: async (nome) => {
+        // Entra na mesma linha do tempo dos cliques: e' assim que se ve' se a mochila abriu logo
+        // a seguir ao resumo da partida, que foi a queixa.
+        const l = JSON.parse(sessionStorage.getItem('banca:cliques') || '[]');
+        l.push({ quem: `time:${nome}`, t: Date.now() });
+        sessionStorage.setItem('banca:cliques', JSON.stringify(l));
         document.querySelector('[data-saida]').textContent = `PPX.times.usar(${JSON.stringify(nome)})`;
         await new Promise((r) => setTimeout(r, 300));
         return { ok: true, trocados: 6, segundos: 24 };
@@ -86,6 +91,14 @@
   // por procurar os ginásios uma única vez que a ferramenta dizia "não há ginásio marcado HOJE"
   // com o HOJE bem visível na tela.
   if (new URLSearchParams(location.search).has('jogo')) {
+    // Marca a hora de cada clique que o jogo de mentira recebe. E' o que permite medir, depois da
+    // corrida, se o tempo ficou **entre** os cliques em vez de amontoado antes deles.
+    window.__cliques = JSON.parse(sessionStorage.getItem('banca:cliques') || '[]');
+    const anotar = (quem) => {
+      window.__cliques.push({ quem, t: Date.now() });
+      sessionStorage.setItem('banca:cliques', JSON.stringify(window.__cliques));
+    };
+
     const npc = document.createElement('div');
     npc.className = 'pokeidle-npc-label';
     const nome = document.createElement('b');
@@ -96,6 +109,7 @@
     document.body.append(npc);
 
     falar.addEventListener('click', () => {
+      anotar('npc');
       if (document.querySelector('.pokeidle-panel')) return;
       const janela = document.createElement('div');
       janela.className = 'pokeidle-panel';
@@ -123,11 +137,13 @@
           const h = document.createElement('button');
           h.className = classe;
           h.textContent = texto;
+          h.addEventListener('click', () => anotar('ginasio'));
           janela.append(h);
         }
         const desafiar = document.createElement('button');
         desafiar.textContent = 'DESAFIAR AGORA';
         desafiar.addEventListener('click', () => {
+          anotar('desafiar');
           const relogio = document.createElement('div');
           relogio.className = 'pvp-battle-clock';
           relogio.textContent = '14:59';
@@ -138,14 +154,21 @@
             const t = document.createElement('h1');
             t.className = 'regional-cinema__title';
             t.textContent = 'Vitória!';
-            const skip = document.createElement('button');
-            skip.className = 'regional-cinema__skip';
-            skip.textContent = 'Continuar';
-            skip.addEventListener('click', () => {
-              t.remove();
-              skip.remove();
-            });
-            document.body.append(t, skip);
+            document.body.append(t);
+            // **O ponto do teste.** O título entra primeiro; o botão de confirmar só chega 2,5 s
+            // depois, como no jogo — foi por isso que a ferramenta seguia para a troca de times
+            // com o resumo da vitória ainda aberto na tela.
+            setTimeout(() => {
+              const skip = document.createElement('button');
+              skip.className = 'regional-cinema__skip';
+              skip.textContent = 'Continuar';
+              skip.addEventListener('click', () => {
+                anotar('continuar');
+                t.remove();
+                skip.remove();
+              });
+              document.body.append(skip);
+            }, 2500);
           }, 5000);
         });
         janela.append(desafiar);

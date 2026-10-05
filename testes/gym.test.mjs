@@ -203,3 +203,42 @@ test('o painel nao deixa botao clicavel que nao faz nada', () => {
   const bloco = codigo.slice(codigo.indexOf('function agendar()'));
   assert.match(bloco.slice(0, bloco.indexOf('}')), /travarBotoes\(true\)/);
 });
+
+test('o tempo esta entre os cliques, e nao antes das etapas', () => {
+  // Relatado: "mal entrou a página de vitória já disparou a troca de times". O orçamento era
+  // repartido por etapa, e dentro de cada etapa os cliques saíam todos de rajada. Quem respira
+  // agora é o próprio clique.
+  assert.match(codigo, /const clicarHumano = async \(el\) => \{\s*await respirarAntesDoClique\(\);/);
+  // Nenhum clique sai no mesmo instante do anterior, nem com o orçamento estourado.
+  assert.match(codigo, /const PAUSA_ENTRE_CLIQUES = 1500;/);
+  assert.match(codigo, /Math\.max\(PAUSA_ENTRE_CLIQUES, justo \* sorteio\(/);
+  // O orçamento da fase é reaberto a cada etapa, porque o F5 do meio leva a memória consigo.
+  assert.match(codigo, /abrirRitmo\(dados\.alvoPre, cliquesQueFaltam\(DA_ENTRADA, etapa\)\)/);
+  assert.match(codigo, /abrirRitmo\(dados\.alvoSaida, cliquesQueFaltam\(DA_SAIDA, etapa\)\)/);
+  // E a pausa por etapa deixou de existir: tê-la junto com a do clique estouraria o orçamento.
+  assert.doesNotMatch(codigo, /respirarAte\(/);
+});
+
+test('o resumo da partida e confirmado, e so depois se mexe no time', () => {
+  // O título "Vitória!" entra antes do resto do resumo; o botão Continuar é o último a chegar.
+  // Procurar uma vez só não encontrava nada, e a ferramenta seguia com o resumo aberto por cima.
+  assert.match(codigo, /const botao = await ate\(botaoDoResumo, 20000\)/);
+  // Aceita o botão pela classe ou pelo texto.
+  assert.match(codigo, /\^\(continuar\|confirmar\|ok\)\$/i);
+  // E ninguém confirma um resumo no instante em que ele aparece.
+  assert.match(codigo, /await dormir\(Math\.round\(sorteio\(3000, 7000\)\), avisar\)/);
+  // A confirmação acontece antes da etapa do time de volta, que é a seguinte na lista.
+  const ordem = ['continuarDoResumo(', "etapa === 'time-volta'"].map((t) => codigo.indexOf(t));
+  assert.ok(ordem[0] > 0 && ordem[0] < ordem[1], 'o resumo tem de ser confirmado antes do time');
+  // Falhar aqui não pode parar a corrida: a tarefa ficaria na etapa `desafiar` e a tentativa
+  // seguinte desafiaria outra vez um ginásio já feito.
+  assert.match(codigo, /sigo mesmo assim/);
+});
+
+test('entre o resumo e a mochila ha uma pausa', () => {
+  // "Mal entrou a página de vitória já disparou a troca de times." A troca em si é do Times, com o
+  // ritmo dele; o que faltava era o tempo ANTES de a mochila abrir.
+  assert.match(codigo, /'time-volta': 1,/);
+  const bloco = codigo.slice(codigo.indexOf("etapa === 'time-volta'"));
+  assert.match(bloco.slice(0, 300), /await respirarAntesDoClique\(/);
+});

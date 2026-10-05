@@ -419,6 +419,17 @@ seis Pokémon e desafiar em oito segundos não se parece com ninguém, por mais 
 evento de rato. Ainda assim os cliques também são de gente: o ponteiro chega, hesita entre 120 e
 420 ms, e o ponto de contacto não é o centro exacto do botão duas vezes seguidas.
 
+**O tempo está entre os cliques, não antes deles.** A primeira versão repartia o orçamento por
+etapas, e dentro de cada etapa os cliques saíam todos juntos: a ferramenta ficava parada um bom
+bocado e depois disparava quatro cliques num segundo. Relatado assim: *"mal entrou a página de
+vitória já disparou a troca de times"*. Agora quem respira é o próprio clique — cada um leva o que
+resta do orçamento a dividir pelos cliques que ainda faltam na fase. Se o jogo demorar, as pausas
+encolhem sozinhas; se sobrar tempo, o último clique da fase fica com ele todo. E há um chão de
+1,5 s por clique, mesmo com o orçamento estourado: nunca saem dois no mesmo instante.
+
+Medido na banca, uma corrida completa: 19 s entre abrir o NPC e escolher o ginásio, 14 s até
+desafiar, 14 s até confirmar o resumo — e só depois a mochila.
+
 Onde o clique humano não funcionar, há reserva para o `click()` simples. Isso veio de uma medição:
 a sequência completa de ponteiro nos botões **da barra de cima** impedia o inventário de abrir — a
 barra reage a mais de um dos eventos e abria e fechava na mesma rajada.
@@ -464,6 +475,26 @@ falta disso que transformou um problema de espera num mistério.
 A banca cobre este caso: `testes/banca-gym.html?jogo=1` monta um jogo de mentira cujos ginásios só
 aparecem **4 segundos** depois da janela, e o ciclo inteiro corre contra ele — incluindo o F5, o
 combate e a leitura da vitória.
+
+### O resumo da partida, e o botão que chega por último
+
+Terceiro erro relatado na prática: a tela de **Vitória!** apareceu e a ferramenta foi logo trocar o
+time, sem clicar em `Continuar`.
+
+Mesma lição, quarta ocorrência: o título entra na tela antes do resto do resumo. As caixas de
+duração, insígnia e drops ainda estão a ser desenhadas, e o botão de confirmar é o último a chegar.
+Procurar uma única vez, no instante em que o título aparece, não encontrava nada — e seguia-se com
+o resumo aberto por cima.
+
+Agora espera-se o botão nascer (até 20 s), aceita-se pela classe **ou** pelo texto
+(`Continuar`/`Confirmar`/`OK`), e antes de clicar há uma pausa de 3 a 7 s — o tempo de ler o que se
+ganhou. Depois disso ainda há outra pausa antes de a mochila abrir.
+
+Se mesmo assim o resumo não fechar, a corrida **não** pára: parar deixaria a tarefa na etapa
+`desafiar`, e a tentativa dos dez minutos desafiaria outra vez um ginásio já feito. Diz-se na tela e
+segue-se.
+
+A banca cobre este caso: no jogo de mentira o botão `Continuar` só nasce **2,5 s** depois do título.
 
 ### Minimizado, só a etiqueta GYM
 
