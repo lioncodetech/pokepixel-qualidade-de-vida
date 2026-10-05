@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do painel Times</title>
+<!--
+  Banca de prova da interface do Times, fora do jogo.
+
+  O que esta' aqui e' so' o painel: um `PPX` de mentira, tres times semeados no armazenamento e
+  nenhum jogo por baixo. Serve para olhar o desenho — modo cheio, modo compacto, o relogio, as
+  mensagens de fim — sem abrir a conta de ninguem e sem gastar uma janela do jogo.
+
+  O que ela **nao** prova: nada que dependa do DOM do PokePixel. Trocar de equipe, ler o HUD, abrir
+  o inventario. Isso so' existe no jogo, e e' por isso que a decisao de troca mora numa funcao pura
+  (`planoDeTroca`, testada em `plano-de-troca.test.mjs`).
+
+  Abra com o servidor estatico do projeto; por `file://` o navegador recusa carregar `../times.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: #2d5a3d;
+    font-family: system-ui, sans-serif;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 22em;
+    color: #d8e6dc;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .nota code {
+    background: #0003;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+</style>
+<p class="nota">
+  Banca do painel <b>Times</b>, sem o jogo. O botão <code>–</code> no cabeçalho alterna o modo
+  compacto; <code>Usar</code> aqui não troca equipe nenhuma, porque não há jogo por baixo.
+</p>
+<script>
+  // `PPX` de mentira: o modulo so' precisa que alguem chame a funcao dele. Sem `canto`, o painel
+  // cai na posicao de reserva, que e' justamente o caminho que convem exercitar aqui.
+  window.PPX = { modulo: (meta, fn) => fn() };
+
+  const time = (nome, nomes) => ({
+    nome,
+    membros: nomes.map((n, i) => ({ id: `${nome}-${i}`, nome: n, nivel: 'Nv.100' })),
+  });
+  localStorage.setItem(
+    'lioncode:times:guardados',
+    JSON.stringify([
+      time('gym', ['Alakazam', 'Charizard', 'Dragonite', 'Exeggutor', 'Gengar', 'Magneton']),
+      time('novo time', ['Tyranitar', 'Scizor', 'Magnemite', 'Magneton', 'Exeggutor', 'Rhyhorn']),
+      time('limpar', ['Tyranitar']),
+    ]),
+  );
+  // Tamanho e posicao ficam de fora de proposito: a banca abre sempre igual.
+  localStorage.removeItem('lioncode:times:tamanho');
+  localStorage.removeItem('lioncode:times:posicao');
+
+  // O script e' injetado com a hora no endereco, e nao escrito como <script src="../times.js">.
+  //
+  // Sem isto o navegador serve `times.js` do cache: recarregar a banca depois de editar o arquivo
+  // mostrava a versao anterior, e durante uma sessao inteira eu medi o comportamento de um codigo
+  // que ja' nao existia — inclusive um erro ja' corrigido, que fazia a banca parecer quebrada.
+  const script = document.createElement('script');
+  script.src = `../times.js?t=${Date.now()}`;
+  document.head.append(script);
+</script>

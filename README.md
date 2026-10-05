@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-As seis ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As sete ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -13,6 +13,7 @@ janela em que você está.
 | Loja rápida | compra pokébolas, poções e revives sem abrir a loja | Alt+C esconde · Alt+V mostra |
 | Venda rápida | vende pokémon pelas raridades que você marcar | Alt+D esconde · Alt+F mostra |
 | Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+J esconde · Alt+K mostra · Alt+L arruma |
+| Times | guarda composições de equipe e troca para uma delas num clique | Alt+T esconde · Alt+Y mostra |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
@@ -68,7 +69,7 @@ A chave verde vale **para esta janela**, como antes valia escolher quais extens�
   Desfazer tudo isso na ordem certa seria uma segunda implementação de cada uma — e é exatamente
   aí que nasceriam os bugs. Recarregar faz isso de graça e sem engano.
 
-Quem nunca mexeu no menu fica com as seis ligadas.
+Quem nunca mexeu no menu fica com as sete ligadas.
 
 ## A caixa de confirmação
 
@@ -176,6 +177,178 @@ Três correções da 1.1.1 são a mesma lição, medida no jogo:
   "Pokébolas", ela parece não ter poção nenhuma. Agora a extensão põe a aba **Todos** antes de ler,
   e não lê se não conseguir.
 
+## Times: por que o UUID, e não o nome
+
+Cada Pokémon tem um `data-creature-id` que aparece igual no inventário e no HUD da equipe. É ele que
+o time guardado usa — e não o nome.
+
+O motivo é concreto: na conta onde isto foi levantado havia **dois Tyranitar**, um Nv.203 no time e
+um Nv.151 na mochila. Guardar por nome teria trocado um pelo outro na primeira aplicação, e o time
+"certo" voltaria com o Pokémon errado dentro.
+
+### As três regras do jogo que mandam na ordem das operações
+
+Medidas no jogo, não supostas:
+
+- **O Pokémon ativo não pode ser removido.** O botão vem desabilitado dizendo "Escolha outro Pokémon
+  para poder remover este". Por isso a liderança passa para alguém que fica **antes** de qualquer
+  remoção.
+- **A equipe trava em 6.** Logo remover vem antes de colocar; ao contrário, a primeira adição
+  falharia calada.
+- **Espécie não se repete.** Se o jogo recusar uma adição, a ferramenta diz qual Pokémon não entrou
+  em vez de seguir como se tivesse entrado.
+
+### A troca completa, seis por seis
+
+É o caso que parece simples e não é. O jogo não deixa remover o Pokémon ativo, e a equipe trava em
+seis. Com os seis saindo e seis entrando:
+
+1. ninguém do time novo está na equipe ainda, então não há para quem passar a liderança;
+2. saem os cinco que não são o ativo, e a equipe fica com um só;
+3. entram cinco dos novos — a equipe volta a seis e **o sexto não cabe**;
+4. agora há alguém do time novo lá dentro: ele assume a liderança;
+5. o ativo antigo finalmente pode sair, e o sexto entra.
+
+Era o passo 4 que faltava quando a troca parava com "o último não entra".
+
+Essa decisão mora numa função pura, `planoDeTroca`, separada do resto justamente para poder ser
+conferida fora do navegador:
+
+```
+node --test testes/*.test.mjs   # a decisão da troca
+npx eslint .                    # variável sem definição, e afins
+```
+
+A segunda linha existe por um motivo concreto. `node --check` só olha a sintaxe: um `liderAgora()`
+que ficou sem definição depois de uma reescrita passa por ele sem queixa e só aparece quando alguém
+clica no botão — aconteceu, em cima de uma equipe de verdade. `no-undef` pega isso antes. Os testes checam que o plano termina
+com a equipe certa e, mais importante, que **cada passo é legal no instante em que acontece** — uma
+varredura de 200 combinações sorteadas confirma que nenhum plano remove o ativo nem passa de seis.
+
+### O plano é refeito a cada passo
+
+A ferramenta calcula o plano, executa só o **primeiro** passo, e recalcula. Seguir um plano inteiro
+de ponta a ponta seria mais curto, mas qualquer diferença entre o que a ferramenta imagina e o que
+o jogo fez se acumularia até o fim da fila. Recalculando contra o HUD a cada passo, um passo que não
+saiu como esperado é simplesmente refeito com o estado real.
+
+### Quem manda é o HUD, não o inventário
+
+O duplo clique **alterna**. Isso torna uma leitura errada muito mais cara do que parece: não se
+perde um passo, faz-se o passo contrário.
+
+Foi o que aconteceu numa prova real — um Pokémon que estava na equipe foi lido como fora, e o
+"colocar" tirou ele. A causa é conhecida deste repositório: a mochila pinta em etapas e reabre na
+última categoria usada, exatamente a lição que a loja rápida já tinha aprendido.
+
+Agora quem responde "quem está na equipe" é o HUD, que está sempre no DOM, não tem abas e não
+filtra. O inventário continua sendo onde se clica — só deixou de ser onde se decide. E, no instante
+de cada clique, o estado é conferido de novo: se já está como se quer, não se toca.
+
+### Os tempos, e por que esperar não é opcional
+
+Tirar do time levou ~1.440 ms e colocar ~950 ms: as duas operações vão ao servidor. Abrir o painel
+de equipe levou ~1.080 ms. Já mover uma posição na ordem leva menos de 10 ms, porque é local — mas
+persiste, confirmado com F5.
+
+Cada passo espera o jogo confirmar antes do seguinte. Isso não é cautela decorativa: durante o
+levantamento, uma sequência rápida de cliques derrubou a página inteira com
+`Cannot read properties of null`. Nenhum passo da ferramenta é disparado às cegas.
+
+### A ordem do HUD não é a ordem de batalha
+
+São duas listas diferentes. Mover no painel de equipe não mexe no HUD, e recolocar um Pokémon o
+devolve ao fim da lista do HUD — mas isso é desenho local, some no F5. A ordem que vale é a do
+painel, e é ela que o time guarda e restaura, com os botões `←` e `→`.
+
+### A troca inteira leva de 20 a 30 segundos
+
+O prazo é sorteado a cada uso, e o espaçamento entre os passos sai dele: a cada passo divide-se o
+tempo que resta pelos passos que faltam, com um desvio sorteado para a cadência não sair de
+metrônomo. Duas trocas iguais nunca duram o mesmo.
+
+São duas razões na mesma medida. Uma rajada de cliques em milissegundos não se parece com ninguém
+jogando. E foi exatamente uma sequência sem respiro que derrubou a página numa prova real.
+
+Como o espaçamento é calculado e não cravado, ele se adapta: o jogo leva perto de 1,2 s por troca,
+e se ele estiver lento as pausas encolhem sozinhas em vez de a operação estourar o prazo.
+
+Durante a troca o painel mostra a contagem e uma barra — *"faltam ~18 s"*. O número sai do mesmo
+orçamento que espaça os passos, e não de um prazo inventado para a tela.
+
+Mas é uma **previsão, não uma promessa**: o orçamento manda nas pausas, não no jogo. Se o servidor
+demorar, o tempo acaba com a troca ainda andando, e aí o texto passa a *"terminando…"* em vez de
+contar para baixo de zero.
+
+No fim o painel diz, em verde: **`Pronto! "gym" montado em 24 s.`** O relógio para antes desse
+anúncio, e não só na limpeza do `finally` — entre o fim da troca e o fim da limpeza há até um
+segundo, e durante ele a tela mostrava "Pronto" com a barra ainda correndo ao lado.
+
+### Modo compacto
+
+O botão `–` no cabeçalho deixa só o **nome do time e o `Usar`**. Somem o campo de salvar, a lista de
+quem está em cada time e o `×` de esquecer.
+
+Trocar de equipe é o que se faz todo dia; guardar um time novo, quase nunca. Com a lista cheia, o
+painel ocupava um pedaço da tela do jogo sobretudo para mostrar o que já se sabe de cor. A escolha
+fica guardada, porque quem prefere um modo prefere sempre.
+
+E o painel fica **menor**, não apenas mais vazio: medido na banca, 260×320 no modo cheio e 186×207
+retraído. Tirar as informações e manter o tamanho deixaria a largura e a altura do modo cheio
+sobrando em volta de uma lista de três linhas curtas.
+
+São dois painéis diferentes, então cada modo guarda o seu tamanho. Um valor só serviria mal aos dois
+e deixaria a alternância presa ao maior: arraste a alça no compacto e o modo cheio não muda.
+
+O formato antigo, de quando havia um tamanho só, continua valendo como o tamanho do modo cheio — que
+é o que ele sempre foi.
+
+### Encolher a janela não apaga o tamanho escolhido
+
+O painel se encaixa na tela de agora: no máximo 92% da largura e 88% da altura, refeito a cada
+mudança da janela, e não só na próxima carga.
+
+Isso abria um caminho silencioso para o painel esquecer o tamanho que você escolheu. A janela
+encolhe → o painel é limitado ao teto da tela nova → essa mudança acorda o `ResizeObserver`, que
+grava o tamanho limitado por cima do escolhido. De volta à tela grande, o painel fica pequeno para
+sempre, e nenhuma peça do caminho parece errada: cada uma fez o que devia.
+
+O observador agora compara a caixa com o último tamanho que **o código** aplicou. Se bate, a mudança
+não foi da alça, e nada é gravado.
+
+### A mochila reabre na categoria errada
+
+Ela guarda a última categoria usada. Deixada em **Boosters**, abre em Boosters — sem uma única
+célula de Pokémon na tela. A ferramenta lia essa grade vazia e anunciava que o time guardado tinha
+sumido da mochila: mensagem errada sobre um problema que não existia.
+
+Antes de ler qualquer coisa, o inventário é levado para a aba **Pokémon** (ou **Todos**, de
+reserva). Trocar de aba não abre janela nenhuma, então não custa nada ao gerenciador de janelas.
+
+É a mesma lição que a loja rápida já tinha aprendido sobre as abas dela, ignorada pela segunda vez
+dentro do mesmo pacote.
+
+### A banca: o painel sem o jogo
+
+`testes/banca.html` sobe o painel do Times fora do PokePixel — um `PPX` de mentira, três times
+semeados, nenhum jogo por baixo. Serve para olhar o desenho sem abrir a conta de ninguém.
+
+Ela se pagou na primeira vez em que foi usada, pegando três defeitos que nenhuma verificação de
+texto encontraria: um `ReferenceError` que derrubava o módulo inteiro e deixava o painel sem lista
+(`const` não sobe, e `aplicarModo` chamava `recolocar` cedo demais — o `no-undef` não vê isso,
+porque o nome existe), a barra do relógio visível o tempo todo apesar do `hidden`, e o vazio embaixo
+da lista no modo compacto.
+
+O que ela **não** prova: nada que dependa do DOM do jogo. É por isso que a decisão de troca mora
+numa função pura, testada à parte.
+
+```bash
+python -m http.server 8777
+```
+
+Depois abra `http://localhost:8777/testes/banca.html`. Por `file://` não funciona: o navegador
+recusa carregar `../times.js`.
+
 ## O que não aparece na mochila é zero
 
 A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como
@@ -196,6 +369,14 @@ agora"*, até um F5.
 
 As duas extensões faziam isso ao limpar popups antes de agir. Agora só fecham o que está mesmo na
 tela: o painel precisa ter largura, e o `✕` também.
+
+**E o Times repetiu o erro mesmo com isto escrito aqui.** Ele conferia o fechamento por
+`isConnected` — que continua verdadeiro numa janela fechada —, concluía que o clique tinha falhado e
+clicava de novo, até três vezes. Era a própria ferramenta provocando o travamento que depois
+relatava como defeito do jogo, e que aparecia "depois de usar umas três vezes".
+
+Daí as duas regras, agora com teste de guarda: o critério é a janela **sair da tela**, nunca sair do
+DOM; e não existe segunda tentativa. Se o clique não fechou, insistir é pior do que falhar.
 
 ## Uma quebrada não leva as outras
 
