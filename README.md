@@ -456,6 +456,14 @@ Um botão à parte, que leva de volta sem ginásio nenhum — útil depois de um
 meio, ou de uma ida ao ginásio feita à mão. A caçada em curso é lembrada de dez em dez segundos,
 porque o nome dela só existe no DOM enquanto ela corre: depois de sair, não há de onde tirá-lo.
 
+**Ele monta o time de "Voltar com" antes de reentrar.** A primeira versão não fazia isso, e o
+relato foi direto: *"cliquei em voltar para a caçada e ele não trocou meu time"*. O campo está no
+painel mesmo por cima do botão — ignorá-lo era a interface prometer uma coisa e fazer outra.
+
+Se você já estiver numa caçada, ele troca o time e para por aí: não faz sentido reentrar no que já
+se está. E segue o mesmo orçamento de 2 a 3 minutos do fim de um ginásio, porque é a mesma
+sequência, feita à mão.
+
 ## O que não aparece na mochila é zero
 
 A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como

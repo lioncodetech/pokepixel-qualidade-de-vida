@@ -872,12 +872,10 @@ PPX.modulo(
      */
     campo('[data-voltar]').addEventListener('click', async () => {
       if (correndo || tarefa()) return;
-      if (naCacada()) {
-        dizer('Você já está numa caçada.');
-        return;
-      }
       const cacada = ler(CHAVE_ULTIMA, null);
-      if (!cacada?.nome) {
+      const paraOTime = campo('[data-time-volta]').value;
+      const jaNaCacada = naCacada();
+      if (!jaNaCacada && !cacada?.nome) {
         dizer('Não sei de qual caçada você saiu — entre numa e eu passo a lembrar.', true);
         return;
       }
@@ -885,9 +883,34 @@ PPX.modulo(
       parar = false;
       travarBotoes(true);
       try {
+        // O orcamento da saida tambem vale aqui: e' a mesma sequencia do fim de um ginasio, feita
+        // a' mao. Sorteado agora porque este botao nao passa pela maquina de estados.
+        const alvo = Date.now() + sorteio(CICLO_SAIDA[0], CICLO_SAIDA[1]);
+
+        // **Trocar o time faz parte.** O painel mostra "Voltar com" mesmo por cima deste botao;
+        // voltar a' cacada sem usar esse campo era a interface prometer uma coisa e fazer outra.
+        // Relatado assim: "cliquei em voltar para a cacada e ele nao trocou meu time".
+        if (paraOTime) {
+          dizer(`Montando o time "${paraOTime}"…`);
+          const troca = await trocarTime(paraOTime);
+          if (!troca.ok) {
+            dizer(`Parei: não montei o time "${paraOTime}": ${troca.erro}`, true);
+            return;
+          }
+        }
+
+        if (jaNaCacada) {
+          celebrar(
+            paraOTime ? `Time "${paraOTime}" montado. Você já estava na caçada.` : 'Você já está numa caçada.',
+          );
+          return;
+        }
+
+        if (parar) return;
+        await respirarAte(alvo, 1, (t) => dizer(t));
         await fecharMenus();
         const r = await voltarACacada(cacada, (t) => dizer(t));
-        if (r.ok) celebrar(`De volta à "${cacada.nome}".`);
+        if (r.ok) celebrar(`De volta à "${cacada.nome}" com o time "${paraOTime}".`);
         else dizer(`Parei: ${r.erro}`, true);
       } finally {
         correndo = false;

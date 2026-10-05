@@ -168,6 +168,22 @@ test('minimizado fica so a etiqueta GYM', () => {
   );
 });
 
+test('voltar para a cacada tambem troca o time', () => {
+  // Relatado assim: "cliquei em voltar para a caçada e ele não trocou meu time". O painel mostra
+  // "Voltar com" mesmo por cima deste botão — ignorar esse campo era a interface prometer uma
+  // coisa e fazer outra.
+  const bloco = codigo.slice(codigo.indexOf("campo('[data-voltar]').addEventListener"));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    });'));
+  const troca = corpo.indexOf('await trocarTime(paraOTime)');
+  const volta = corpo.indexOf('await voltarACacada(');
+  assert.ok(troca >= 0, 'o botão de voltar não troca o time');
+  assert.ok(troca < volta, 'volta à caçada antes de montar o time');
+  // Já numa caçada, troca o time e para por aí — não faz sentido reentrar no que já se está.
+  assert.match(corpo, /if \(jaNaCacada\)/);
+  // E segue o mesmo orçamento do fim de um ginásio, que é a mesma sequência feita à mão.
+  assert.match(corpo, /sorteio\(CICLO_SAIDA\[0\], CICLO_SAIDA\[1\]\)/);
+});
+
 test('o painel nao deixa botao clicavel que nao faz nada', () => {
   // Durante os dez minutos de espera o "Fazer o ginásio" continuava clicável e era ignorado em
   // silêncio. Um botão que ignora o utilizador é pior do que um botão desligado.
