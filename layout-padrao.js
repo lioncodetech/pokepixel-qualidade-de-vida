@@ -12,7 +12,7 @@ PPX.modulo(
   {
     id: 'layout-padrao',
     nome: 'Layout padrão',
-    atalhos: 'Alt+Z esconde · Alt+X mostra · Alt+L arruma',
+    atalhos: 'Alt+J esconde · Alt+K mostra · Alt+L arruma',
   },
   () => {
     'use strict';
@@ -231,7 +231,7 @@ PPX.modulo(
       <header>
         <strong>Layout padrão</strong>
         <button type="button" data-minimizar title="Minimizar, deixando só o botão de arrumar">–</button>
-        <button type="button" data-fechar title="Esconder (Alt+Z)">×</button>
+        <button type="button" data-fechar title="Esconder (Alt+J)">×</button>
       </header>
       <div class="corpo">
         <button type="button" class="tudo" data-arrumar>Arrumar tudo</button>
@@ -460,7 +460,7 @@ PPX.modulo(
      *
      * E' o comando que se usa o tempo todo, e o painel inteiro so' faz falta quando se muda alguma
      * coisa. Minimizado nao e' escondido: quem some com a ferramenta e' o menu do pacote (ou
-     * Alt+Z), e ai' a bolha vai junto.
+     * Alt+J), e ai' a bolha vai junto.
      */
     const bolha = document.createElement('div');
     bolha.id = 'lioncode-layout-bolha';
@@ -587,11 +587,13 @@ PPX.modulo(
 
     addEventListener('keydown', (evento) => {
       if (!evento.altKey || evento.ctrlKey || evento.metaKey) return;
-      if (evento.code === 'KeyZ') {
+      // Alt+J e Alt+K, e nao Alt+Z e Alt+X: estas duas sao do caderno de anotacoes, que roda em
+      // qualquer site. Com as duas extensoes na mesma janela, uma tecla comandava as duas.
+      if (evento.code === 'KeyJ') {
         evento.preventDefault();
         mostrarPainel(false);
         globalThis.PPX?.anotar?.('layout-padrao', false);
-      } else if (evento.code === 'KeyX') {
+      } else if (evento.code === 'KeyK') {
         evento.preventDefault();
         mostrarPainel(true);
         globalThis.PPX?.anotar?.('layout-padrao', true);

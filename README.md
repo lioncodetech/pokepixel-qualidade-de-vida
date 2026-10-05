@@ -12,7 +12,7 @@ janela em que você está.
 | Senha | guarda usuário e senha e os cola no login | botões na tela de login |
 | Loja rápida | compra pokébolas, poções e revives sem abrir a loja | Alt+C esconde · Alt+V mostra |
 | Venda rápida | vende pokémon pelas raridades que você marcar | Alt+D esconde · Alt+F mostra |
-| Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+Z esconde · Alt+X mostra · Alt+L arruma |
+| Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+J esconde · Alt+K mostra · Alt+L arruma |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
@@ -125,8 +125,10 @@ com um **⤢** ao lado para abrir o painel de volta. A bolha e o painel dividem 
 arrastar um leva o outro —, e arrastar a bolha não dispara o botão: andou menos de 4px é clique,
 mais que isso é arrasto.
 
-Minimizado não é escondido. Quem some com a ferramenta é a chave no menu do PokePixel (ou **Alt+Z**),
-e aí a bolha vai junto; **Alt+X** traz de volta. Com o painel fora de vista o resultado de cada
+Minimizado não é escondido. Quem some com a ferramenta é a chave no menu do PokePixel (ou **Alt+J**),
+e aí a bolha vai junto; **Alt+K** traz de volta. São **Alt+J** e **Alt+K**, e não o par vizinho das
+outras ferramentas, porque **Alt+Z** e **Alt+X** são do caderno de anotações, que roda em qualquer
+site: com as duas extensões na mesma janela, uma tecla comandava as duas. Com o painel fora de vista o resultado de cada
 arrumada aparece no título da bolha, para onde o mouse já está indo.
 
 ### Arrumar ao abrir cada janela

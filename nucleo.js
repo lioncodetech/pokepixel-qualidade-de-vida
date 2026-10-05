@@ -63,7 +63,7 @@
     {
       id: 'layout-padrao',
       nome: 'Layout padrão',
-      atalhos: 'Alt+Z esconde · Alt+X mostra · Alt+L arruma',
+      atalhos: 'Alt+J esconde · Alt+K mostra · Alt+L arruma',
     },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
