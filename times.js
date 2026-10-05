@@ -823,7 +823,17 @@ PPX.modulo(
          O estado e o relogio ficam: saber que a troca esta' andando importa nos dois modos. */
       #lioncode-times.compacto .salvar,
       #lioncode-times.compacto li small,
-      #lioncode-times.compacto li [data-apagar] { display: none; }
+      #lioncode-times.compacto li [data-apagar],
+      #lioncode-times.compacto li [data-atualizar] { display: none; }
+      /* O nome convida a ser clicado: e' por ele que se renomeia. */
+      #lioncode-times li b { cursor: text; }
+      #lioncode-times li b:hover { text-decoration: underline dotted #8b97a8; }
+      #lioncode-times li input.renomeando {
+        width: 100%; background: #0d1219; color: #e7edf6; border: 1px solid #3b82f6;
+        border-radius: 5px; padding: 2px 5px; font: inherit; font-weight: 600;
+      }
+      /* A confirmacao de regravar: o mesmo botao, a dizer que o proximo clique vale. */
+      #lioncode-times li [data-atualizar].confirmando { color: #ffd479; border-color: #7a6227; }
       #lioncode-times.compacto li { padding: 4px 8px; }
       #lioncode-times.compacto .corpo { gap: 6px; }
       /* Retrair tem de deixar o painel **menor**, e nao so' tirar o que estava escrito nele: a
@@ -914,6 +924,8 @@ PPX.modulo(
         rotulo.className = 'rotulo';
         const nome = document.createElement('b');
         nome.textContent = time.nome;
+        nome.title = 'Clique para renomear';
+        nome.addEventListener('click', () => renomear(nome, time.nome));
         const quem = document.createElement('small');
         quem.textContent = time.membros.map((m) => m.nome).join(', ');
         quem.title = quem.textContent;
@@ -922,6 +934,33 @@ PPX.modulo(
         usar.type = 'button';
         usar.textContent = 'Usar';
         usar.addEventListener('click', () => void usarTime(time));
+        // Regravar este time com a equipe que esta' na tela. Em dois cliques, de proposito: e'
+        // uma gravacao por cima, e um toque errado aqui apagaria um time inteiro sem aviso.
+        const atualizar = document.createElement('button');
+        atualizar.type = 'button';
+        atualizar.dataset.atualizar = '';
+        atualizar.textContent = '↻';
+        atualizar.title = `Regravar "${time.nome}" com a equipe que está na tela`;
+        let confirmar = 0;
+        atualizar.addEventListener('click', () => {
+          if (confirmar) {
+            clearTimeout(confirmar);
+            confirmar = 0;
+            atualizar.classList.remove('confirmando');
+            atualizar.textContent = '↻';
+            void salvarAtual(time.nome);
+            return;
+          }
+          atualizar.classList.add('confirmando');
+          atualizar.textContent = '?';
+          dizer(`Clique no ? outra vez para regravar "${time.nome}" com a equipe da tela.`);
+          confirmar = setTimeout(() => {
+            confirmar = 0;
+            atualizar.classList.remove('confirmando');
+            atualizar.textContent = '↻';
+          }, 5000);
+        });
+
         const apagar = document.createElement('button');
         apagar.type = 'button';
         apagar.dataset.apagar = '';
@@ -935,9 +974,68 @@ PPX.modulo(
           desenhar();
           dizer(`"${time.nome}" esquecido.`);
         });
-        item.append(rotulo, usar, apagar);
+        item.append(rotulo, usar, atualizar, apagar);
         lista.append(item);
       }
+    };
+
+    /**
+     * Renomear no lugar: o nome vira uma caixa de texto ali mesmo.
+     *
+     * Enter grava, Escape desiste, e sair da caixa grava tambem — quem clica fora depois de
+     * escrever quer o que escreveu, nao o que estava la' antes.
+     *
+     * O Ginasio guarda os times **pelo nome**, entao renomear aqui partiria a escolha dele em
+     * silencio. Por isso avisa-se pela porta `PPX.gym`, do mesmo jeito que o Ginasio pergunta os
+     * nomes pela porta `PPX.times`.
+     */
+    const renomear = (elemento, velho) => {
+      if (aplicando) return;
+      const caixa = document.createElement('input');
+      caixa.type = 'text';
+      caixa.className = 'renomeando';
+      caixa.maxLength = 24;
+      caixa.value = velho;
+      let fechado = false;
+
+      const desistir = () => {
+        if (fechado) return;
+        fechado = true;
+        caixa.replaceWith(elemento);
+      };
+
+      const gravarNome = () => {
+        if (fechado) return;
+        const novo = caixa.value.trim();
+        fechado = true;
+        caixa.replaceWith(elemento);
+        if (!novo || novo === velho) return;
+        if (times().some((t) => t.nome === novo)) {
+          dizer(`Já existe um time chamado "${novo}".`, true);
+          return;
+        }
+        gravar(
+          CHAVE_TIMES,
+          times().map((t) => (t.nome === velho ? { ...t, nome: novo } : t)),
+        );
+        globalThis.PPX?.gym?.timeRenomeado?.(velho, novo);
+        desenhar();
+        celebrar(`"${velho}" agora chama-se "${novo}".`);
+      };
+
+      caixa.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          gravarNome();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          desistir();
+        }
+      });
+      caixa.addEventListener('blur', gravarNome);
+      elemento.replaceWith(caixa);
+      caixa.focus();
+      caixa.select();
     };
 
     /**
@@ -947,13 +1045,15 @@ PPX.modulo(
      * no painel de equipe, entao ele e' aberto e fechado em seguida — e' o unico jeito de guardar
      * a ordem, e sem ela "usar" devolveria os Pokemon certos na sequencia errada.
      */
-    async function salvarAtual() {
+    async function salvarAtual(nomeForcado) {
       const atual = doHud();
       if (!atual.length) {
         dizer('Não encontrei a equipe na tela. O jogo já terminou de carregar?', true);
         return;
       }
-      const nome = (campo('[data-nome]').value || '').trim() || `Time ${times().length + 1}`;
+      // Com nome dado, e' uma regravacao de um time que ja' existe — o `↻` da lista. Sem nome, e'
+      // o Salvar de sempre, que le' a caixa de texto.
+      const nome = nomeForcado || (campo('[data-nome]').value || '').trim() || `Time ${times().length + 1}`;
       dizer('Lendo a ordem de batalha…');
       let ordem = [];
       if (await abrirEquipe()) {
@@ -969,13 +1069,20 @@ PPX.modulo(
         lider: atual.find((p) => p.lider)?.id || '',
         ordem,
       };
-      gravar(CHAVE_TIMES, [...times().filter((t) => t.nome !== nome), time]);
-      campo('[data-nome]').value = '';
+      // A ordem da lista e' preservada numa regravacao: o time regravado fica onde estava, em vez
+      // de saltar para o fim como se fosse novo.
+      const guardados = times();
+      const onde = guardados.findIndex((t) => t.nome === nome);
+      if (onde >= 0) guardados[onde] = time;
+      else guardados.push(time);
+      gravar(CHAVE_TIMES, guardados);
+      if (!nomeForcado) campo('[data-nome]').value = '';
       desenhar();
-      dizer(
+      const verbo = onde >= 0 ? 'regravado' : 'guardado';
+      celebrar(
         ordem.length
-          ? `"${nome}" guardado com ${time.membros.length} Pokémon e a ordem.`
-          : `"${nome}" guardado com ${time.membros.length} Pokémon, sem a ordem.`,
+          ? `"${nome}" ${verbo} com ${time.membros.length} Pokémon e a ordem.`
+          : `"${nome}" ${verbo} com ${time.membros.length} Pokémon, sem a ordem.`,
       );
     }
 

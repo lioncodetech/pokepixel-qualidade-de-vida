@@ -109,7 +109,9 @@ test('o relogio para antes de a tela anunciar o fim', () => {
 test('o modo compacto some com o que nao e nome nem Usar, e e lembrado', () => {
   assert.match(codigo, /#lioncode-times\.compacto \.salvar,/);
   assert.match(codigo, /#lioncode-times\.compacto li small,/);
-  assert.match(codigo, /#lioncode-times\.compacto li \[data-apagar\] \{ display: none; \}/);
+  assert.match(codigo, /#lioncode-times\.compacto li \[data-apagar\],/);
+  // Regravar e esquecer sao os dois botoes de administrar a lista: os dois somem no compacto.
+  assert.match(codigo, /#lioncode-times\.compacto li \[data-atualizar\] \{ display: none; \}/);
   // O tamanho proprio do modo compacto esta' no teste do retrair, logo abaixo.
   assert.match(codigo, /gravar\(CHAVE_COMPACTO, compacto\)/);
 });
@@ -175,4 +177,34 @@ test('a medicao que originou tudo isto continua escrita nas duas extensoes de or
       /Nao foi possivel abrir esta janela/,
       `${arquivo} perdeu a medicao sobre o X de janela ja' fechada`,
     );
+});
+
+test('um time guardado pode ser regravado sem sair do lugar na lista', () => {
+  // "Eu quero poder editar um time já existente." Regravar não é guardar outro: o time regravado
+  // fica onde estava, em vez de saltar para o fim como se fosse novo.
+  assert.match(codigo, /async function salvarAtual\(nomeForcado\)/);
+  assert.match(codigo, /const onde = guardados\.findIndex\(\(t\) => t\.nome === nome\)/);
+  assert.match(codigo, /if \(onde >= 0\) guardados\[onde\] = time;/);
+  // E é em dois cliques: uma gravação por cima apaga um time inteiro, não pode sair de um toque.
+  assert.match(codigo, /atualizar\.textContent = '\?';/);
+  assert.match(codigo, /Clique no \? outra vez para regravar/);
+});
+
+test('renomear avisa o ginasio, que guarda os times pelo nome', () => {
+  assert.match(codigo, /const renomear = \(elemento, velho\) =>/);
+  // Enter grava, Escape desiste, e sair da caixa grava também.
+  assert.match(codigo, /if \(e\.key === 'Enter'\)/);
+  assert.match(codigo, /else if \(e\.key === 'Escape'\)/);
+  assert.match(codigo, /caixa\.addEventListener\('blur', gravarNome\)/);
+  // Dois times com o mesmo nome seriam indistinguíveis — e o "usar" pegaria o primeiro.
+  assert.match(codigo, /if \(times\(\)\.some\(\(t\) => t\.nome === novo\)\)/);
+  // O Ginásio guarda as escolhas pelo nome: sem este aviso, renomear partia a escolha dele em
+  // silêncio, e só se descobriria no meio de uma corrida.
+  assert.match(codigo, /globalThis\.PPX\?\.gym\?\.timeRenomeado\?\.\(velho, novo\)/);
+  const gym = ler('gym.js');
+  assert.match(gym, /timeRenomeado: \(velho, novo\) =>/);
+  // As duas regioes, e nao so' a que esta' a' vista: o mesmo time pode estar escolhido nas duas.
+  assert.match(gym, /const trocar = \(nome\) => \(nome === velho \? novo : nome\)/);
+  assert.match(gym, /timeGym: trocar\(guardado\.porRegiao\[r\]\.timeGym\)/);
+  assert.match(gym, /timeVolta: trocar\(guardado\.porRegiao\[r\]\.timeVolta\)/);
 });

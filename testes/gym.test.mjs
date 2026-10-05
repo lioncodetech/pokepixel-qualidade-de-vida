@@ -49,8 +49,11 @@ test('o F5 e uma etapa, e a seguinte e gravada antes dele', () => {
 
 test('a cacada e guardada antes do primeiro passo', () => {
   // Depois de sair dela já não há como saber de onde se saiu: o nome só existe enquanto ela corre.
-  const bloco = codigo.slice(codigo.indexOf("campo('[data-ir]').addEventListener"));
+  // O botão e a agenda começam pelo mesmo caminho: `comecar`. O automático não pode ser um
+  // segundo fluxo, com os seus próprios enganos.
+  const bloco = codigo.slice(codigo.indexOf('const comecar = (regiao)'));
   assert.match(bloco, /cacada: cacadaAtiva\(\)/);
+  assert.match(codigo, /campo\('\[data-ir\]'\)\.addEventListener\('click', \(\) => \{\s*if \(correndo \|\| tarefa\(\)\) return;\s*comecar\(/);
   assert.match(codigo, /\.platform-hunt__zone-name/);
   assert.match(codigo, /\.platform-hunt__zone-meta/);
 });
@@ -269,4 +272,45 @@ test('o botao de confirmar o resumo so serve se estiver ligado', () => {
   assert.match(codigo, /for \(let volta = 0; volta < 4; volta \+= 1\)/);
   // Falhar aqui diz o que viu, com a marca de desligado — como nos ginásios.
   assert.match(codigo, /\(desligado\)/);
+});
+
+test('a agenda e a mesma da venda e da loja rapidas', () => {
+  // Pedido assim: "vou colocar o range de horario igual ao do de vendas e compras". O formato e a
+  // logica sao os de la' — janela por virgula, instante sorteado dentro da janela, UMA rodada por
+  // janela —, e nao um desenho novo.
+  const venda = ler('venda-rapida.js');
+  for (const pedaço of [
+    'const minuto = (hora, min) => (Number(hora) % 24) * 60 + (Number(min ?? 0) % 60);',
+    'const duracao = ((fim - inicio + 1440) % 1440 || 1440) * 60000;',
+    'if (fecha <= quando || abre <= ultima) continue;',
+  ])
+    assert.ok(venda.includes(pedaço) && codigo.includes(pedaço), `as duas tem: ${pedaço}`);
+  // Uma janela por regiao, porque as regioes pedem times diferentes.
+  assert.match(codigo, /const REGIOES = \['KANTO', 'JOHTO'\]/);
+  assert.match(codigo, /const timesDe = \(regiao\) => escolhas\(\)\.porRegiao\[regiao\]/);
+});
+
+test('a janela e marcada como usada antes de comecar, por causa do F5', () => {
+  // A corrida passa por uma recarga no meio. Um relogio que so' existisse em memoria voltaria a
+  // disparar na mesma janela — desafiando outra vez um ginasio ja' feito.
+  const bloco = codigo.slice(codigo.indexOf('const dispararAuto = (regiao)'));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  const marca = corpo.indexOf('guardarAgenda(nova)');
+  const roda = corpo.indexOf('comecar(regiao)');
+  assert.ok(marca >= 0 && roda > marca, 'marca a janela antes de comecar a corrida');
+});
+
+test('o sinal de cada regiao conta o dia do servidor, e nao o da maquina', () => {
+  // Verde ganhou, vermelho perdeu, laranja deu erro, cinza ainda nao foi feito hoje.
+  assert.match(codigo, /vitoria: \['#3fb950'/);
+  assert.match(codigo, /derrota: \['#f85149'/);
+  assert.match(codigo, /erro: \['#d29922'/);
+  assert.match(codigo, /vazio: \['#424a57'/);
+  // O dia e' contado a partir da hora em que o servidor reseta, que e' um campo — inventar a hora
+  // deixaria o sinal verde depois do reset, ou cinza antes dele.
+  assert.match(codigo, /d\.setMinutes\(d\.getMinutes\(\) - horaDoReset\(\)\)/);
+  assert.match(codigo, /if \(!linha \|\| linha\.dia !== diaDoServidor\(\)\) return \{ estado: 'vazio' \}/);
+  // Derrota nao e' erro: sao estados diferentes, com cores diferentes.
+  assert.match(codigo, /dados\.venceu === false \? 'derrota' : 'vitoria'/);
+  assert.match(codigo, /anotarPlacar\(dados\.regiao, 'erro', erro\)/);
 });

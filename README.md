@@ -302,6 +302,24 @@ No fim o painel diz, em verde: **`Pronto! "gym" montado em 24 s.`** O relógio p
 anúncio, e não só na limpeza do `finally` — entre o fim da troca e o fim da limpeza há até um
 segundo, e durante ele a tela mostrava "Pronto" com a barra ainda correndo ao lado.
 
+### Editar um time guardado
+
+Dois caminhos, os dois na própria linha do time:
+
+**Regravar com a equipe da tela** — o `↻`. Monte a equipe como quer no jogo e clique: aquele time
+passa a ser esta equipe, sem digitar o nome outra vez. São **dois cliques** (o botão vira `?` e
+espera 5 s pelo segundo), porque isto grava por cima de um time inteiro e um toque errado não pode
+apagar nada. O time regravado fica **onde estava** na lista, em vez de saltar para o fim.
+
+**Renomear** — clique no nome. Ele vira uma caixa de texto ali mesmo: Enter grava, Escape desiste,
+e clicar fora grava também (quem escreveu quer o que escreveu). Dois times com o mesmo nome são
+recusados — seriam indistinguíveis, e o `usar` pegaria o primeiro.
+
+O **Ginásio guarda os times pelo nome**, porque nome é tudo o que há — não existe id de time no
+jogo. Renomear aqui partiria a escolha dele em silêncio, e só se descobriria no meio de uma corrida.
+Por isso o Times avisa pela porta `PPX.gym`, do mesmo jeito que o Ginásio pergunta os nomes pela
+porta `PPX.times`: a escolha guardada e a lista na tela seguem o nome novo sozinhas.
+
 ### Modo compacto
 
 O botão `–` no cabeçalho deixa só o **nome do time e o `Usar`**. Somem o campo de salvar, a lista de
@@ -510,6 +528,44 @@ segue-se.
 
 A banca cobre os dois casos: no jogo de mentira o botão `Continuar` só nasce **2,5 s** depois do
 título, e nasce **desligado** por mais 6 s.
+
+### Horário para cada região
+
+O formato é o mesmo da venda e da loja rápidas, por pedido: `08:00-09:00`, uma janela por vírgula,
+e **uma rodada por janela**. O instante é sorteado dentro da janela inteira — começar sempre às
+08:00 em ponto é o padrão mais visível que existe. Uma janela que termina antes de começar
+atravessa a meia-noite (`22:00-02:00`).
+
+Kanto e Johto têm cada uma a sua caixa, o seu interruptor e, agora, **os seus próprios times**: a
+região escolhida no alto manda no que as duas listas mostram, e trocar de região não escreve por
+cima dos times da outra. Sem isso, agendar as duas seria agendar a mesma equipe duas vezes.
+
+A janela é marcada como usada **antes** de a corrida começar, nunca no fim. A corrida passa por um
+F5 no meio: um relógio que vivesse só na memória voltaria a disparar na mesma janela, desafiando
+outra vez um ginásio já feito.
+
+O botão e a agenda começam pelo mesmo caminho (`comecar`). O automático não pode ser um segundo
+fluxo, com os seus próprios enganos.
+
+### O sinal de cada região
+
+Um ponto ao lado de cada linha:
+
+| cor | o que diz |
+|---|---|
+| verde | venceu |
+| vermelho | perdeu |
+| laranja | deu erro |
+| cinza | ainda não foi feito hoje |
+
+Passar o rato diz o resto: *"KANTO: Vitória às 20:44"*, *"JOHTO: Deu erro às 20:43 — não achei o
+botão Caçar"*. Com o ginásio a correr sozinho, é a única forma de saber o que aconteceu enquanto
+ninguém estava a olhar — e derrota e erro ficam distinguíveis, que é a diferença entre "perdi" e
+"nem cheguei a lutar".
+
+**A hora do reset é um campo.** Eu não sei a que horas o PokePixel reseta o ginásio do dia, e
+inventar um número seria pior do que perguntar: o sinal ficaria verde depois do reset, ou cinza
+antes dele. O padrão é meia-noite local; mudar o campo acerta tudo, sem versão nova.
 
 ### O botão `↻`: times novos sem recarregar a página
 

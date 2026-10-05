@@ -43,6 +43,10 @@ PPX.modulo(
     /** A ultima cacada vista a correr, para o botao de voltar funcionar fora de uma tarefa. */
     const CHAVE_ULTIMA = 'lioncode:gym:ultima-cacada';
     const CHAVE_MIN = 'lioncode:gym:minimizado';
+    const CHAVE_AGENDA = 'lioncode:gym:agenda';
+    const CHAVE_PLACAR = 'lioncode:gym:placar';
+
+    const REGIOES = ['KANTO', 'JOHTO'];
 
     // ------------------------------------------------------------- os dois ciclos
     //
@@ -613,8 +617,163 @@ PPX.modulo(
     const guardarTarefa = (dados) => gravar(CHAVE_TAREFA, dados);
     const limparTarefa = () => apagar(CHAVE_TAREFA);
 
-    const escolhas = () =>
-      ler(CHAVE_ESCOLHAS, { regiao: 'KANTO', timeGym: '', timeVolta: 'Hunt' });
+    /**
+     * As escolhas, **uma por regiao**.
+     *
+     * Kanto e Johto pedem times diferentes — foi o pedido original desta ferramenta. Com um par
+     * unico, agendar as duas regioes seria agendar a mesma equipe duas vezes.
+     *
+     * A forma antiga (um par so', na raiz) e' lida e atribuida a' regiao que estava escolhida na
+     * altura: quem ja' usava a ferramenta nao perde o que tinha configurado.
+     */
+    const PADRAO_REGIAO = { timeGym: '', timeVolta: 'Hunt' };
+
+    const escolhas = () => {
+      const bruto = ler(CHAVE_ESCOLHAS, null) || {};
+      const regiao = bruto.regiao === 'JOHTO' ? 'JOHTO' : 'KANTO';
+      const por = { ...(bruto.porRegiao || {}) };
+      if (!bruto.porRegiao && (bruto.timeGym || bruto.timeVolta))
+        por[regiao] = { timeGym: bruto.timeGym || '', timeVolta: bruto.timeVolta || 'Hunt' };
+      return {
+        regiao,
+        porRegiao: Object.fromEntries(
+          REGIOES.map((r) => [r, { ...PADRAO_REGIAO, ...(por[r] || {}) }]),
+        ),
+      };
+    };
+
+    const timesDe = (regiao) => escolhas().porRegiao[regiao] || { ...PADRAO_REGIAO };
+
+    // ------------------------------------------------------------- a agenda
+    //
+    // O formato e a logica sao os da venda e da loja rapidas, de proposito: "08:00-09:00", uma
+    // janela por virgula, instante sorteado dentro da janela e **uma rodada por janela**. Foi o
+    // pedido — "igual ao do de vendas e compras" — e e' codigo ja' usado, nao um desenho novo.
+
+    const agenda = () => {
+      const bruto = ler(CHAVE_AGENDA, null) || {};
+      // O `reset` viaja junto: `guardarAgenda(agenda())` e' o caminho de toda a gravacao, e um
+      // campo que nao estivesse aqui seria apagado na primeira mudanca de horario.
+      return Object.assign({ reset: String(bruto.reset ?? '00:00') }, Object.fromEntries(
+        REGIOES.map((r) => [
+          r,
+          {
+            ligado: bruto[r]?.ligado === true,
+            horarios: String(bruto[r]?.horarios ?? ''),
+            ultima: Number(bruto[r]?.ultima) || 0,
+          },
+        ]),
+      ));
+    };
+
+    const guardarAgenda = (nova) => gravar(CHAVE_AGENDA, nova);
+
+    /**
+     * As janelas de horario lidas de "08:00-09:00, 19:00-20:00".
+     *
+     * Uma janela que termina antes de comecar atravessa a meia-noite: 22:00-02:00 vale assim.
+     */
+    const janelasDe = (texto) => {
+      const achadas = [];
+      for (const parte of String(texto).split(/[;,]/)) {
+        const casa =
+          /^\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*(?:-|as|ate|até)\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*$/i.exec(
+            parte,
+          );
+        if (!casa) continue;
+        const minuto = (hora, min) => (Number(hora) % 24) * 60 + (Number(min ?? 0) % 60);
+        achadas.push({ inicio: minuto(casa[1], casa[2]), fim: minuto(casa[3], casa[4]) });
+      }
+      return achadas;
+    };
+
+    /**
+     * As janelas como instantes de verdade — ontem, hoje e amanha —, em ordem de abertura.
+     *
+     * Em minutos do dia nao da' para dizer "esta janela ja' foi usada": 08:00 de hoje e 08:00 de
+     * amanha sao o mesmo numero. Ontem entra por causa das janelas que atravessam a meia-noite.
+     */
+    const proximasJanelas = (texto, agora) => {
+      const todas = [];
+      for (const { inicio, fim } of janelasDe(texto)) {
+        const duracao = ((fim - inicio + 1440) % 1440 || 1440) * 60000;
+        for (const dia of [-1, 0, 1]) {
+          const abre = new Date(agora);
+          abre.setHours(0, 0, 0, 0);
+          abre.setDate(abre.getDate() + dia);
+          abre.setMinutes(inicio);
+          todas.push({ abre: abre.getTime(), fecha: abre.getTime() + duracao });
+        }
+      }
+      return todas.sort((a, b) => a.abre - b.abre);
+    };
+
+    /**
+     * Quanto falta ate' o instante sorteado da proxima janela — ou `null` se nao ha' nenhuma.
+     *
+     * O instante e' sorteado dentro da janela inteira, e nao na abertura: comecar sempre as 08:00
+     * em ponto e' o padrao mais visivel que existe. Com a janela ja' aberta, o sorteio vale do
+     * momento atual ate' o fechamento.
+     */
+    const esperaDaJanela = (texto, ultima, agora = new Date()) => {
+      const quando = agora.getTime();
+      for (const { abre, fecha } of proximasJanelas(texto, agora)) {
+        if (fecha <= quando || abre <= ultima) continue;
+        const comeco = Math.max(abre, quando);
+        if (comeco >= fecha) continue;
+        return comeco - quando + Math.random() * (fecha - comeco);
+      }
+      return null;
+    };
+
+    // -------------------------------------------------------------- o placar
+    //
+    // Um sinal por regiao: verde ganhou, vermelho perdeu, laranja deu erro, cinza ainda nao foi
+    // feito hoje. Nao e' enfeite — com o ginasio a correr sozinho, e' a unica forma de saber o
+    // que aconteceu enquanto voce nao estava olhando.
+
+    const CORES = {
+      vitoria: ['#3fb950', 'Vitória'],
+      derrota: ['#f85149', 'Derrota'],
+      erro: ['#d29922', 'Deu erro'],
+      vazio: ['#424a57', 'Ainda não foi feito hoje'],
+    };
+
+    /**
+     * O "dia" do placar, contado a partir da hora em que o servidor reseta.
+     *
+     * **Nao sei a que horas o PokePixel reseta o ginásio do dia**, e inventar um numero seria pior
+     * do que perguntar: o sinal ficaria verde depois do reset, ou cinza antes dele. Por isso a
+     * hora e' um campo, com meia-noite local por padrao. Mudar o campo acerta tudo sem publicar
+     * versao nova.
+     */
+    const horaDoReset = () => {
+      const casa = /^\s*(\d{1,2}):?(\d{2})?\s*$/.exec(String((ler(CHAVE_AGENDA, null) || {}).reset ?? '00:00'));
+      if (!casa) return 0;
+      return (Number(casa[1]) % 24) * 60 + (Number(casa[2] ?? 0) % 60);
+    };
+
+    const diaDoServidor = (quando = Date.now()) => {
+      const d = new Date(quando);
+      d.setMinutes(d.getMinutes() - horaDoReset());
+      return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    };
+
+    const placar = () => ler(CHAVE_PLACAR, {}) || {};
+
+    /** Como esta' hoje a regiao: o resultado de ontem nao conta, porque o ginásio reseta. */
+    const estadoDe = (regiao) => {
+      const linha = placar()[regiao];
+      if (!linha || linha.dia !== diaDoServidor()) return { estado: 'vazio' };
+      return linha;
+    };
+
+    const anotarPlacar = (regiao, estado, texto) => {
+      const todos = placar();
+      todos[regiao] = { dia: diaDoServidor(), estado, texto: texto || '', quando: Date.now() };
+      gravar(CHAVE_PLACAR, todos);
+      pintarPlacar();
+    };
 
     // ------------------------------------------------------------------ painel
 
@@ -642,6 +801,26 @@ PPX.modulo(
         </label>
         <button type="button" class="ir" data-ir>Fazer o ginásio de hoje</button>
         <button type="button" class="volta" data-voltar>Voltar para a caçada</button>
+        <div class="agenda">
+          <div class="linha">
+            <span class="sinal" data-sinal="KANTO"></span>
+            <label class="liga"><input type="checkbox" data-auto="KANTO"> Kanto</label>
+            <input type="text" data-horas="KANTO" placeholder="08:00-09:00"
+              title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
+          </div>
+          <div class="linha">
+            <span class="sinal" data-sinal="JOHTO"></span>
+            <label class="liga"><input type="checkbox" data-auto="JOHTO"> Johto</label>
+            <input type="text" data-horas="JOHTO" placeholder="19:00-20:00"
+              title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
+          </div>
+          <div class="linha reset">
+            <span>servidor reseta às</span>
+            <input type="text" data-reset placeholder="00:00"
+              title="A hora em que o ginásio do dia reseta. É por ela que os sinais voltam a cinza.">
+          </div>
+          <p class="proxima" data-proxima></p>
+        </div>
         <p class="estado" data-estado></p>
         <button type="button" class="parar" data-parar hidden>Parar</button>
       </div>`;
@@ -675,6 +854,23 @@ PPX.modulo(
       #lioncode-gym button.ir:hover, #lioncode-gym button.volta:hover { background: #26344c; }
       #lioncode-gym button.volta { border-color: #2a3244; color: #9aa6b8; }
       #lioncode-gym button:disabled { opacity: .5; cursor: default; }
+      #lioncode-gym .agenda { display: flex; flex-direction: column; gap: 5px;
+        border-top: 1px solid #202835; padding-top: 7px; }
+      #lioncode-gym .agenda .linha { display: flex; align-items: center; gap: 6px; }
+      #lioncode-gym .agenda .liga { flex-direction: row; align-items: center; gap: 4px;
+        color: #e7edf6; font-size: 12px; white-space: nowrap; }
+      #lioncode-gym .agenda input[type="text"] {
+        flex: 1; min-width: 0; background: #0d1219; color: #e7edf6; border: 1px solid #2a3244;
+        border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
+      }
+      #lioncode-gym .agenda .reset { color: #8b97a8; font-size: 12px; }
+      #lioncode-gym .agenda .reset input { max-width: 64px; flex: 0 0 auto; }
+      #lioncode-gym .agenda .proxima { margin: 0; color: #8b97a8; font-size: 12px; min-height: 1.2em; }
+      /* O sinal: um ponto por regiao. Verde ganhou, vermelho perdeu, laranja deu erro, cinza
+         ainda nao foi feito hoje. Com o ginasio a correr sozinho, e' o unico jeito de saber o que
+         aconteceu enquanto ninguem estava olhando. */
+      #lioncode-gym .sinal { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto;
+        background: #424a57; box-shadow: 0 0 0 1px #0006 inset; }
       #lioncode-gym .estado { margin: 0; color: #9aa6b8; min-height: 1.4em; }
       #lioncode-gym .estado.ruim { color: #ff9b9b; }
       #lioncode-gym .estado.bom { color: #7ddba0; font-weight: 600; }
@@ -711,17 +907,21 @@ PPX.modulo(
      * Os nomes vem de `PPX.times`, a porta que o Times abre para as outras ferramentas do pacote.
      * Sem ela — Times desligado, por exemplo — as listas ficam vazias e o botao explica porque.
      */
-    const encherTimes = () => {
+    const encherTimes = (forcar = false) => {
       const nomes = globalThis.PPX?.times?.nomes?.() || [];
       const guardado = escolhas();
+      const daRegiao = guardado.porRegiao[guardado.regiao];
       for (const [seletor, escolhido] of [
-        ['[data-time-gym]', guardado.timeGym],
-        ['[data-time-volta]', guardado.timeVolta],
+        ['[data-time-gym]', daRegiao.timeGym],
+        ['[data-time-volta]', daRegiao.timeVolta],
       ]) {
         const lista = campo(seletor);
         // O que esta' na tela vale mais do que o que esta' guardado: encher as listas outra vez
         // nao pode desfazer uma escolha que o utilizador acabou de fazer.
-        const naTela = lista.value;
+        //
+        // Com `forcar`, nao: ao trocar de regiao e' preciso mostrar os times **daquela** regiao,
+        // e o que esta' na tela e' justamente o da regiao anterior.
+        const naTela = forcar ? '' : lista.value;
         const manter = nomes.includes(naTela) ? naTela : escolhido;
         lista.innerHTML = '';
         if (!nomes.length) {
@@ -739,19 +939,75 @@ PPX.modulo(
           lista.append(opcao);
         }
       }
-      campo('[data-regiao]').value = guardado.regiao || 'KANTO';
+      campo('[data-regiao]').value = guardado.regiao;
       return nomes;
     };
 
-    const guardarEscolhas = () =>
+    /** Grava os times **na regiao que esta' escolhida**, sem tocar na outra. */
+    const guardarEscolhas = () => {
+      const guardado = escolhas();
+      const regiao = campo('[data-regiao]').value;
       gravar(CHAVE_ESCOLHAS, {
-        regiao: campo('[data-regiao]').value,
-        timeGym: campo('[data-time-gym]').value,
-        timeVolta: campo('[data-time-volta]').value,
+        regiao,
+        porRegiao: {
+          ...guardado.porRegiao,
+          [regiao]: {
+            timeGym: campo('[data-time-gym]').value,
+            timeVolta: campo('[data-time-volta]').value,
+          },
+        },
       });
+    };
 
-    for (const seletor of ['[data-regiao]', '[data-time-gym]', '[data-time-volta]'])
+    for (const seletor of ['[data-time-gym]', '[data-time-volta]'])
       campo(seletor).addEventListener('change', guardarEscolhas);
+
+    // Trocar de regiao nao e' mudar uma escolha, e' mudar de pagina: grava-se so' a regiao e as
+    // listas passam a mostrar os times dela. Gravar aqui como nas outras escreveria os times da
+    // regiao anterior por cima dos desta.
+    campo('[data-regiao]').addEventListener('change', () => {
+      const guardado = escolhas();
+      gravar(CHAVE_ESCOLHAS, { ...guardado, regiao: campo('[data-regiao]').value });
+      encherTimes(true);
+    });
+
+    // ------------------------------------------------- a agenda, na tela
+
+    const pintarPlacar = () => {
+      for (const regiao of REGIOES) {
+        const ponto = campo(`[data-sinal="${regiao}"]`);
+        if (!ponto) continue;
+        const linha = estadoDe(regiao);
+        const [cor, rotulo] = CORES[linha.estado] || CORES.vazio;
+        ponto.style.background = cor;
+        const quando = linha.quando
+          ? ` às ${new Date(linha.quando).toTimeString().slice(0, 5)}`
+          : '';
+        ponto.title = `${regiao}: ${rotulo}${quando}${linha.texto ? ` — ${linha.texto}` : ''}`;
+      }
+    };
+
+    /** Os relogios da agenda, um por regiao, e o instante que cada um esta' a marcar. */
+    const relogios = {};
+    const proximos = {};
+
+    const pintarAgenda = () => {
+      const marcados = REGIOES.filter((r) => proximos[r]).sort((a, b) => proximos[a] - proximos[b]);
+      if (!marcados.length) {
+        const ligadoSemHora = REGIOES.some(
+          (r) => agenda()[r].ligado && !janelasDe(agenda()[r].horarios).length,
+        );
+        campo('[data-proxima]').textContent = ligadoSemHora ? 'nenhum horário válido' : '';
+        return;
+      }
+      const primeiro = marcados[0];
+      const quando = new Date(proximos[primeiro]);
+      const dois = (n) => String(n).padStart(2, '0');
+      const dia = quando.toDateString() === new Date().toDateString() ? 'hoje' : 'amanhã';
+      campo('[data-proxima]').textContent =
+        `próximo: ${primeiro === 'KANTO' ? 'Kanto' : 'Johto'} ${dia} às ` +
+        `${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
+    };
 
     /**
      * Reler os times sem recarregar a pagina.
@@ -831,6 +1087,13 @@ PPX.modulo(
           }
           if (passo.fim) {
             limparTarefa();
+            // O sinal guarda o que aconteceu: derrota nao e' erro, e as duas coisas tem de ficar
+            // distinguiveis depois, quando ninguem estava a olhar.
+            anotarPlacar(
+              dados.regiao,
+              dados.venceu === false ? 'derrota' : 'vitoria',
+              dados.resultado || '',
+            );
             celebrar(passo.mensagem);
             return;
           }
@@ -1010,6 +1273,9 @@ PPX.modulo(
       dados.tentativas = (dados.tentativas || 0) + 1;
       dados.proxima = Date.now() + ESPERA_APOS_FALHA;
       guardarTarefa(dados);
+      // Laranja enquanto a tentativa seguinte nao chega. Se ela correr bem, o sinal vira verde —
+      // o que fica no fim e' o que aconteceu de facto.
+      anotarPlacar(dados.regiao, 'erro', erro);
       dizer(`Parei: ${erro}. Tento de novo em ${faltaPara(dados.proxima)}.`, true);
       agendar();
     }
@@ -1043,24 +1309,26 @@ PPX.modulo(
       return `${segundos} s`;
     };
 
-    campo('[data-ir]').addEventListener('click', () => {
-      if (correndo || tarefa()) return;
-      const escolha = {
-        regiao: campo('[data-regiao]').value,
-        timeGym: campo('[data-time-gym]').value,
-        timeVolta: campo('[data-time-volta]').value,
-      };
-      if (!escolha.timeGym) {
-        dizer('Escolha o time do ginásio. Guarde um no Times primeiro, se não houver.', true);
-        return;
+    /**
+     * Comeca uma corrida numa regiao. E' o mesmo caminho para o botao e para a agenda — o
+     * automatico nao pode ser um segundo fluxo, com os seus proprios enganos.
+     */
+    const comecar = (regiao) => {
+      const times = timesDe(regiao);
+      if (!times.timeGym) {
+        dizer(
+          `Escolha o time do ginásio de ${regiao}. Guarde um no Times primeiro, se não houver.`,
+          true,
+        );
+        return false;
       }
       // A cacada e' guardada **agora**, antes de qualquer passo: depois de sair dela, ja' nao ha'
       // como saber de onde se saiu.
       guardarTarefa({
         etapa: 'sair',
-        regiao: escolha.regiao,
-        timeGym: escolha.timeGym,
-        timeVolta: escolha.timeVolta,
+        regiao,
+        timeGym: times.timeGym,
+        timeVolta: times.timeVolta,
         cacada: cacadaAtiva() || ler(CHAVE_ULTIMA, null),
         desde: Date.now(),
         // Sorteado agora e guardado: o F5 do meio do caminho levaria consigo um alvo que so'
@@ -1068,7 +1336,84 @@ PPX.modulo(
         alvoPre: Date.now() + sorteio(CICLO_PRE[0], CICLO_PRE[1]),
       });
       void continuarTarefa();
+      return true;
+    };
+
+    campo('[data-ir]').addEventListener('click', () => {
+      if (correndo || tarefa()) return;
+      comecar(campo('[data-regiao]').value);
     });
+
+    /**
+     * A hora chegou numa regiao.
+     *
+     * A janela e' marcada como usada **antes** de comecar, e nao no fim: a corrida passa por um F5
+     * no meio, e um relogio que so' existisse em memoria voltaria a disparar na mesma janela —
+     * desafiando outra vez um ginasio ja' feito.
+     */
+    const dispararAuto = (regiao) => {
+      const nova = agenda();
+      nova[regiao].ultima = Date.now();
+      guardarAgenda(nova);
+      if (correndo || tarefa()) {
+        dizer(`A hora de ${regiao} chegou, mas há uma corrida em andamento.`, true);
+      } else if (!comecar(regiao)) {
+        anotarPlacar(regiao, 'erro', 'não havia time escolhido');
+      } else {
+        dizer(`Hora de ${regiao}: começando sozinho.`);
+      }
+      agendarRegiao(regiao);
+    };
+
+    function agendarRegiao(regiao) {
+      clearTimeout(relogios[regiao]);
+      relogios[regiao] = 0;
+      proximos[regiao] = 0;
+      const config = agenda()[regiao];
+      if (config.ligado) {
+        const ms = esperaDaJanela(config.horarios, config.ultima);
+        if (ms !== null) {
+          proximos[regiao] = Date.now() + ms;
+          relogios[regiao] = setTimeout(() => dispararAuto(regiao), ms);
+        }
+      }
+      pintarAgenda();
+    }
+
+    for (const regiao of REGIOES) {
+      const liga = campo(`[data-auto="${regiao}"]`);
+      const horas = campo(`[data-horas="${regiao}"]`);
+      const guardado = agenda()[regiao];
+      liga.checked = guardado.ligado;
+      horas.value = guardado.horarios;
+      const mudou = () => {
+        const nova = agenda();
+        nova[regiao] = { ...nova[regiao], ligado: liga.checked, horarios: horas.value.trim() };
+        guardarAgenda(nova);
+        agendarRegiao(regiao);
+      };
+      liga.addEventListener('change', mudou);
+      horas.addEventListener('change', mudou);
+    }
+
+    const campoReset = campo('[data-reset]');
+    campoReset.value = agenda().reset;
+    campoReset.addEventListener('change', () => {
+      const nova = agenda();
+      nova.reset = campoReset.value.trim() || '00:00';
+      guardarAgenda(nova);
+      // A hora do reset muda o que conta como "hoje": os sinais podem acender ou apagar com isto.
+      pintarPlacar();
+    });
+
+    for (const regiao of REGIOES) agendarRegiao(regiao);
+    pintarPlacar();
+    // Um minuto: a linha do "próximo" tem de envelhecer sozinha, e os sinais tem de voltar a
+    // cinza na hora do reset mesmo com a aba aberta a noite toda.
+    setInterval(() => {
+      pintarAgenda();
+      pintarPlacar();
+    }, 60000);
 
     /**
      * Leva o jogador de volta a' cacada, sozinho, sem ginasio nenhum.
@@ -1242,6 +1587,36 @@ PPX.modulo(
     if (globalThis.PPX) {
       globalThis.PPX.controlar?.('gym', mostrarPainel);
       mostrarPainel(globalThis.PPX.visivel?.('gym') !== false);
+
+      /**
+       * A porta por onde o Times avisa que um time mudou de nome.
+       *
+       * O Ginasio guarda as duas escolhas **pelo nome** — e' o que o jogo tem, nao ha' id nenhum.
+       * Sem este aviso, renomear um time no Times partia a escolha daqui em silencio: a lista
+       * passava a ter o nome novo e a escolha guardada apontava para um nome que ja' nao existe,
+       * e so' se descobriria no meio de uma corrida.
+       */
+      globalThis.PPX.gym = {
+        timeRenomeado: (velho, novo) => {
+          const guardado = escolhas();
+          const trocar = (nome) => (nome === velho ? novo : nome);
+          gravar(CHAVE_ESCOLHAS, {
+            ...guardado,
+            // **As duas regioes**, e nao so' a que esta' a' vista: o mesmo time pode estar
+            // escolhido em Kanto e em Johto, e a que nao estivesse na tela ficaria partida.
+            porRegiao: Object.fromEntries(
+              REGIOES.map((r) => [
+                r,
+                {
+                  timeGym: trocar(guardado.porRegiao[r].timeGym),
+                  timeVolta: trocar(guardado.porRegiao[r].timeVolta),
+                },
+              ]),
+            ),
+          });
+          encherTimes(true);
+        },
+      };
     }
 
     // Retomar depois de uma recarga. O `Times` e' outro content script e pode ainda nao ter
