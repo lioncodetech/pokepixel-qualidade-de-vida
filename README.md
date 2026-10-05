@@ -367,6 +367,71 @@ python -m http.server 8777
 Depois abra `http://localhost:8777/testes/banca.html`. Por `file://` não funciona: o navegador
 recusa carregar `../times.js`.
 
+## Ginásio do dia
+
+Sai da caçada, troca para o time de ginásio, desafia o ginásio marcado **HOJE**, volta ao time de
+caçada e reentra na mesma caçada de onde saiu. Uma região por vez — Kanto e Johto têm times
+diferentes. A **Elite Four fica de fora**, por pedido.
+
+```
+guardar a caçada → VOLTAR À CIDADE → time do ginásio → F5 → NPC GYM
+    → aba da região → o marcado HOJE → DESAFIAR → combate → time de volta → a caçada
+```
+
+### Três coisas que só apareceram fazendo
+
+**Não é preciso andar.** O pedido original falava em "correr para o ginásio". Não é preciso: o
+"Conversar" do NPC GYM foi clicado com o NPC **fora da tela** e a janela abriu. Nenhum passo desta
+ferramenta move o personagem — o que teria sido, de longe, a parte mais frágil dela.
+
+**O F5 é obrigatório** entre trocar o time e desafiar. Sem ele o painel do ginásio continua vendo a
+equipe antiga: medido, seis Pokémon no HUD e *"Pokémon equipados 1/3"* na janela, mesmo fechando e
+reabrindo. Desafiar assim entregaria um ginásio reforçado por uma condição que você de facto cumpre.
+
+**O combate é automático e o cronômetro é um teto.** O relógio marcava 15 minutos num combate que
+durou **67 segundos**. Quem diz que acabou é o título do resumo, que já vem com "Vitória!" ou
+"Derrota!" dentro — uma espera só, que entrega a resposta junto com o fim.
+
+### A máquina de estados existe por causa do F5
+
+A recarga leva consigo tudo o que estiver só na memória. Por isso a tarefa é guardada no
+armazenamento, etapa a etapa, e a etapa seguinte é escrita **antes** da recarga — senão a página
+voltaria, repetiria a etapa do F5 e recarregaria outra vez, para sempre.
+
+Uma falha não recomeça do zero: a tarefa fica guardada na etapa em que parou, e a tentativa seguinte
+continua dali. Sair da caçada duas vezes não faria sentido nenhum.
+
+### Derrota não é erro
+
+O ciclo de dez minutos vale para falhas de verdade — janela que não abriu, troca que não completou.
+Numa derrota o jogo funcionou: você perdeu. Repetir queimaria a segunda entrada do dia à toa.
+
+E falhar ao devolver o time de caçada **interrompe** o ciclo em vez de seguir: entrar na caçada com
+o time de ginásio seria pior do que parar e avisar.
+
+### O ritmo, e por que são dois
+
+Um minuto a dois antes do ginásio; dois a três depois dele. São dois orçamentos porque são dois
+momentos diferentes: antes há a pressa de quem vai lutar, depois a calma de quem já lutou.
+
+A parte que se parece com um jogador não é a forma do clique, é o ritmo — sair da caçada, trocar
+seis Pokémon e desafiar em oito segundos não se parece com ninguém, por mais fiel que seja cada
+evento de rato. Ainda assim os cliques também são de gente: o ponteiro chega, hesita entre 120 e
+420 ms, e o ponto de contacto não é o centro exacto do botão duas vezes seguidas.
+
+Onde o clique humano não funcionar, há reserva para o `click()` simples. Isso veio de uma medição:
+a sequência completa de ponteiro nos botões **da barra de cima** impedia o inventário de abrir — a
+barra reage a mais de um dos eventos e abria e fechava na mesma rajada.
+
+As pausas longas dizem na tela que são propositais (*"Esperando um pouco… 24 s"*). Sem isso a
+ferramenta pareceria travada, e você clicaria no botão outra vez.
+
+### Voltar para a caçada
+
+Um botão à parte, que leva de volta sem ginásio nenhum — útil depois de uma corrida que parou no
+meio, ou de uma ida ao ginásio feita à mão. A caçada em curso é lembrada de dez em dez segundos,
+porque o nome dela só existe no DOM enquanto ela corre: depois de sair, não há de onde tirá-lo.
+
 ## O que não aparece na mochila é zero
 
 A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como

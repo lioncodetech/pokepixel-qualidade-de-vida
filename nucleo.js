@@ -66,6 +66,7 @@
       atalhos: 'Alt+J esconde · Alt+K mostra · Alt+L arruma',
     },
     { id: 'times', nome: 'Times', atalhos: 'Alt+T esconde · Alt+Y mostra' },
+    { id: 'gym', nome: 'Ginásio do dia', atalhos: 'Alt+G esconde · Alt+H mostra' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

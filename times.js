@@ -979,8 +979,14 @@ PPX.modulo(
       );
     }
 
+    /**
+     * Monta um time guardado, cuidando da tela enquanto isso.
+     *
+     * Devolve o que aconteceu em vez de so' escrever na tela, porque o ginasio precisa **saber**:
+     * uma troca que falhou no meio nao pode virar um desafio com a equipe errada.
+     */
     async function usarTime(time) {
-      if (aplicando) return;
+      if (aplicando) return { ok: false, erro: 'já há uma troca em andamento' };
       aplicando = true;
       cancelado = false;
       campo('[data-parar]').hidden = false;
@@ -993,13 +999,18 @@ PPX.modulo(
         // ainda correndo e "faltam ~1 s" ao lado. Duas afirmacoes contrarias ao mesmo tempo.
         pararRelogio();
         const levou = Math.max(1, Math.round((Date.now() - inicioDaTroca) / 1000));
-        if (resultado.parado) dizer('Parado. A equipe ficou no meio da troca.', true);
-        else if (resultado.trocados === 0) celebrar(`A equipe já era "${time.nome}".`);
+        if (resultado.parado) {
+          dizer('Parado. A equipe ficou no meio da troca.', true);
+          return { ok: false, parado: true, erro: 'a troca foi parada no meio' };
+        }
+        if (resultado.trocados === 0) celebrar(`A equipe já era "${time.nome}".`);
         else celebrar(`Pronto! "${time.nome}" montado em ${levou} s.`);
+        return { ok: true, trocados: resultado.trocados, segundos: levou };
       } catch (erro) {
         // Falha com nome e motivo. Uma troca que para no meio deixa a equipe incompleta, e quem
         // esta' cacando precisa saber disso agora, nao quando o Pokemon errado desmaiar.
         dizer(`Parei: ${erro.message}. Confira a equipe no jogo.`, true);
+        return { ok: false, erro: erro.message };
       } finally {
         // Nunca deixar um menu da barra aberto, nem quando a troca falhou no meio: e' o que trava o
         // jogo para a proxima vez, e foi assim que tres usos seguidos pararam de funcionar.
@@ -1216,6 +1227,27 @@ PPX.modulo(
     if (globalThis.PPX) {
       globalThis.PPX.controlar?.('times', mostrarPainel);
       mostrarPainel(globalThis.PPX.visivel?.('times') !== false);
+
+      /**
+       * A porta para as outras ferramentas do pacote — hoje, o ginasio.
+       *
+       * Os content scripts de uma extensao partilham o mesmo `globalThis`, entao esta e' a forma
+       * honesta de uma ferramenta pedir a troca a outra: a logica de troca mora num lugar so', com
+       * os seus testes, e quem chama recebe o resultado em vez de ter de adivinhar lendo a tela.
+       *
+       * A alternativa seria o ginasio clicar no botão "Usar" deste painel, que pode estar
+       * escondido — e um painel escondido nao e' uma interface, e' um acidente esperando.
+       */
+      globalThis.PPX.times = {
+        nomes: () => times().map((t) => t.nome),
+        usar: async (nome) => {
+          const time = times().find((t) => t.nome === nome);
+          if (!time) return { ok: false, erro: `não há time guardado chamado "${nome}"` };
+          // Mostrar o painel: a troca demora 20-30 s e o usuario tem direito de ver o que corre.
+          mostrarPainel(true);
+          return usarTime(time);
+        },
+      };
     }
   },
 );

@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do Ginásio do dia</title>
+<!--
+  Banca do painel do Ginásio, fora do jogo.
+
+  O que ela prova: o painel sobe, lê os times do `PPX.times`, guarda as escolhas, e **a máquina de
+  estados sobrevive a uma recarga** — que é a parte mais delicada desta ferramenta, porque o passo
+  do F5 leva consigo tudo o que estiver só na memória.
+
+  O que ela não prova: nada que dependa do DOM do jogo. Sair da caçada, abrir o NPC, desafiar,
+  esperar o combate. Isso só existe no jogo, e foi medido lá antes de ser escrito.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../gym.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    background: #2d5a3d;
+    font-family: system-ui, sans-serif;
+    color: #d8e6dc;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 26em;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    background: #0003;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  button.teste {
+    background: #0004;
+    color: inherit;
+    border: 1px solid #ffffff33;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font: inherit;
+    cursor: pointer;
+    margin-right: 6px;
+  }
+  pre {
+    background: #0004;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 30em;
+    white-space: pre-wrap;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca do <b>Ginásio do dia</b>, sem o jogo. O painel está no canto. Não há caçada, nem NPC, nem
+    ginásio — então <code>Fazer o ginásio de hoje</code> vai falhar num passo do jogo, e é isso que
+    se quer ver: que ele <b>falha dizendo o motivo</b> em vez de ficar calado.
+  </p>
+  <p>
+    <button class="teste" data-ver>Ver a tarefa guardada</button>
+    <button class="teste" data-limpar>Limpar a tarefa</button>
+  </p>
+  <pre data-saida>—</pre>
+</div>
+<script>
+  // `PPX` de mentira, com a porta que o Times abre de verdade.
+  window.PPX = {
+    modulo: (meta, fn) => fn(),
+    times: {
+      nomes: () => ['Hunt', 'Gym Kanto', 'Gym Johto'],
+      usar: async (nome) => {
+        document.querySelector('[data-saida]').textContent = `PPX.times.usar(${JSON.stringify(nome)})`;
+        await new Promise((r) => setTimeout(r, 300));
+        return { ok: true, trocados: 6, segundos: 24 };
+      },
+    },
+  };
+
+  const script = document.createElement('script');
+  script.src = `../gym.js?t=${Date.now()}`;
+  document.head.append(script);
+
+  document.querySelector('[data-ver]').addEventListener('click', () => {
+    document.querySelector('[data-saida]').textContent =
+      localStorage.getItem('lioncode:gym:tarefa') || '— nenhuma tarefa guardada —';
+  });
+  document.querySelector('[data-limpar]').addEventListener('click', () => {
+    localStorage.removeItem('lioncode:gym:tarefa');
+    document.querySelector('[data-saida]').textContent = 'limpa';
+  });
+</script>
