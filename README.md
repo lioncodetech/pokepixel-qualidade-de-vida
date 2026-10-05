@@ -232,10 +232,28 @@ de ponta a ponta seria mais curto, mas qualquer diferença entre o que a ferrame
 o jogo fez se acumularia até o fim da fila. Recalculando contra o HUD a cada passo, um passo que não
 saiu como esperado é simplesmente refeito com o estado real.
 
+### Equipar e desequipar são ações escritas, não um duplo clique
+
+O botão direito sobre o Pokémon abre um cartão com a ação por extenso: **Equipar** em quem está
+fora, **Desequipar** em quem está dentro. É esse cartão que a ferramenta usa.
+
+A primeira versão usava duplo clique, e ele tinha dois defeitos no mesmo lugar:
+
+- **No Ditto faz outra coisa.** Abre o menu de transformação em vez de equipar. A conta usada no
+  levantamento não tinha Ditto, então esse caminho nunca apareceu — foi preciso o usuário relatar.
+- **Ele alterna.** Não existe "põe" nem "tira": existe "inverte".
+
+Pedir "equipar" não pode tirar ninguém. A ambiguidade não foi contornada com cuidado: ela deixou de
+existir. Se a ação esperada não estiver no cartão, nada acontece e o erro **diz quais ações havia
+ali** — é assim que um caso especial novo se anuncia em vez de virar um "não funcionou".
+
+Um detalhe que custou atenção: o cartão traz `data-element`, **nunca o `data-creature-id`**. Com
+dois cartões abertos não há como saber em qual se clica, e numa conta com dois Tyranitar o erro
+seria invisível. Por isso todos são fechados antes, e confere-se que ficou exatamente um.
+
 ### Quem manda é o HUD, não o inventário
 
-O duplo clique **alterna**. Isso torna uma leitura errada muito mais cara do que parece: não se
-perde um passo, faz-se o passo contrário.
+Mesmo com a ação explícita, continua valendo: uma leitura errada do estado é cara.
 
 Foi o que aconteceu numa prova real — um Pokémon que estava na equipe foi lido como fora, e o
 "colocar" tirou ele. A causa é conhecida deste repositório: a mochila pinta em etapas e reabre na

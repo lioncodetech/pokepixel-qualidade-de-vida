@@ -53,6 +53,28 @@ test('a troca inteira e espacada entre 20 e 30 s', () => {
   assert.match(times, /await respirar\(passos\.length\)/);
 });
 
+test('equipar e desequipar sao acoes escritas, nunca um duplo clique que alterna', () => {
+  // Dois defeitos no mesmo lugar. No Ditto o duplo clique abre o menu de transformacao e nao
+  // equipa — relatado pelo usuario, e invisivel no levantamento porque a conta nao tinha Ditto.
+  // E o duplo clique **alterna**: nao existe "poe" nem "tira", existe "inverte", entao uma leitura
+  // errada do estado custava o passo contrario. Foi assim que um Ivysaur saiu da equipe.
+  assert.doesNotMatch(codigo, /duploClique|dblclick/);
+  assert.match(codigo, /const botaoDireito = \(el\)/);
+  assert.match(codigo, /new MouseEvent\('contextmenu', base\)/);
+  // A acao pedida e' explicita: pedir "equipar" nao pode tirar ninguem.
+  assert.match(codigo, /entrar \? '\.pokemon-card__action\.is-equip' : '\.pokemon-card__action\.is-unequip'/);
+  // Sem a acao no cartao, nada acontece e o erro diz o que havia ali.
+  assert.match(codigo, /if \(!acao\) \{/);
+});
+
+test('so um cartao por vez, porque o cartao nao diz de quem e', () => {
+  // O cartao traz `data-element`, nunca o `data-creature-id`. Com dois na tela nao ha' como saber
+  // em qual se clica — e com dois Tyranitar na conta o erro seria invisivel.
+  assert.match(codigo, /const CARTAO = 'aside\.pokemon-card--pinned'/);
+  assert.match(codigo, /const fecharCartoes = async \(\)/);
+  assert.match(codigo, /document\.querySelectorAll\(CARTAO\)\.length === 1/);
+});
+
 test('o inventario e levado para a aba dos Pokemon antes de ser lido', () => {
   // A mochila reabre na ultima categoria usada. Deixada em "Boosters", nao tem uma celula de
   // Pokemon — e a ferramenta dizia que o time guardado tinha sumido da mochila.

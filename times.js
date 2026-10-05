@@ -245,11 +245,10 @@ PPX.modulo(
      * Isto **nao** era o defeito que aparecia "depois de usar umas tres vezes": aquele era o
      * oposto — um clique a mais num `✕` de janela que ja' tinha fechado. Ver `fechar`.
      *
-     * A celula do inventario responde a `dblclick`, mas o jogo tambem acompanha os cliques simples
-     * antes dele — por isso `vezes` manda a sequencia inteira, com `detail` 1 e 2, e nao o
-     * `dblclick` solto. Testado: assim o Pokemon sai e entra do time.
+     * Houve aqui um `vezes` para o duplo clique do inventario. Saiu junto com ele: equipar e
+     * desequipar passaram a ser acoes escritas no cartao do botao direito. Ver `alternar`.
      */
-    const clicar = (el, vezes = 1) => {
+    const clicar = (el) => {
       const caixa = el.getBoundingClientRect();
       // Caixa zerada nao tem centro util; manda-se no canto que ela ocupa, que e' onde o jogo
       // posicionou o elemento.
@@ -269,17 +268,63 @@ PPX.modulo(
       };
       el.dispatchEvent(new PointerEvent('pointerover', { ...base, buttons: 0 }));
       el.dispatchEvent(new MouseEvent('mouseover', { ...base, buttons: 0 }));
-      for (let vez = 1; vez <= vezes; vez += 1) {
-        el.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }));
-        el.dispatchEvent(new MouseEvent('mousedown', { ...base, buttons: 1, detail: vez }));
-        el.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }));
-        el.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0, detail: vez }));
-        el.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0, detail: vez }));
-      }
-      if (vezes > 1) el.dispatchEvent(new MouseEvent('dblclick', { ...base, buttons: 0, detail: 2 }));
+      el.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }));
+      el.dispatchEvent(new MouseEvent('mousedown', { ...base, buttons: 1, detail: 1 }));
+      el.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }));
+      el.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0, detail: 1 }));
+      el.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0, detail: 1 }));
     };
 
-    const duploClique = (el) => clicar(el, 2);
+    /**
+     * O clique com o botao direito, que abre o cartao do Pokemon fixado na tela.
+     *
+     * `contextmenu` sozinho nao basta: o jogo acompanha o `pointerdown`/`mousedown` com
+     * `button: 2` antes dele, como faria um rato de verdade.
+     */
+    const botaoDireito = (el) => {
+      const caixa = el.getBoundingClientRect();
+      const base = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: caixa.left + caixa.width / 2,
+        clientY: caixa.top + caixa.height / 2,
+        button: 2,
+        buttons: 2,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+      };
+      el.dispatchEvent(new PointerEvent('pointerover', { ...base, buttons: 0 }));
+      el.dispatchEvent(new MouseEvent('mouseover', { ...base, buttons: 0 }));
+      el.dispatchEvent(new PointerEvent('pointerdown', base));
+      el.dispatchEvent(new MouseEvent('mousedown', base));
+      el.dispatchEvent(new MouseEvent('contextmenu', base));
+      el.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }));
+      el.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0 }));
+    };
+
+    const CARTAO = 'aside.pokemon-card--pinned';
+
+    /**
+     * Fecha todos os cartoes fixados.
+     *
+     * Existe porque o cartao **nao diz de quem e'**: ele traz `data-element`, nunca o
+     * `data-creature-id`. Com dois cartoes na tela nao ha' como saber em qual se vai clicar, e com
+     * dois Tyranitar na conta o erro seria invisivel. Entao fecha-se tudo antes de abrir um, e
+     * confere-se que ficou exatamente um.
+     */
+    const fecharCartoes = async () => {
+      for (const cartao of document.querySelectorAll(CARTAO)) {
+        const x = cartao.querySelector('.pokemon-card__control.is-close');
+        if (x) {
+          x.click();
+          await espera(200);
+        }
+      }
+      return document.querySelectorAll(CARTAO).length === 0;
+    };
 
     /**
      * O jogo esta' recusando abrir janelas?
@@ -553,22 +598,65 @@ PPX.modulo(
       return { trocados };
     }
 
-    /** Tira ou poe um Pokemon, conferindo que o jogo aceitou antes de seguir. */
+    /**
+     * Tira ou poe um Pokemon, pela acao escrita no cartao do botao direito.
+     *
+     * **Nao e' mais o duplo clique.** O duplo clique funcionava para quase todos, mas tinha dois
+     * defeitos, um deles descoberto em cima da equipe de verdade:
+     *
+     * 1. **No Ditto ele faz outra coisa.** Abre o menu de transformacao, nao equipa. Relatado pelo
+     *    usuario; a conta usada no levantamento nao tinha Ditto, entao este caminho nunca aparecia.
+     * 2. **Ele alterna.** Nao existe "poe" nem "tira": existe "inverte". Uma leitura errada do
+     *    estado nao custava um passo perdido, custava o passo contrario — foi assim que um Ivysaur
+     *    saiu da equipe numa prova real.
+     *
+     * O botao direito abre um cartao com a acao **escrita**: `is-equip` em quem esta' fora,
+     * `is-unequip` em quem esta' dentro. Pedir "equipar" nao pode tirar ninguem, e se a acao que
+     * se espera nao estiver no cartao, nada acontece e o erro diz o que havia ali. O cartao se
+     * fecha sozinho depois da acao — medido no jogo.
+     */
     async function alternar(id, entrar, nomeDe) {
-      // Conferir de novo, no instante do clique. O duplo clique alterna, entao um clique dado por
-      // engano nao e' um passo perdido: e' o passo contrario. Se ja' esta' como queremos, nao se
-      // toca — foi a falta desta linha que tirou um Pokemon da equipe numa prova real.
       if (noTime(id) === entrar) return;
       const slot = slotDoInventario(id);
       if (!slot) throw new Error(`${nomeDe(id)} sumiu da mochila no meio da troca`);
-      duploClique(slot);
+
+      await fecharCartoes();
+      botaoDireito(slot);
+      if ((await ate(() => document.querySelectorAll(CARTAO).length === 1, 4000)) === null) {
+        await fecharCartoes();
+        throw new Error(`o cartão de ${nomeDe(id)} não abriu com o botão direito`);
+      }
+
+      const cartao = document.querySelector(CARTAO);
+      const acao = cartao.querySelector(
+        entrar ? '.pokemon-card__action.is-equip' : '.pokemon-card__action.is-unequip',
+      );
+      if (!acao) {
+        // Dizer o que o cartao oferecia e' o que separa um aviso util de um "nao funcionou": no
+        // Ditto, por exemplo, e' aqui que apareceria uma acao de transformacao.
+        const havia = [...cartao.querySelectorAll('.pokemon-card__action')]
+          .map((a) => (a.textContent || '').replace(/[^\p{L} ]/gu, '').trim())
+          .filter(Boolean)
+          .join(', ');
+        await fecharCartoes();
+        throw new Error(
+          `o cartão de ${nomeDe(id)} não tem "${entrar ? 'Equipar' : 'Desequipar'}"` +
+            (havia ? ` — tem ${havia}` : ''),
+        );
+      }
+
+      acao.click();
       // Tirar levou 1444 ms e por 953 ms na medicao; 8 s cobre uma conexao ruim sem travar a tela.
       const demorou = await ate(() => noTime(id) === entrar, 8000);
-      if (demorou === null)
+      if (demorou === null) {
+        await fecharCartoes();
         throw new Error(
           `o jogo não ${entrar ? 'colocou' : 'tirou'} ${nomeDe(id)} depois de 8 s` +
             (entrar ? ' — pode ser espécie repetida ou limite de nível' : ''),
         );
+      }
+      // O cartao costuma fechar sozinho; se tiver ficado, nao se deixa um aberto para o proximo.
+      await fecharCartoes();
       // A folga entre operacoes nao mora aqui: quem sabe quantos passos faltam e' o laco de
       // `aplicar`, e e' de la' que sai o espacamento. Ver `respirar`.
     }
