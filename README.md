@@ -426,6 +426,30 @@ barra reage a mais de um dos eventos e abria e fechava na mesma rajada.
 As pausas longas dizem na tela que são propositais (*"Esperando um pouco… 24 s"*). Sem isso a
 ferramenta pareceria travada, e você clicaria no botão outra vez.
 
+### O anúncio que nasce atrasado
+
+O primeiro erro relatado na prática foi *"não consegui abrir a janela do ginásio"*, com o anúncio do
+Discord cobrindo a tela inteira (`z-index` 18000).
+
+O seletor de fechar sempre esteve certo. **O problema era o momento.** O anúncio nasce alguns
+segundos *depois* da recarga, e a ferramenta fechava os banners antes de ele existir: encontrava a
+tela limpa, seguia em frente, e o anúncio aparecia mesmo a tempo de o jogo recusar abrir a janela.
+
+Fechar uma vez não basta. Agora espera-se a tela ficar **quieta** — três voltas seguidas sem nada a
+fechar e sem nada grande por cima —, e isso acontece depois da recarga, antes de abrir o ginásio e
+antes de voltar à caçada. Há ainda uma segunda tentativa de abrir o ginásio, para o anúncio que
+apareça entre a limpeza e o clique.
+
+Além dos dois botões de fechar conhecidos, há uma rede: qualquer caixa que cubra boa parte da tela
+com `z-index` de modal conta como anúncio. As janelas do jogo e os painéis deste pacote ficam de
+fora — o próprio painel do ginásio seria o primeiro falso positivo.
+
+### Minimizado, só a etiqueta GYM
+
+O botão `–` no cabeçalho esconde tudo e deixa uma etiqueta de 90×32 escrita **GYM**. Diferente do
+modo compacto do Times, que ainda mostra a lista: aqui o ginásio é uma ordem que se dá uma vez por
+dia, e depois disso o painel só está a tapar o jogo. A escolha fica guardada.
+
 ### Voltar para a caçada
 
 Um botão à parte, que leva de volta sem ginásio nenhum — útil depois de uma corrida que parou no

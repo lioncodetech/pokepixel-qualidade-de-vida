@@ -42,6 +42,7 @@ PPX.modulo(
     const CHAVE_POS = 'lioncode:gym:posicao';
     /** A ultima cacada vista a correr, para o botao de voltar funcionar fora de uma tarefa. */
     const CHAVE_ULTIMA = 'lioncode:gym:ultima-cacada';
+    const CHAVE_MIN = 'lioncode:gym:minimizado';
 
     // ------------------------------------------------------------- os dois ciclos
     //
@@ -239,20 +240,62 @@ PPX.modulo(
       return !document.querySelector('.pokeidle-top-toolbar__btn[aria-expanded="true"]');
     };
 
+    /** Os botoes de fechar dos aneuncios que o jogo poe por cima de tudo. */
+    const FECHOS = ['.pokeidle-promo-banner__close', '.expedition-alert-banner__dismiss'];
+
     /**
-     * Fecha os aneuncios que o jogo poe por cima de tudo.
+     * Ha' alguma coisa grande por cima do jogo?
      *
-     * Nasce um logo depois de cada recarga — o do Discord apareceu em cima da tela de combate na
-     * prova real. Com ele na frente, o clique seguinte nao chega a lugar nenhum.
+     * Rede para o que nao esta' na lista acima: qualquer caixa que cubra boa parte da tela com
+     * `z-index` de modal. As janelas do jogo e os paineis deste pacote ficam de fora — sao
+     * legitimas, e o painel do ginasio seria o primeiro falso positivo.
      */
-    const fecharBanners = () => {
+    const haSobreposto = () =>
+      [...document.querySelectorAll('div, section, aside, dialog')].some((e) => {
+        if (e.closest('.pokeidle-panel') || e.id.startsWith('lioncode-')) return false;
+        const caixa = e.getBoundingClientRect();
+        if (caixa.width < innerWidth * 0.4 || caixa.height < innerHeight * 0.4) return false;
+        return Number(getComputedStyle(e).zIndex || 0) >= 10000;
+      });
+
+    const fecharBanners = async () => {
       let quantos = 0;
-      for (const botao of document.querySelectorAll('.pokeidle-promo-banner__close'))
-        if (visivel(botao)) {
-          botao.click();
-          quantos += 1;
-        }
+      for (let volta = 0; volta < 5; volta += 1) {
+        const botao = FECHOS.map((s) => document.querySelector(s)).find(visivel);
+        if (!botao) break;
+        clicar(botao);
+        quantos += 1;
+        await espera(Math.round(sorteio(400, 900)));
+      }
       return quantos;
+    };
+
+    /**
+     * Espera a tela ficar sem aneuncios por cima, fechando os que forem aparecendo.
+     *
+     * **Este e' o conserto do "nao consegui abrir a janela do ginasio".** O seletor de fechar
+     * sempre esteve certo; o problema era o momento. O aneuncio do Discord nasce alguns segundos
+     * **depois** da recarga, e a ferramenta fechava os banners antes de ele existir — encontrava a
+     * tela limpa, seguia em frente, e o aneuncio aparecia mesmo a tempo de o jogo recusar abrir a
+     * janela. Fechar uma vez nao basta: e' preciso insistir ate' a tela ficar quieta.
+     *
+     * "Quieta" sao tres voltas seguidas sem nada a fechar e sem nada grande por cima.
+     */
+    const esperarTelaLimpa = async (prazo = 15000, avisar) => {
+      const fim = Date.now() + prazo;
+      let quieto = 0;
+      while (Date.now() < fim) {
+        const fechou = await fecharBanners();
+        if (!fechou && !haSobreposto()) {
+          quieto += 1;
+          if (quieto >= 3) return true;
+        } else {
+          quieto = 0;
+          if (avisar) avisar('Fechando os anúncios do jogo…');
+        }
+        await espera(600);
+      }
+      return !haSobreposto();
     };
 
     /**
@@ -379,6 +422,7 @@ PPX.modulo(
      */
     const voltarACacada = async (cacada, avisar) => {
       if (!cacada?.nome) return { ok: false, erro: 'não guardei de qual caçada você saiu' };
+      await esperarTelaLimpa(10000, avisar);
       avisar('Abrindo as caçadas…');
       document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="hunts"]')?.click();
       const janela = await ate(() => janelaPorTitulo(/CA[ÇC]ADAS/i), 8000);
@@ -439,7 +483,8 @@ PPX.modulo(
     painel.id = 'lioncode-gym';
     painel.innerHTML = `
       <header>
-        <strong>Ginásio do dia</strong>
+        <strong data-titulo>Ginásio do dia</strong>
+        <button type="button" data-minimizar title="Minimizar">–</button>
         <button type="button" data-fechar title="Esconder (Alt+G)">×</button>
       </header>
       <div class="corpo">
@@ -493,6 +538,13 @@ PPX.modulo(
       #lioncode-gym .estado { margin: 0; color: #9aa6b8; min-height: 1.4em; }
       #lioncode-gym .estado.ruim { color: #ff9b9b; }
       #lioncode-gym .estado.bom { color: #7ddba0; font-weight: 600; }
+
+      /* Minimizado: fica a etiqueta GYM e mais nada. E' um painel de dar uma ordem e sair da
+         frente, nao de ficar a olhar — com o jogo por tras, o que importa e' nao tapar o jogo. */
+      #lioncode-gym.minimizado { width: auto; }
+      #lioncode-gym.minimizado .corpo { display: none; }
+      #lioncode-gym.minimizado header { border-bottom: 0; padding: 6px 8px; }
+      #lioncode-gym.minimizado header strong { font-size: 12px; letter-spacing: .06em; }
     `;
     painel.append(estilo);
     document.body.append(painel);
@@ -662,11 +714,25 @@ PPX.modulo(
       }
 
       if (etapa === 'desafiar') {
-        fecharBanners();
+        // Esta etapa vem logo depois de uma recarga, que e' exactamente quando o aneuncio nasce.
+        await esperarTelaLimpa(15000, (t) => dizer(t));
         await fecharMenus();
         dizer('Abrindo o ginásio…');
-        const janela = await abrirOGinasio();
-        if (!janela) return { ok: false, erro: 'não consegui abrir a janela do ginásio' };
+        let janela = await abrirOGinasio();
+        if (!janela) {
+          // Segunda tentativa: se um aneuncio apareceu entre a limpeza e o clique, a janela nao
+          // abriu por causa dele, e nao porque o NPC sumiu.
+          await esperarTelaLimpa(8000, (t) => dizer(t));
+          await fecharMenus();
+          janela = await abrirOGinasio();
+        }
+        if (!janela)
+          return {
+            ok: false,
+            erro: haSobreposto()
+              ? 'há um anúncio do jogo por cima que não consegui fechar'
+              : 'não consegui abrir a janela do ginásio',
+          };
         if (!(await escolherRegiao(janela, dados.regiao)))
           return { ok: false, erro: `a janela do ginásio não tem a aba ${dados.regiao}` };
 
@@ -700,7 +766,7 @@ PPX.modulo(
         dados.venceu = luta.venceu;
         guardarTarefa(dados);
         await continuarDoResumo();
-        fecharBanners();
+        await fecharBanners();
         return { ok: true };
       }
 
@@ -863,6 +929,30 @@ PPX.modulo(
       pintar();
     };
 
+    /**
+     * Minimizar: fica so' a etiqueta GYM.
+     *
+     * Diferente do modo compacto do Times, que ainda mostra a lista: aqui esconde-se tudo. O
+     * ginasio e' uma ordem que se da' uma vez por dia — depois disso o painel so' esta' a tapar o
+     * jogo. O estado em curso continua a ser escrito, e basta restaurar para o ver.
+     */
+    let minimizado = ler(CHAVE_MIN, false) === true;
+
+    const aplicarMinimo = () => {
+      painel.classList.toggle('minimizado', minimizado);
+      campo('[data-titulo]').textContent = minimizado ? 'GYM' : 'Ginásio do dia';
+      const botao = campo('[data-minimizar]');
+      botao.textContent = minimizado ? '□' : '–';
+      botao.title = minimizado ? 'Mostrar tudo' : 'Minimizar';
+      recolocar();
+    };
+
+    campo('[data-minimizar]').addEventListener('click', () => {
+      minimizado = !minimizado;
+      gravar(CHAVE_MIN, minimizado);
+      aplicarMinimo();
+    });
+
     campo('[data-fechar]').addEventListener('click', () => {
       mostrarPainel(false);
       globalThis.PPX?.anotar?.('gym', false);
@@ -908,6 +998,7 @@ PPX.modulo(
     });
 
     encherTimes();
+    aplicarMinimo();
     recolocar();
     pintar();
     lembrarCacada();
@@ -933,7 +1024,9 @@ PPX.modulo(
           return;
         }
         travarBotoes(true);
-        await espera(1500);
+        // A pagina acabou de carregar: da'-se tempo ao aneuncio de nascer, para poder fecha-lo,
+        // em vez de o encontrar a meio do passo seguinte.
+        await esperarTelaLimpa(15000, (t) => dizer(t));
         void continuarTarefa();
       };
       void retomar();

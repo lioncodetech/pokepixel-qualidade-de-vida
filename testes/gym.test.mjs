@@ -72,10 +72,10 @@ test('nao se abre janela com um menu da barra aberto, nem com banner na frente',
   // As duas coisas fazem o jogo recusar abrir janelas, e o banner nasce logo depois de cada
   // recarga — na prova real ele apareceu por cima da tela de combate.
   const bloco = codigo.slice(codigo.indexOf("if (etapa === 'desafiar')"));
-  const banners = bloco.indexOf('fecharBanners()');
+  const limpeza = bloco.indexOf('esperarTelaLimpa');
   const menus = bloco.indexOf('fecharMenus()');
   const abre = bloco.indexOf('abrirOGinasio()');
-  assert.ok(banners >= 0 && banners < abre, 'abre o ginásio sem fechar os banners');
+  assert.ok(limpeza >= 0 && limpeza < abre, 'abre o ginásio sem esperar a tela limpar');
   assert.ok(menus >= 0 && menus < abre, 'abre o ginásio com um menu da barra aberto');
 });
 
@@ -126,6 +126,46 @@ test('a ultima cacada e lembrada, para o botao de voltar funcionar sozinho', () 
   // E o botão existe, com saída clara quando não há nada lembrado.
   assert.match(codigo, /campo\('\[data-voltar\]'\)\.addEventListener/);
   assert.match(gym, /Não sei de qual caçada você saiu/);
+});
+
+test('espera a tela ficar limpa, porque o anuncio nasce atrasado', () => {
+  // O defeito que isto conserta: "não consegui abrir a janela do ginásio". O seletor de fechar
+  // sempre esteve certo — o problema era o momento. O anúncio do Discord nasce alguns segundos
+  // DEPOIS da recarga, e a ferramenta fechava os banners antes de ele existir: encontrava a tela
+  // limpa, seguia, e o anúncio aparecia mesmo a tempo de o jogo recusar abrir a janela.
+  assert.match(codigo, /const esperarTelaLimpa = async/);
+  // Fechar uma vez não basta: insiste até a tela ficar quieta por três voltas seguidas.
+  assert.match(codigo, /if \(quieto >= 3\) return true;/);
+  // E há rede para o anúncio que não estiver na lista de seletores conhecidos.
+  assert.match(codigo, /const haSobreposto = \(\)/);
+  assert.match(codigo, /zIndex \|\| 0\) >= 10000/);
+  // Os painéis deste pacote e as janelas do jogo não contam como anúncio.
+  assert.match(codigo, /e\.closest\('\.pokeidle-panel'\) \|\| e\.id\.startsWith\('lioncode-'\)/);
+});
+
+test('a limpeza acontece depois da recarga e antes de cada abertura', () => {
+  // A etapa `desafiar` vem logo depois do F5, que é exactamente quando o anúncio nasce.
+  const desafiar = codigo.slice(codigo.indexOf("if (etapa === 'desafiar')"));
+  const limpa = desafiar.indexOf('esperarTelaLimpa');
+  const abre = desafiar.indexOf('abrirOGinasio()');
+  assert.ok(limpa >= 0 && limpa < abre, 'abre o ginásio sem esperar a tela limpar');
+  // E há segunda tentativa, para o anúncio que aparecer entre a limpeza e o clique.
+  assert.match(desafiar.slice(0, desafiar.indexOf('return {')), /janela = await abrirOGinasio\(\);/);
+  // A retomada depois do F5 também espera, em vez de uma pausa fixa de 1,5 s.
+  assert.match(codigo, /travarBotoes\(true\);\s*\n\s*await esperarTelaLimpa/);
+});
+
+test('minimizado fica so a etiqueta GYM', () => {
+  // Medido na banca: 240x337 cheio, 90x32 minimizado.
+  assert.match(codigo, /minimizado \? 'GYM' : 'Gin[áa]sio do dia'/);
+  assert.match(codigo, /#lioncode-gym\.minimizado \.corpo \{ display: none; \}/);
+  assert.match(codigo, /gravar\(CHAVE_MIN, minimizado\)/);
+  // E aplicado na carga, senão a escolha guardada só valeria depois de clicar outra vez —
+  // exactamente o erro cometido antes em `times.js`.
+  assert.ok(
+    codigo.indexOf('const recolocar = () =>') < codigo.lastIndexOf('aplicarMinimo();'),
+    'aplicarMinimo() é chamado antes de `recolocar` existir',
+  );
 });
 
 test('o painel nao deixa botao clicavel que nao faz nada', () => {
