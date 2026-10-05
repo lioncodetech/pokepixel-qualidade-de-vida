@@ -49,10 +49,27 @@
     só aparece <b>2,5 s</b> depois da janela, e ela abre sempre na aba <b>Kanto</b>, mesmo quando a
     caçada procurada é de Hoenn.
   </p>
+  <p>
+    O botão <code>–</code> do painel recolhe-o para a etiqueta: ali ficam a caçada em curso e as
+    setas para folhear as guardadas. É o estado em que o jogo está à vista e o painel não.
+  </p>
   <pre data-saida>—</pre>
 </div>
 <script>
-  window.PPX = { modulo: (meta, fn) => fn() };
+  // `PPX` de mentira, com a porta que o Times abre de verdade — é por ela que cada atalho monta
+  // o seu time antes de entrar na caçada.
+  window.PPX = {
+    modulo: (meta, fn) => fn(),
+    times: {
+      nomes: () => ['Hunt', 'Hunt Hoenn', 'Gym Kanto'],
+      usar: async (nome) => {
+        window.__trocas = window.__trocas || [];
+        window.__trocas.push({ nome, t: Date.now() });
+        await new Promise((r) => setTimeout(r, 400));
+        return { ok: true, trocados: 6, segundos: 24 };
+      },
+    },
+  };
 
   if (new URLSearchParams(location.search).has('jogo')) {
     const CACADAS = {

@@ -601,11 +601,27 @@ time continuar a existir.
 
 Fica travado durante uma corrida, como os outros botões, e desaparece no modo minimizado.
 
-### Minimizado, só a etiqueta GYM
+### Minimizado: a etiqueta GYM e o placar
 
-O botão `–` no cabeçalho esconde tudo e deixa uma etiqueta de 90×32 escrita **GYM**. Diferente do
-modo compacto do Times, que ainda mostra a lista: aqui o ginásio é uma ordem que se dá uma vez por
-dia, e depois disso o painel só está a tapar o jogo. A escolha fica guardada.
+O botão `–` no cabeçalho recolhe o painel para uma etiqueta estreita com **GYM**, o sinal de cada
+região com o resultado escrito ao lado — `Kanto  Vitória 22:24` — e a linha do próximo horário:
+
+```
+GYM                □ ×
+● Kanto  Vitória 22:24
+● Johto  —
+próximo: Johto hoje às 19:10
+```
+
+O que sai da frente são as listas e os campos, que é o que tapa o jogo e é uma ordem que se dá uma
+vez por dia. O placar fica, e de propósito: **minimizado é justamente o estado em que o ginásio
+corre sozinho**, e abrir o painel inteiro só para ver se o ponto já está verde desfazia o motivo de
+o ter minimizado. A palavra fica escrita porque ninguém para o mouse em cima de um ponto de dez
+pixels para saber como acabou — o `title` continua lá, com a frase inteira.
+
+Cinza não ganha palavra nenhuma, só um traço: o ponto já diz que não foi feito, e a hora de um
+ginásio que não aconteceu não existe. A mensagem do que está acontecendo *agora* continua só no
+painel inteiro. A escolha de minimizar fica guardada.
 
 ### Voltar para a caçada
 
@@ -629,6 +645,52 @@ Guarda as caçadas que você usa e leva até qualquer uma num clique. Quantas qu
 `Ir`, e a que está acontecendo agora aparece marcada com **você está aqui**. Guardar a mesma
 caçada outra vez atualiza em vez de duplicar: dois atalhos com o mesmo nome seriam
 indistinguíveis.
+
+A marca **você está aqui** é conferida de **dez em dez minutos**, e também na hora em que o painel
+reaparece. Ela é uma comodidade, não um relógio: quem acabou de entrar numa caçada já a está vendo
+no jogo. E repinta-se **só a marca**, nunca a lista — reconstruir as linhas fecharia um select de
+time aberto na cara de quem estivesse a escolher.
+
+### Um time por caçada
+
+Cada atalho pode levar um time junto. O select fica na própria linha, e a troca acontece
+**antes** de entrar: a caçada começa a lutar assim que você chega, e trocar a equipe com ela já
+correndo seria lutar as primeiras batalhas com o time errado.
+
+O time é **opcional** — a maior parte das caçadas se faz com a equipe que já está na tela, e
+obrigar a escolher transformaria um atalho de um clique num formulário. Guardar a caçada outra vez
+corrige a região e o modo mas **não apaga** o time: regravar é acertar o endereço, não desfazer a
+configuração. E um time que deixou de existir no Times continua listado, marcado
+*"(não existe mais)"*, em vez de sumir em silêncio.
+
+A troca passa pela porta `PPX.times`, a mesma que o Ginásio usa — a lógica de troca mora num lugar
+só, com os seus testes.
+
+### Minimizado: onde estou, e as setas
+
+O botão `–` recolhe o painel para uma etiqueta estreita com a caçada **em curso** e duas setas para
+folhear as guardadas sem abrir a lista:
+
+```
+CAÇ                  □ ×
+‹   Caça de Rattata  ›
+você está aqui       Ir
+```
+
+A linha de baixo diz o que importa de cada uma: `você está aqui` em verde quando é a que está
+correndo, `com o time "Hunt"` quando o atalho leva time, ou a região e o modo. O `Ir` leva até a que
+está à mostra — e some quando ela já é a atual e não tem time para montar.
+
+**Folhear é passageiro.** Se a caçada mudar no jogo, por sua mão ou por outro atalho, a etiqueta
+volta a mostrar onde você está: minimizado, a primeira pergunta é essa, e a resposta tem de aparecer
+sozinha. As setas dão a volta na lista em vez de parar nas pontas, e ficam apagadas quando há um só
+atalho guardado.
+
+A largura é fixa em 196px. Pelo conteúdo ela saltava de 176 para 184 pixels ao passar de uma caçada
+para a seguinte — nome comprido agora corta com reticências.
+
+A mensagem do que está acontecendo aparece ali também. O corpo do painel está escondido nesse
+estado, e um `Ir` que não responde nada parece um botão quebrado.
 
 ### Por que o nome não se edita
 

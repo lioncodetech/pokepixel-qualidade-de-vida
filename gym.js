@@ -835,6 +835,7 @@ PPX.modulo(
         <button type="button" data-minimizar title="Minimizar">–</button>
         <button type="button" data-fechar title="Esconder (Alt+G)">×</button>
       </header>
+      <div class="resumo" data-resumo></div>
       <div class="corpo">
         <label>Região
           <select data-regiao>
@@ -924,9 +925,23 @@ PPX.modulo(
       #lioncode-gym .estado.ruim { color: #ff9b9b; }
       #lioncode-gym .estado.bom { color: #7ddba0; font-weight: 600; }
 
-      /* Minimizado: fica a etiqueta GYM e mais nada. E' um painel de dar uma ordem e sair da
-         frente, nao de ficar a olhar — com o jogo por tras, o que importa e' nao tapar o jogo. */
-      #lioncode-gym.minimizado { width: auto; }
+      /* Minimizado: a etiqueta GYM, o sinal de cada regiao, como foi hoje e o proximo horario.
+         Era so' a etiqueta ate' este pedido, e estava errado: minimizado e' justamente o estado em
+         que o ginasio corre sozinho, e abrir o painel inteiro so' para ver se o ponto ja' esta'
+         verde desfazia o motivo de o ter minimizado. O resto — as listas, os campos — continua
+         escondido, que e' o que tapava o jogo. */
+      #lioncode-gym .resumo { display: none; }
+      #lioncode-gym.minimizado .resumo {
+        display: flex; flex-direction: column; gap: 4px; padding: 0 8px 7px;
+        font-size: 12px; color: #9aa6b8;
+      }
+      #lioncode-gym.minimizado .resumo .linha { display: flex; align-items: center; gap: 6px; }
+      #lioncode-gym.minimizado .resumo .linha b { color: #e7edf6; font-weight: 600; }
+      #lioncode-gym.minimizado .resumo .linha .quando { margin-left: auto; white-space: nowrap; }
+      #lioncode-gym.minimizado .resumo .proxima { margin: 1px 0 0; color: #8b97a8; }
+      /* Largura pelo conteudo, com um minimo: "Vitória 22:24" e' a linha mais comprida que aqui
+         aparece, e uma etiqueta que muda de largura a cada resultado saltaria na tela. */
+      #lioncode-gym.minimizado { width: auto; min-width: 162px; }
       #lioncode-gym.minimizado .corpo { display: none; }
       #lioncode-gym.minimizado header { border-bottom: 0; padding: 6px 8px; }
       #lioncode-gym.minimizado header strong { font-size: 12px; letter-spacing: .06em; }
@@ -1022,18 +1037,70 @@ PPX.modulo(
 
     // ------------------------------------------------- a agenda, na tela
 
+    const horaCurta = (quando) => new Date(quando).toTimeString().slice(0, 5);
+
+    /** O que se sabe de uma regiao hoje: a cor, a palavra, a hora e a frase inteira do title. */
+    const legendaDe = (regiao) => {
+      const linha = estadoDe(regiao);
+      const [cor, rotulo] = CORES[linha.estado] || CORES.vazio;
+      const hora = linha.quando ? horaCurta(linha.quando) : '';
+      return {
+        feito: linha.estado && linha.estado !== 'vazio',
+        cor,
+        rotulo,
+        hora,
+        titulo:
+          `${regiao}: ${rotulo}${hora ? ` às ${hora}` : ''}` +
+          `${linha.texto ? ` — ${linha.texto}` : ''}`,
+      };
+    };
+
     const pintarPlacar = () => {
       for (const regiao of REGIOES) {
         const ponto = campo(`[data-sinal="${regiao}"]`);
         if (!ponto) continue;
-        const linha = estadoDe(regiao);
-        const [cor, rotulo] = CORES[linha.estado] || CORES.vazio;
+        const { cor, titulo } = legendaDe(regiao);
         ponto.style.background = cor;
-        const quando = linha.quando
-          ? ` às ${new Date(linha.quando).toTimeString().slice(0, 5)}`
-          : '';
-        ponto.title = `${regiao}: ${rotulo}${quando}${linha.texto ? ` — ${linha.texto}` : ''}`;
+        ponto.title = titulo;
       }
+      pintarResumo();
+    };
+
+    /**
+     * O resumo que o painel minimizado mostra.
+     *
+     * Mesmo placar, mesmas cores: o que muda e' que aqui a palavra esta' escrita, em vez de viver
+     * so' no `title` do ponto. Minimizado ninguem vai parar o mouse em cima de um ponto de dez
+     * pixels para descobrir se o ginasio de hoje ja' foi feito.
+     */
+    const pintarResumo = () => {
+      const caixa = campo('[data-resumo]');
+      if (!caixa) return;
+      caixa.textContent = '';
+      for (const regiao of REGIOES) {
+        const { cor, rotulo, hora, titulo, feito } = legendaDe(regiao);
+        const linha = document.createElement('div');
+        linha.className = 'linha';
+        linha.title = titulo;
+        const ponto = document.createElement('span');
+        ponto.className = 'sinal';
+        ponto.style.background = cor;
+        const nome = document.createElement('b');
+        nome.textContent = regiao === 'KANTO' ? 'Kanto' : 'Johto';
+        const diz = document.createElement('span');
+        diz.className = 'quando';
+        // Cinza dispensa palavra: o ponto ja' diz que nao foi feito, e a hora de um ginasio que
+        // nao aconteceu nao existe.
+        diz.textContent = feito ? `${rotulo}${hora ? ` ${hora}` : ''}` : '—';
+        linha.append(ponto, nome, diz);
+        caixa.append(linha);
+      }
+      const proxima = campo('[data-proxima]')?.textContent || '';
+      if (!proxima) return;
+      const p = document.createElement('p');
+      p.className = 'proxima';
+      p.textContent = proxima;
+      caixa.append(p);
     };
 
     /** Os relogios da agenda, um por regiao, e o instante que cada um esta' a marcar. */
@@ -1047,6 +1114,7 @@ PPX.modulo(
           (r) => agenda()[r].ligado && !janelasDe(agenda()[r].horarios).length,
         );
         campo('[data-proxima]').textContent = ligadoSemHora ? 'nenhum horário válido' : '';
+        pintarResumo();
         return;
       }
       const primeiro = marcados[0];
@@ -1056,6 +1124,7 @@ PPX.modulo(
       campo('[data-proxima]').textContent =
         `próximo: ${primeiro === 'KANTO' ? 'Kanto' : 'Johto'} ${dia} às ` +
         `${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
+      pintarResumo();
     };
 
     /**
@@ -1567,11 +1636,12 @@ PPX.modulo(
     };
 
     /**
-     * Minimizar: fica so' a etiqueta GYM.
+     * Minimizar: ficam a etiqueta GYM, o sinal de cada regiao e o proximo horario.
      *
-     * Diferente do modo compacto do Times, que ainda mostra a lista: aqui esconde-se tudo. O
-     * ginasio e' uma ordem que se da' uma vez por dia — depois disso o painel so' esta' a tapar o
-     * jogo. O estado em curso continua a ser escrito, e basta restaurar para o ver.
+     * As listas e os campos saem — sao eles que tapam o jogo, e sao uma ordem que se da' uma vez
+     * por dia. O placar fica: minimizado e' o estado em que o ginasio corre sozinho, e e' ai' que
+     * saber se ja' foi feito, e como acabou, vale mais. A mensagem do que esta' a acontecer agora
+     * continua so' no painel inteiro.
      */
     let minimizado = ler(CHAVE_MIN, false) === true;
 
@@ -1581,6 +1651,7 @@ PPX.modulo(
       const botao = campo('[data-minimizar]');
       botao.textContent = minimizado ? '□' : '–';
       botao.title = minimizado ? 'Mostrar tudo' : 'Minimizar';
+      if (minimizado) pintarResumo();
       recolocar();
     };
 

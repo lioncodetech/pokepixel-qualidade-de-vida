@@ -54,7 +54,7 @@ test('o nome guardado e a chave de busca, e por isso nao se renomeia', () => {
 test('guardar a mesma cacada atualiza, e nao duplica', () => {
   // Dois atalhos com o mesmo nome seriam indistinguíveis, e `PPX.cacadas.ir` pegaria o primeiro.
   assert.match(codigo, /const onde = todas\.findIndex\(\(c\) => c\.nome === agora\.nome\)/);
-  assert.match(codigo, /if \(onde >= 0\) todas\[onde\] = agora;/);
+  assert.match(codigo, /if \(onde >= 0\) todas\[onde\] = \{ \.\.\.agora, time:/);
 });
 
 test('a barra de cima leva clique cru, e o resto clique de gente', () => {
@@ -83,4 +83,61 @@ test('a porta PPX.cacadas devolve o resultado, como a do Times', () => {
   assert.match(codigo, /globalThis\.PPX\.cacadas = \{/);
   assert.match(codigo, /nomes: \(\) => guardadas\(\)\.map\(\(c\) => c\.nome\)/);
   assert.match(codigo, /erro: `não há atalho guardado para "\$\{nome\}"`/);
+});
+
+test('o time do atalho e montado antes de entrar na cacada', () => {
+  // A caçada começa a lutar assim que entra: trocar a equipe depois seria lutar as primeiras
+  // batalhas com o time errado.
+  const bloco = codigo.slice(codigo.indexOf('const levar = async (alvo)'));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  const monta = corpo.indexOf('await montarTime(');
+  const entra = corpo.indexOf('await irPara(');
+  assert.ok(monta >= 0 && monta < entra, 'monta o time antes de ir');
+  // E a porta externa segue o mesmo caminho, incluindo o time.
+  const porta = codigo.slice(codigo.indexOf('ir: async (nome)'));
+  assert.match(porta.slice(0, 600), /await montarTime\(alvo\.time/);
+});
+
+test('o time e opcional, e regravar o atalho nao o apaga', () => {
+  // A maior parte das caçadas se faz com a equipe que já está na tela: obrigar a escolher um time
+  // transformaria um atalho de um clique num formulário.
+  assert.match(codigo, /— sem trocar o time —/);
+  // Guardar de novo é corrigir o endereço, não desfazer a configuração.
+  assert.match(codigo, /todas\[onde\] = \{ \.\.\.agora, time: todas\[onde\]\.time \|\| '' \}/);
+  // Um time que deixou de existir não pode sumir em silêncio.
+  assert.match(codigo, /\(não existe mais\)/);
+});
+
+test('o relogio repinta so a marca, nunca a lista inteira', () => {
+  // Reconstruir as linhas fecharia um select de time aberto na cara de quem estivesse a escolher.
+  assert.match(codigo, /setInterval\(pintarMarca, 10 \* 60 \* 1000\)/);
+  assert.doesNotMatch(codigo, /setInterval\(desenhar/);
+  // E porque dez minutos e' muito tempo, reabrir o painel repinta a marca na hora.
+  const bloco = codigo.slice(codigo.indexOf('const mostrarPainel'));
+  assert.match(bloco.slice(0, bloco.indexOf('};')), /if \(sim\) pintarMarca\(\)/);
+});
+
+test('minimizado mostra a cacada atual e folheia as guardadas', () => {
+  // Minimizado era so' a etiqueta. O que tapa o jogo e' a lista com os seus selects de time; a
+  // caçada em curso, nao — e' justamente o que se quer saber de relance.
+  assert.match(codigo, /<div class="resumo" data-resumo>/);
+  assert.match(codigo, /#lioncode-cacadas \.resumo \{ display: none; \}/);
+  assert.match(codigo, /#lioncode-cacadas\.minimizado \.corpo \{ display: none; \}/);
+  // Largura fixa: medido na banca, pelo conteudo a etiqueta saltava de 176 para 184 pixels ao
+  // passar de uma caçada para a seguinte.
+  assert.match(codigo, /#lioncode-cacadas\.minimizado \{ width: 196px; \}/);
+  // As setas dao a volta, em vez de parar nas pontas.
+  assert.match(codigo, /todas\[\(onde \+ passo \+ todas\.length\) % todas\.length\]\.nome/);
+  // Folhear e' o estado passageiro: uma troca de caçada feita a mao devolve a etiqueta ao lugar.
+  assert.match(codigo, /if \(agora\?\.nome !== ultimoAtivo\) \{/);
+  assert.match(codigo, /folheado = null;/);
+  // E a mensagem tem de chegar ao minimizado: la' o corpo esta' escondido, e um `Ir` calado
+  // parece um botao partido.
+  assert.match(codigo, /const ecoar = \(\) => \{/);
+  assert.match(codigo, /eco\.textContent = estado\.textContent/);
+  // Chegar a uma caçada repinta o resumo — senao o "você está aqui" so' aparecia no relogio.
+  const bloco = codigo.slice(codigo.indexOf('const desenhar = () => {'));
+  assert.match(bloco.slice(0, 300), /pintarResumo\(\);/);
+  // E as setas param durante uma ida, como todo o resto.
+  assert.match(codigo, /for \(const b of painel\.querySelectorAll\('\.resumo button'\)\) b\.disabled = sim;/);
 });

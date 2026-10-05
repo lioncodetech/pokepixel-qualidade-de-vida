@@ -241,6 +241,18 @@ PPX.modulo(
         <button type="button" data-minimizar title="Minimizar">–</button>
         <button type="button" data-fechar title="Esconder (Alt+R)">×</button>
       </header>
+      <div class="resumo" data-resumo>
+        <div class="cima">
+          <button type="button" data-passo="-1" title="Caçada anterior da lista">‹</button>
+          <b data-folheada>—</b>
+          <button type="button" data-passo="1" title="Próxima caçada da lista">›</button>
+        </div>
+        <div class="baixo">
+          <small data-sub></small>
+          <button type="button" data-ir-min title="Ir para a caçada mostrada">Ir</button>
+        </div>
+        <p class="estado" data-estado-min></p>
+      </div>
       <div class="corpo">
         <button type="button" class="salvar" data-salvar>Guardar a caçada atual</button>
         <ul data-lista></ul>
@@ -273,10 +285,17 @@ PPX.modulo(
       #lioncode-cacadas ul { list-style: none; margin: 0; padding: 0;
         display: flex; flex-direction: column; gap: 5px; }
       #lioncode-cacadas li {
-        display: flex; align-items: center; gap: 5px;
+        display: flex; flex-direction: column; gap: 4px;
         background: #0d1219; border: 1px solid #202835; border-radius: 8px; padding: 5px 7px;
       }
+      #lioncode-cacadas li .cima { display: flex; align-items: center; gap: 5px; }
       #lioncode-cacadas li .rotulo { flex: 1; min-width: 0; }
+      #lioncode-cacadas li select {
+        width: 100%; background: #1a2130; color: #e7edf6; border: 1px solid #2a3244;
+        border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
+      }
+      /* Sem time escolhido o select e' so' ruido: fica apagado ate' valer alguma coisa. */
+      #lioncode-cacadas li select.sem-time { color: #8b97a8; }
       #lioncode-cacadas li b { display: block; font-weight: 600; overflow: hidden;
         text-overflow: ellipsis; white-space: nowrap; }
       #lioncode-cacadas li small { color: #8b97a8; display: block; }
@@ -292,8 +311,42 @@ PPX.modulo(
       #lioncode-cacadas .estado.bom { color: #7ddba0; font-weight: 600; }
       #lioncode-cacadas .vazio { color: #8b97a8; margin: 0; }
 
-      /* Minimizado: fica a etiqueta e mais nada. O painel e' de dar uma ordem e sair da frente. */
-      #lioncode-cacadas.minimizado { width: auto; }
+      /* Minimizado: a cacada em curso, e as setas para folhear as guardadas sem abrir a lista.
+         O que sai da frente e' a lista inteira com os seus selects de time — e' ela que tapa o
+         jogo. Fica o que se quer saber de relance: onde estou, e o caminho para o lado. */
+      #lioncode-cacadas .resumo { display: none; }
+      #lioncode-cacadas.minimizado .resumo {
+        display: flex; flex-direction: column; gap: 3px; padding: 0 8px 7px;
+      }
+      #lioncode-cacadas.minimizado .resumo .cima { display: flex; align-items: center; gap: 4px; }
+      #lioncode-cacadas.minimizado .resumo .cima b {
+        flex: 1; min-width: 0; text-align: center; font-size: 13px; font-weight: 600;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #lioncode-cacadas.minimizado .resumo .cima button {
+        background: none; border: 0; color: #8b97a8; font-size: 16px; line-height: 1;
+        padding: 0 4px; cursor: pointer; font-family: inherit;
+      }
+      #lioncode-cacadas.minimizado .resumo .cima button:hover:not(:disabled) { color: #e7edf6; }
+      #lioncode-cacadas.minimizado .resumo .baixo {
+        display: flex; align-items: center; gap: 6px;
+      }
+      #lioncode-cacadas.minimizado .resumo .baixo small {
+        flex: 1; min-width: 0; color: #8b97a8; font-size: 12px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #lioncode-cacadas.minimizado .resumo .baixo small.agora { color: #7ddba0; }
+      #lioncode-cacadas.minimizado .resumo .baixo button {
+        background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a; border-radius: 6px;
+        padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer;
+      }
+      #lioncode-cacadas.minimizado .resumo .baixo button:hover:not(:disabled) { background: #26344c; }
+      #lioncode-cacadas.minimizado .resumo .estado { font-size: 12px; min-height: 0; }
+      #lioncode-cacadas.minimizado .resumo .estado:empty { display: none; }
+      /* Largura fixa, menor que a do painel aberto: medido na banca, com a largura pelo conteudo
+         a etiqueta saltava de 176 para 184 pixels ao passar de uma cacada para outra. Nome
+         comprido corta com reticencias. */
+      #lioncode-cacadas.minimizado { width: 196px; }
       #lioncode-cacadas.minimizado .corpo { display: none; }
       #lioncode-cacadas.minimizado header { border-bottom: 0; padding: 6px 8px; }
       #lioncode-cacadas.minimizado header strong { font-size: 12px; letter-spacing: .06em; }
@@ -305,14 +358,25 @@ PPX.modulo(
     const estado = campo('[data-estado]');
     const lista = campo('[data-lista]');
 
+    // A mensagem vai aos dois lugares: minimizado, o `.corpo` esta' escondido, e um `Ir` que nao
+    // responde nada parece um botao partido.
+    const ecoar = () => {
+      const eco = campo('[data-estado-min]');
+      if (!eco) return;
+      eco.textContent = estado.textContent;
+      eco.className = estado.className;
+    };
+
     const dizer = (texto, ruim) => {
       estado.textContent = texto;
       estado.classList.toggle('ruim', !!ruim);
       estado.classList.remove('bom');
+      ecoar();
     };
     const celebrar = (texto) => {
       dizer(texto);
       estado.classList.add('bom');
+      ecoar();
     };
 
     const guardadas = () => {
@@ -326,9 +390,92 @@ PPX.modulo(
       indo = sim;
       campo('[data-salvar]').disabled = sim;
       for (const b of lista.querySelectorAll('button')) b.disabled = sim;
+      for (const b of painel.querySelectorAll('.resumo button')) b.disabled = sim;
     };
 
+    /** So' a linha de baixo de cada item: onde fica, ou "você está aqui". */
+    const pintarMarca = () => {
+      pintarResumo();
+      const agora = cacadaAtiva();
+      for (const onde of lista.querySelectorAll('li small')) {
+        const aqui = onde.dataset.cacada === agora?.nome;
+        onde.textContent = aqui ? 'você está aqui' : onde.dataset.onde;
+        onde.classList.toggle('agora', aqui);
+      }
+    };
+
+    /**
+     * O que a etiqueta minimizada mostra.
+     *
+     * `folheado` e' o nome escolhido a dedo com as setas; `null` significa "siga a cacada em
+     * curso". Sair a folhear nao e' o estado normal: minimizado, a primeira pergunta e' onde se
+     * esta', e a resposta tem de aparecer sozinha.
+     */
+    let folheado = null;
+    let ultimoAtivo = null;
+
+    const pintarResumo = () => {
+      const todas = guardadas();
+      const agora = cacadaAtiva();
+      // A cacada mudou no jogo: as setas perdem a vez e volta-se a mostrar onde se esta'. Sem
+      // isto, uma troca feita a mao deixava a etiqueta a apontar para outro lugar.
+      if (agora?.nome !== ultimoAtivo) {
+        ultimoAtivo = agora?.nome ?? null;
+        folheado = null;
+      }
+      const titulo = campo('[data-folheada]');
+      const sub = campo('[data-sub]');
+      const ir = campo('[data-ir-min]');
+      const setas = painel.querySelectorAll('[data-passo]');
+      if (!todas.length) {
+        titulo.textContent = agora?.nome || 'nenhum atalho';
+        sub.textContent = agora ? 'nada guardado ainda' : '';
+        sub.classList.remove('agora');
+        ir.hidden = true;
+        for (const seta of setas) seta.disabled = true;
+        return;
+      }
+      let onde = todas.findIndex((c) => c.nome === (folheado ?? agora?.nome));
+      if (onde < 0) onde = 0;
+      const alvo = todas[onde];
+      const aqui = Boolean(agora) && agora.nome === alvo.nome;
+      titulo.textContent = alvo.nome;
+      titulo.title = alvo.nome;
+      sub.textContent = aqui
+        ? 'você está aqui'
+        : alvo.time
+          ? `com o time "${alvo.time}"`
+          : [alvo.regiao, alvo.modo].filter(Boolean).join(' · ');
+      sub.classList.toggle('agora', aqui);
+      // Ja' estando la', `Ir` so' teria sentido para montar o time — e para isso ha' a lista.
+      ir.hidden = aqui && !alvo.time;
+      ir.disabled = indo;
+      for (const seta of setas) seta.disabled = indo || todas.length < 2;
+    };
+
+    for (const seta of painel.querySelectorAll('[data-passo]'))
+      seta.addEventListener('click', () => {
+        const todas = guardadas();
+        if (todas.length < 2) return;
+        let onde = todas.findIndex((c) => c.nome === (folheado ?? cacadaAtiva()?.nome));
+        if (onde < 0) onde = 0;
+        const passo = Number(seta.dataset.passo);
+        folheado = todas[(onde + passo + todas.length) % todas.length].nome;
+        pintarResumo();
+      });
+
+    campo('[data-ir-min]').addEventListener('click', () => {
+      const todas = guardadas();
+      if (!todas.length) return;
+      let onde = todas.findIndex((c) => c.nome === (folheado ?? cacadaAtiva()?.nome));
+      if (onde < 0) onde = 0;
+      void levar(todas[onde]);
+    });
+
     const desenhar = () => {
+      // O resumo acompanha: `desenhar` corre depois de guardar, de apagar e de chegar a uma
+      // cacada, e e' nessa ultima que o minimizado tem de passar a dizer "você está aqui".
+      pintarResumo();
       const todas = guardadas();
       const agora = cacadaAtiva();
       lista.innerHTML = '';
@@ -339,8 +486,11 @@ PPX.modulo(
         lista.append(vazio);
         return;
       }
+      const nomesDeTime = globalThis.PPX?.times?.nomes?.() || [];
       for (const alvo of todas) {
         const item = document.createElement('li');
+        const cima = document.createElement('div');
+        cima.className = 'cima';
         const rotulo = document.createElement('div');
         rotulo.className = 'rotulo';
         const nome = document.createElement('b');
@@ -349,7 +499,9 @@ PPX.modulo(
         const onde = document.createElement('small');
         const partes = [alvo.regiao, alvo.modo].filter(Boolean);
         const aqui = agora?.nome === alvo.nome;
-        onde.textContent = aqui ? 'você está aqui' : partes.join(' · ') || 'sem região';
+        onde.dataset.cacada = alvo.nome;
+        onde.dataset.onde = partes.join(' · ') || 'sem região';
+        onde.textContent = aqui ? 'você está aqui' : onde.dataset.onde;
         onde.classList.toggle('agora', aqui);
         rotulo.append(nome, onde);
 
@@ -373,7 +525,47 @@ PPX.modulo(
           dizer(`"${alvo.nome}" esquecida.`);
         });
 
-        item.append(rotulo, ir, apagar);
+        cima.append(rotulo, ir, apagar);
+        item.append(cima);
+
+        // O time e' **opcional**: a maior parte das cacadas se faz com a equipe que ja' esta' na
+        // tela, e obrigar a escolher uma seria transformar um atalho de um clique num formulario.
+        const times = document.createElement('select');
+        times.dataset.time = '';
+        const nenhum = document.createElement('option');
+        nenhum.value = '';
+        nenhum.textContent = nomesDeTime.length ? '— sem trocar o time —' : '— Times desligado —';
+        times.append(nenhum);
+        for (const nome of nomesDeTime) {
+          const opcao = document.createElement('option');
+          opcao.value = nome;
+          opcao.textContent = `com o time "${nome}"`;
+          times.append(opcao);
+        }
+        // Um time guardado que deixou de existir nao pode desaparecer em silencio: fica na lista,
+        // marcado, para voce ver que ele sumiu em vez de descobrir no meio de uma troca.
+        if (alvo.time && !nomesDeTime.includes(alvo.time)) {
+          const perdido = document.createElement('option');
+          perdido.value = alvo.time;
+          perdido.textContent = `"${alvo.time}" (não existe mais)`;
+          times.append(perdido);
+        }
+        times.value = alvo.time || '';
+        times.classList.toggle('sem-time', !times.value);
+        times.addEventListener('change', () => {
+          gravar(
+            CHAVE_LISTA,
+            guardadas().map((c) => (c.nome === alvo.nome ? { ...c, time: times.value } : c)),
+          );
+          times.classList.toggle('sem-time', !times.value);
+          dizer(
+            times.value
+              ? `"${alvo.nome}" passa a montar o time "${times.value}".`
+              : `"${alvo.nome}" deixa de trocar o time.`,
+          );
+        });
+        item.append(times);
+
         lista.append(item);
       }
     };
@@ -387,8 +579,10 @@ PPX.modulo(
       }
       const todas = guardadas();
       const onde = todas.findIndex((c) => c.nome === agora.nome);
-      if (onde >= 0) todas[onde] = agora;
-      else todas.push(agora);
+      // Regravar atualiza a regiao e o modo, mas **nao** mexe no time escolhido: guardar de novo e'
+      // corrigir o endereco, nao desfazer a configuracao.
+      if (onde >= 0) todas[onde] = { ...agora, time: todas[onde].time || '' };
+      else todas.push({ ...agora, time: '' });
       gravar(CHAVE_LISTA, todas);
       desenhar();
       celebrar(
@@ -396,16 +590,46 @@ PPX.modulo(
       );
     };
 
+    /**
+     * Monta o time do atalho, se houver um.
+     *
+     * **Antes** de entrar na cacada, nunca depois: a cacada comeca a lutar assim que entra, e
+     * trocar a equipe com ela ja' correndo seria lutar as primeiras batalhas com o time errado.
+     */
+    const montarTime = async (nome, avisar) => {
+      if (!nome) return { ok: true };
+      const times = globalThis.PPX?.times;
+      if (!times?.usar)
+        return { ok: false, erro: 'a ferramenta Times não está ligada — ligue-a no menu (Alt+Q)' };
+      avisar(`Montando o time "${nome}"…`);
+      return times.usar(nome);
+    };
+
     const levar = async (alvo) => {
       if (indo) return;
-      if (cacadaAtiva()?.nome === alvo.nome) {
+      const jaAqui = cacadaAtiva()?.nome === alvo.nome;
+      if (jaAqui && !alvo.time) {
         celebrar(`Você já está em "${alvo.nome}".`);
         return;
       }
       travar(true);
       try {
+        const time = await montarTime(alvo.time, (t) => dizer(t));
+        if (!time.ok) {
+          dizer(`Parei: não montei o time "${alvo.time}": ${time.erro}`, true);
+          return;
+        }
+        if (jaAqui) {
+          celebrar(`Time "${alvo.time}" montado. Você já estava em "${alvo.nome}".`);
+          return;
+        }
         const r = await irPara(alvo, (t) => dizer(t));
-        if (r.ok) celebrar(`Caçando em "${alvo.nome}".`);
+        if (r.ok)
+          celebrar(
+            alvo.time
+              ? `Caçando em "${alvo.nome}" com o time "${alvo.time}".`
+              : `Caçando em "${alvo.nome}".`,
+          );
         else dizer(`Parei: ${r.erro}`, true);
       } finally {
         travar(false);
@@ -432,12 +656,16 @@ PPX.modulo(
     const mostrarPainel = (sim) => {
       aVista = sim;
       pintar();
+      // Com o relogio em dez minutos, a marca pode estar velha quando o painel reaparece. Repintar
+      // aqui nao reconstroi linha nenhuma, por isso nao fecha um select aberto.
+      if (sim) pintarMarca();
     };
 
     let minimizado = ler(CHAVE_MIN, false) === true;
     const aplicarMinimo = () => {
       painel.classList.toggle('minimizado', minimizado);
       campo('[data-titulo]').textContent = minimizado ? 'CAÇ' : 'Caçadas';
+      if (minimizado) pintarResumo();
       const botao = campo('[data-minimizar]');
       botao.textContent = minimizado ? '□' : '–';
       botao.title = minimizado ? 'Mostrar tudo' : 'Minimizar';
@@ -497,7 +725,13 @@ PPX.modulo(
     pintar();
     // A cacada pode comecar ou acabar pela mao do utilizador: a marca "você está aqui" tem de
     // acompanhar isso sem depender de um clique neste painel.
-    setInterval(desenhar, 10000);
+    //
+    // Repinta-se **so' a marca**, nunca a lista inteira: reconstruir as linhas fecharia na cara
+    // de quem estivesse com um select de time aberto.
+    //
+    // De dez em dez minutos, a pedido: a marca e' uma comodidade, nao um relogio. Quem acabou de
+    // entrar numa cacada ja' esta' a olhar para ela no jogo.
+    setInterval(pintarMarca, 10 * 60 * 1000);
 
     if (globalThis.PPX) {
       globalThis.PPX.controlar?.('cacadas', mostrarPainel);
@@ -519,6 +753,11 @@ PPX.modulo(
           if (indo) return { ok: false, erro: 'já há uma ida em andamento' };
           travar(true);
           try {
+            // Mesmo caminho do botao, inclusive o time: quem chama de fora nao pode receber um
+            // comportamento diferente do que a interface mostra.
+            const time = await montarTime(alvo.time, (t) => dizer(t));
+            if (!time.ok)
+              return { ok: false, erro: `não montei o time "${alvo.time}": ${time.erro}` };
             return await irPara(alvo, (t) => dizer(t));
           } finally {
             travar(false);

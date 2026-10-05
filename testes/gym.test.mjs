@@ -338,3 +338,27 @@ test('os dois cinemas sao coisas diferentes', () => {
   const espera = desafiar.indexOf('esperarOCombate(');
   assert.ok(entra >= 0 && entra < espera, 'entra na arena antes de esperar o combate');
 });
+
+test('minimizado mostra o placar, e so esconde o que tapa o jogo', () => {
+  // Minimizado era so' a etiqueta `GYM`. Esta' errado: minimizado e' justamente o estado em que o
+  // ginasio corre sozinho, e abrir o painel inteiro so' para ver se o ponto ja' esta' verde
+  // desfaz o motivo de o ter minimizado.
+  assert.match(codigo, /<div class="resumo" data-resumo><\/div>/);
+  assert.match(codigo, /#lioncode-gym \.resumo \{ display: none; \}/);
+  assert.match(codigo, /#lioncode-gym\.minimizado \.resumo \{/);
+  // O que tapa o jogo — as listas e os campos — continua escondido.
+  assert.match(codigo, /#lioncode-gym\.minimizado \.corpo \{ display: none; \}/);
+  // A palavra fica escrita: ninguem para o mouse em cima de um ponto de dez pixels para saber
+  // como acabou o ginasio de hoje.
+  assert.match(codigo, /diz\.textContent = feito \? `\$\{rotulo\}/);
+  // Cor, palavra e title saem do mesmo lugar que o ponto da agenda: um placar so'.
+  assert.match(codigo, /const legendaDe = \(regiao\) => \{/);
+  const pintar = codigo.slice(codigo.indexOf('const pintarPlacar = () => {'));
+  assert.match(pintar.slice(0, pintar.indexOf('\n    };')), /pintarResumo\(\);/);
+  // E o proximo horario tambem se repinta ali: o resumo copia o texto da agenda.
+  const agenda = codigo.slice(codigo.indexOf('const pintarAgenda = () => {'));
+  assert.ok(
+    (agenda.slice(0, agenda.indexOf('\n    };')).match(/pintarResumo\(\)/g) || []).length === 2,
+    'os dois caminhos de pintarAgenda repintam o resumo',
+  );
+});
