@@ -362,16 +362,34 @@ PPX.modulo(
       return true;
     };
 
+    const hotspots = (janela) =>
+      [...janela.querySelectorAll('.gym-hotspot')].filter(
+        (h) => !h.className.includes('gym-hotspot--league'),
+      );
+
     /**
-     * O ginasio marcado HOJE.
+     * O ginasio marcado HOJE — **esperando por ele**.
      *
-     * `is-active` e' a marca do dia. A Elite Four e' um hotspot como os outros, distinguida apenas
-     * pela classe `gym-hotspot--league` — e ela fica **de fora**, por pedido explicito.
+     * A janela entra no DOM antes do conteudo dela. Esta e' a terceira vez que esta licao aparece
+     * neste pacote: a loja do Mark desenha as abas ~285 ms depois da janela, o inventario pinta a
+     * grade em etapas, e aqui o mapa do desafio e' uma imagem grande com os ginasios por cima.
+     * Procurar uma unica vez, no instante em que a janela existe, da' "nao ha' ginasio marcado
+     * HOJE" com o HOJE bem visivel na tela — foi o que o utilizador relatou, com captura.
+     *
+     * Aceita as duas marcas: a classe `is-active` e o texto `HOJE` do rotulo. Sao a mesma coisa no
+     * jogo, mas custa pouco nao depender de uma so'.
+     *
+     * A Elite Four e' um hotspot como os outros, distinguida pela classe `gym-hotspot--league`, e
+     * fica **de fora** por pedido explicito.
      */
     const ginasioDeHoje = (janela) =>
-      [...janela.querySelectorAll('.gym-hotspot.is-active')].find(
-        (h) => !h.className.includes('gym-hotspot--league'),
-      ) || null;
+      ate(
+        () =>
+          hotspots(janela).find(
+            (h) => h.className.includes('is-active') || /^HOJE/i.test((h.textContent || '').trim()),
+          ),
+        12000,
+      );
 
     const tituloDoResultado = () => document.querySelector('.regional-cinema__title');
     const combateEmCurso = () => Boolean(document.querySelector('.pvp-battle-clock'));
@@ -736,10 +754,20 @@ PPX.modulo(
         if (!(await escolherRegiao(janela, dados.regiao)))
           return { ok: false, erro: `a janela do ginásio não tem a aba ${dados.regiao}` };
 
-        const hoje = ginasioDeHoje(janela);
+        dizer(`Procurando o ginásio de hoje em ${dados.regiao}…`);
+        const hoje = await ginasioDeHoje(janela);
         if (!hoje) {
+          // A mensagem diz o que **foi visto**, e nao so' o que faltou: foi a falta disto que
+          // transformou um problema de espera num mistério. Com a lista na mao, a proxima falha
+          // ja' se explica sozinha.
+          const todos = hotspots(janela);
+          const diagnostico = todos.length
+            ? `vi ${todos.length} ginásios e nenhum marcado HOJE: ${todos
+                .map((h) => (h.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 18))
+                .join(' | ')}`
+            : 'a janela abriu mas os ginásios não chegaram a aparecer';
           await fecharJanela(janela);
-          return { ok: false, erro: `não há ginásio marcado HOJE em ${dados.regiao}` };
+          return { ok: false, erro: `em ${dados.regiao}, ${diagnostico}` };
         }
         await clicarHumano(hoje);
         await espera(Math.round(sorteio(800, 1800)));

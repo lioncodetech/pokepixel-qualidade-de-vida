@@ -79,6 +79,80 @@
     },
   };
 
+  // Um jogo de mentira, ligado com ?jogo=1 — e montado ANTES do gym.js, para sobreviver ao F5 da
+  // etapa de recarga. Sem isto não há como exercitar a parte que vem depois da recarga.
+  //
+  // O atraso de 4 s nos ginásios é o ponto: a janela do desafio entra no DOM antes do mapa, e foi
+  // por procurar os ginásios uma única vez que a ferramenta dizia "não há ginásio marcado HOJE"
+  // com o HOJE bem visível na tela.
+  if (new URLSearchParams(location.search).has('jogo')) {
+    const npc = document.createElement('div');
+    npc.className = 'pokeidle-npc-label';
+    const nome = document.createElement('b');
+    nome.textContent = 'GYM';
+    const falar = document.createElement('span');
+    falar.textContent = 'Conversar';
+    npc.append(nome, falar);
+    document.body.append(npc);
+
+    falar.addEventListener('click', () => {
+      if (document.querySelector('.pokeidle-panel')) return;
+      const janela = document.createElement('div');
+      janela.className = 'pokeidle-panel';
+      janela.style.cssText =
+        'position:fixed;left:10px;bottom:10px;width:380px;background:#1a2130;color:#e7edf6;padding:8px;border-radius:8px';
+      const titulo = document.createElement('div');
+      titulo.className = 'pokeidle-panel__title';
+      titulo.textContent = 'DESAFIO DOS GYMS';
+      const fechar = document.createElement('div');
+      fechar.className = 'pokeidle-panel__close';
+      fechar.textContent = '×';
+      fechar.addEventListener('click', () => janela.remove());
+      const aba = document.createElement('button');
+      aba.textContent = 'KANTO';
+      aba.className = 'is-active';
+      janela.append(titulo, fechar, aba);
+      document.body.append(janela);
+
+      setTimeout(() => {
+        for (const [texto, classe] of [
+          ['HOJE Brock Pewter', 'gym-hotspot is-active'],
+          ['Misty Cerulean', 'gym-hotspot'],
+          ['ELITE FOUR', 'gym-hotspot gym-hotspot--league'],
+        ]) {
+          const h = document.createElement('button');
+          h.className = classe;
+          h.textContent = texto;
+          janela.append(h);
+        }
+        const desafiar = document.createElement('button');
+        desafiar.textContent = 'DESAFIAR AGORA';
+        desafiar.addEventListener('click', () => {
+          const relogio = document.createElement('div');
+          relogio.className = 'pvp-battle-clock';
+          relogio.textContent = '14:59';
+          document.body.append(relogio);
+          // Combate curto, como o real: 67 s no jogo, 5 s aqui.
+          setTimeout(() => {
+            relogio.remove();
+            const t = document.createElement('h1');
+            t.className = 'regional-cinema__title';
+            t.textContent = 'Vitória!';
+            const skip = document.createElement('button');
+            skip.className = 'regional-cinema__skip';
+            skip.textContent = 'Continuar';
+            skip.addEventListener('click', () => {
+              t.remove();
+              skip.remove();
+            });
+            document.body.append(t, skip);
+          }, 5000);
+        });
+        janela.append(desafiar);
+      }, 4000);
+    });
+  }
+
   const script = document.createElement('script');
   script.src = `../gym.js?t=${Date.now()}`;
   document.head.append(script);

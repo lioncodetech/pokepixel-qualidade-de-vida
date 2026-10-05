@@ -444,6 +444,27 @@ Além dos dois botões de fechar conhecidos, há uma rede: qualquer caixa que cu
 com `z-index` de modal conta como anúncio. As janelas do jogo e os painéis deste pacote ficam de
 fora — o próprio painel do ginásio seria o primeiro falso positivo.
 
+### O ginásio que ainda não foi desenhado
+
+Segundo erro relatado na prática: *"não há ginásio marcado HOJE em KANTO"* — com o **HOJE bem
+visível na tela**, na captura, e o `Desafiar agora` disponível.
+
+A janela entra no DOM antes do conteúdo dela. É a terceira vez que esta lição aparece neste
+repositório: a loja do Mark desenha as abas ~285 ms depois da janela, o inventário pinta a grade em
+etapas, e aqui o mapa do desafio é uma imagem grande com os ginásios por cima. Procurar uma única
+vez, no instante em que a janela existe, não acha nada.
+
+Agora espera-se por eles, e aceitam-se as duas marcas: a classe `is-active` e o texto `HOJE` do
+rótulo. São a mesma coisa no jogo, mas custa pouco não depender de uma só.
+
+E a falha passou a **dizer o que viu**: *"em KANTO, vi 7 ginásios e nenhum marcado HOJE: Brock
+Pewter | Misty Cerulean | …"*, ou *"a janela abriu mas os ginásios não chegaram a aparecer"*. Foi a
+falta disso que transformou um problema de espera num mistério.
+
+A banca cobre este caso: `testes/banca-gym.html?jogo=1` monta um jogo de mentira cujos ginásios só
+aparecem **4 segundos** depois da janela, e o ciclo inteiro corre contra ele — incluindo o F5, o
+combate e a leitura da vitória.
+
 ### Minimizado, só a etiqueta GYM
 
 O botão `–` no cabeçalho esconde tudo e deixa uma etiqueta de 90×32 escrita **GYM**. Diferente do

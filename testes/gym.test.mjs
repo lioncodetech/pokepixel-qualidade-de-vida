@@ -55,6 +55,19 @@ test('a cacada e guardada antes do primeiro passo', () => {
   assert.match(codigo, /\.platform-hunt__zone-meta/);
 });
 
+test('espera os ginasios aparecerem, e a falha diz o que viu', () => {
+  // Relatado com captura: "não há ginásio marcado HOJE em KANTO" com o HOJE bem visível na tela.
+  // A janela entra no DOM antes do conteúdo — terceira vez que esta lição aparece no pacote, e a
+  // primeira em que eu a ignorei num mapa que é uma imagem grande.
+  assert.match(codigo, /const ginasioDeHoje = \(janela\) =>\s*\n?\s*ate\(/);
+  assert.match(codigo, /const hoje = await ginasioDeHoje\(janela\)/);
+  // Aceita as duas marcas: a classe e o texto do rótulo.
+  assert.match(codigo, /h\.className\.includes\('is-active'\) \|\| \/\^HOJE\/i\.test/);
+  // E a falha lista os ginásios que encontrou, em vez de só dizer o que faltou.
+  assert.match(codigo, /vi \$\{todos\.length\} gin[áa]sios e nenhum marcado HOJE/);
+  assert.match(codigo, /a janela abriu mas os gin[áa]sios n[ãa]o chegaram a aparecer/);
+});
+
 test('a Elite Four fica de fora', () => {
   // Pedido explícito. Ela é um hotspot como os outros, distinguida só pela classe da liga.
   assert.match(codigo, /!h\.className\.includes\('gym-hotspot--league'\)/);
