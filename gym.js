@@ -741,6 +741,9 @@ PPX.modulo(
           {
             ligado: bruto[r]?.ligado === true,
             horarios: String(bruto[r]?.horarios ?? ''),
+            // Vazio quer dizer todo dia — e' como esta agenda sempre se comportou, e e' o que o
+            // ginasio do dia pede na maioria das vezes.
+            dias: String(bruto[r]?.dias ?? ''),
             ultima: Number(bruto[r]?.ultima) || 0,
           },
         ]),
@@ -750,62 +753,18 @@ PPX.modulo(
     const guardarAgenda = (nova) => gravar(CHAVE_AGENDA, nova);
 
     /**
-     * As janelas de horario lidas de "08:00-09:00, 19:00-20:00".
+     * Quanto falta ate' o instante sorteado da proxima ocorrencia — ou `null` se nao ha' nenhuma.
      *
-     * Uma janela que termina antes de comecar atravessa a meia-noite: 22:00-02:00 vale assim.
-     */
-    const janelasDe = (texto) => {
-      const achadas = [];
-      for (const parte of String(texto).split(/[;,]/)) {
-        const casa =
-          /^\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*(?:-|as|ate|até)\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*$/i.exec(
-            parte,
-          );
-        if (!casa) continue;
-        const minuto = (hora, min) => (Number(hora) % 24) * 60 + (Number(min ?? 0) % 60);
-        achadas.push({ inicio: minuto(casa[1], casa[2]), fim: minuto(casa[3], casa[4]) });
-      }
-      return achadas;
-    };
-
-    /**
-     * As janelas como instantes de verdade — ontem, hoje e amanha —, em ordem de abertura.
+     * A conta inteira mora em `agenda.js`, partilhada com a venda e com a compra: as tres tinham
+     * esta mesma logica copiada linha por linha, e acrescentar "toda semana" e "todo mes" em tres
+     * copias seria acrescentar o mesmo defeito em tres lugares. Ver o cabecalho de `agenda.js`.
      *
-     * Em minutos do dia nao da' para dizer "esta janela ja' foi usada": 08:00 de hoje e 08:00 de
-     * amanha sao o mesmo numero. Ontem entra por causa das janelas que atravessam a meia-noite.
+     * Sem o calendario — alguem com uma mistura de versoes do pacote —, a agenda simplesmente nao
+     * marca nada, em vez de marcar errado.
      */
-    const proximasJanelas = (texto, agora) => {
-      const todas = [];
-      for (const { inicio, fim } of janelasDe(texto)) {
-        const duracao = ((fim - inicio + 1440) % 1440 || 1440) * 60000;
-        for (const dia of [-1, 0, 1]) {
-          const abre = new Date(agora);
-          abre.setHours(0, 0, 0, 0);
-          abre.setDate(abre.getDate() + dia);
-          abre.setMinutes(inicio);
-          todas.push({ abre: abre.getTime(), fecha: abre.getTime() + duracao });
-        }
-      }
-      return todas.sort((a, b) => a.abre - b.abre);
-    };
-
-    /**
-     * Quanto falta ate' o instante sorteado da proxima janela — ou `null` se nao ha' nenhuma.
-     *
-     * O instante e' sorteado dentro da janela inteira, e nao na abertura: comecar sempre as 08:00
-     * em ponto e' o padrao mais visivel que existe. Com a janela ja' aberta, o sorteio vale do
-     * momento atual ate' o fechamento.
-     */
-    const esperaDaJanela = (texto, ultima, agora = new Date()) => {
-      const quando = agora.getTime();
-      for (const { abre, fecha } of proximasJanelas(texto, agora)) {
-        if (fecha <= quando || abre <= ultima) continue;
-        const comeco = Math.max(abre, quando);
-        if (comeco >= fecha) continue;
-        return comeco - quando + Math.random() * (fecha - comeco);
-      }
-      return null;
-    };
+    const calendario = () => globalThis.PPX?.agenda || null;
+    const esperaDaJanela = (horarios, dias, ultima, agora = new Date()) =>
+      calendario()?.esperaDaAgenda({ horarios, dias }, ultima, agora) ?? null;
 
     // -------------------------------------------------------------- o placar
     //
@@ -889,12 +848,14 @@ PPX.modulo(
             <label class="liga"><input type="checkbox" data-auto="KANTO"> Kanto</label>
             <input type="text" data-horas="KANTO" placeholder="08:00-09:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
+            <span data-agenda="KANTO"></span>
           </div>
           <div class="linha">
             <span class="sinal" data-sinal="JOHTO"></span>
             <label class="liga"><input type="checkbox" data-auto="JOHTO"> Johto</label>
             <input type="text" data-horas="JOHTO" placeholder="19:00-20:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
+            <span data-agenda="JOHTO"></span>
           </div>
           <div class="linha reset">
             <span>servidor reseta às</span>
@@ -945,6 +906,12 @@ PPX.modulo(
         flex: 1; min-width: 0; background: #0d1219; color: #e7edf6; border: 1px solid #2a3244;
         border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
       }
+      /* Campo que o calendario nao entendeu: marcado, porque aceitar em silencio deixaria a
+         agenda ligada sem nenhum dia marcado. */
+      #lioncode-gym .agenda input.erro { border-color: #7a3b3b; color: #f3b9b9; }
+      /* O editor da agenda ocupa a linha inteira: fechado e' um botao, aberto sao listas. */
+      #lioncode-gym .agenda [data-agenda] { flex: 1; min-width: 0; display: flex; }
+      #lioncode-gym .agenda [data-agenda] .ppx-ag { flex: 1; min-width: 0; }
       #lioncode-gym .agenda .reset { color: #8b97a8; font-size: 12px; }
       #lioncode-gym .agenda .reset input { max-width: 64px; flex: 0 0 auto; }
       #lioncode-gym .agenda .proxima { margin: 0; color: #8b97a8; font-size: 12px; min-height: 1.2em; }
@@ -1142,17 +1109,41 @@ PPX.modulo(
     const pintarAgenda = () => {
       const marcados = REGIOES.filter((r) => proximos[r]).sort((a, b) => proximos[a] - proximos[b]);
       if (!marcados.length) {
-        const ligadoSemHora = REGIOES.some(
-          (r) => agenda()[r].ligado && !janelasDe(agenda()[r].horarios).length,
-        );
-        campo('[data-proxima]').textContent = ligadoSemHora ? 'nenhum horário válido' : '';
+        // Dizer **o que** falta, e nao so' que falta: com dois campos por regiao, "nenhum horario
+        // valido" manda olhar para o campo errado metade das vezes.
+        const cal = calendario();
+        const quebrada = REGIOES.map((r) => [r, agenda()[r]]).find(([, c]) => {
+          if (!c.ligado) return false;
+          return !cal || !cal.valida({ modo: 'horarios', horarios: c.horarios, dias: c.dias });
+        });
+        if (!quebrada) campo('[data-proxima]').textContent = '';
+        else {
+          const [regiao, c] = quebrada;
+          const sobrou = cal?.diasNaoEntendidos(c.dias) || [];
+          campo('[data-proxima]').textContent = !cal
+            ? 'o calendário não carregou'
+            : sobrou.length
+              ? `${regiao}: não entendi "${sobrou[0]}" nos dias`
+              : `${regiao}: nenhum horário válido`;
+        }
         pintarResumo();
         return;
       }
       const primeiro = marcados[0];
       const quando = new Date(proximos[primeiro]);
       const dois = (n) => String(n).padStart(2, '0');
-      const dia = quando.toDateString() === new Date().toDateString() ? 'hoje' : 'amanhã';
+      // **"amanha" deixou de ser verdade.** Com o campo de dias, o proximo ginasio pode ser daqui
+      // a tres semanas, e esta linha dizia "amanha" para qualquer coisa que nao fosse hoje. Passada
+      // a vespera, a data por extenso e' a unica resposta honesta.
+      const meiaNoite = new Date();
+      meiaNoite.setHours(0, 0, 0, 0);
+      const diasAte = Math.floor((quando - meiaNoite) / 86400000);
+      const dia =
+        diasAte === 0
+          ? 'hoje'
+          : diasAte === 1
+            ? 'amanhã'
+            : `${dois(quando.getDate())}/${dois(quando.getMonth() + 1)}`;
       campo('[data-proxima]').textContent =
         `próximo: ${primeiro === 'KANTO' ? 'Kanto' : 'Johto'} ${dia} às ` +
         `${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
@@ -1210,6 +1201,27 @@ PPX.modulo(
      * Chamada tanto pelo botao como na carga da pagina: depois do F5 do passo `recarregar` e' esta
      * mesma funcao que retoma, sem saber que houve uma recarga pelo meio.
      */
+    // ------------------------------------------------------------- a vez
+    //
+    // O ginasio e' o vizinho mais pesado do pacote: ele sai da cacada, fecha menus e janelas, troca
+    // a equipe inteira e da' **dois F5**. Qualquer venda ou compra a meio caminho morre nessas
+    // recargas sem dizer nada. Por isso ele pede a vez antes de sair da cacada, e so' a solta no
+    // fim — inclusive atravessando as proprias recargas, porque do outro lado a vez ainda e' dele.
+    let soltarVez = null;
+    const pegarVez = async () => {
+      const vez = globalThis.PPX?.vez;
+      if (!vez?.pedir) return true; // nucleo antigo: segue como antes, sem fila
+      const dono = vez.dono();
+      if (dono && dono.id !== 'gym') dizer(`Esperando o ${vez.nome(dono.id)} terminar…`);
+      soltarVez = await vez.pedir('gym');
+      return Boolean(soltarVez);
+    };
+    const largarVez = () => {
+      if (!soltarVez) return;
+      soltarVez();
+      soltarVez = null;
+    };
+
     async function continuarTarefa() {
       if (correndo) return;
       const dados = tarefa();
@@ -1217,7 +1229,15 @@ PPX.modulo(
       correndo = true;
       parar = false;
       travarBotoes(true);
+      // **A vez nao e' solta no `finally` quando a pagina vai recarregar.** Do outro lado do F5 a
+      // tarefa continua, e soltar aqui abriria exactamente a fresta que esta fila existe para
+      // fechar: a venda entrando entre a recarga e a retomada.
+      let recarregando = false;
       try {
+        if (!(await pegarVez())) {
+          await falhou(dados, 'o jogo ficou ocupado tempo demais');
+          return;
+        }
         for (;;) {
           if (parar) {
             limparTarefa();
@@ -1230,7 +1250,10 @@ PPX.modulo(
             return;
           }
           const passo = await executarEtapa(etapa, dados);
-          if (passo.recarregou) return; // a pagina vai embora; quem segue e' a carga seguinte
+          if (passo.recarregou) {
+            recarregando = true;
+            return; // a pagina vai embora; quem segue e' a carga seguinte
+          }
           if (!passo.ok) {
             await falhou(dados, passo.erro);
             return;
@@ -1258,6 +1281,7 @@ PPX.modulo(
           // Nao ha' pausa aqui: o tempo esta' todo **entre os cliques**, dentro das etapas.
         }
       } finally {
+        if (!recarregando) largarVez();
         fecharRitmo();
         correndo = false;
         travarBotoes(Boolean(tarefa()));
@@ -1535,7 +1559,7 @@ PPX.modulo(
       proximos[regiao] = 0;
       const config = agenda()[regiao];
       if (config.ligado) {
-        const ms = esperaDaJanela(config.horarios, config.ultima);
+        const ms = esperaDaJanela(config.horarios, config.dias, config.ultima);
         if (ms !== null) {
           proximos[regiao] = Date.now() + ms;
           relogios[regiao] = setTimeout(() => dispararAuto(regiao), ms);
@@ -1547,17 +1571,47 @@ PPX.modulo(
     for (const regiao of REGIOES) {
       const liga = campo(`[data-auto="${regiao}"]`);
       const horas = campo(`[data-horas="${regiao}"]`);
+      // ---- a agenda da regiao, fechada ate' alguem querer configurar -------
+      //
+      // Uma lista de sete dias e outra de trinta e um nao cabem numa linha deste painel — mas nao
+      // precisam de caber: ficam atras de um botao que mostra o que ja' esta' combinado. Configurar
+      // isto e' coisa de poucas vezes; ler o que foi combinado e' de todo dia.
+      //
+      // O horario muda-se de casa para dentro do editor junto com os dias: a agenda da regiao abre
+      // e fecha inteira, em vez de meia dentro e meia fora.
+      const editor = calendario()?.montarControles({
+        resumoDe: (texto) => calendario().resumo({ dias: texto, horarios: horas.value.trim() }),
+      });
+      const dias = editor ? editor.campo : document.createElement('input');
+      if (editor) {
+        campo(`[data-agenda="${regiao}"]`).append(editor.el);
+        editor.corpo.prepend(horas);
+      }
       const guardado = agenda()[regiao];
       liga.checked = guardado.ligado;
       horas.value = guardado.horarios;
+      if (editor) editor.escrever(guardado.dias);
+      else dias.value = guardado.dias;
       const mudou = () => {
         const nova = agenda();
-        nova[regiao] = { ...nova[regiao], ligado: liga.checked, horarios: horas.value.trim() };
+        nova[regiao] = {
+          ...nova[regiao],
+          ligado: liga.checked,
+          horarios: horas.value.trim(),
+          dias: dias.value.trim(),
+        };
         guardarAgenda(nova);
+        // Um pedaco que nao se entendeu fica marcado. Ignora-lo seria pior do que recusa-lo: quem
+        // escreveu "ultima quarta" com um engano ficaria sem nenhum dia marcado, achando que tem.
+        const sobrou = calendario()?.diasNaoEntendidos(dias.value) || [];
+        dias.classList.toggle('erro', sobrou.length > 0);
+        // O resumo no botao fechado acompanha o horario tambem, e nao so' os dias.
+        editor?.resumir();
         agendarRegiao(regiao);
       };
       liga.addEventListener('change', mudou);
       horas.addEventListener('change', mudou);
+      dias.addEventListener('change', mudou);
     }
 
     const campoReset = campo('[data-reset]');

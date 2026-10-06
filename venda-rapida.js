@@ -570,6 +570,9 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
           <input type="text" data-horarios placeholder="08:00-09:00, 19:00-20:00"
             title="Uma janela por vírgula. Dentro de cada uma ela age uma única vez."
             spellcheck="false">
+          <input type="text" data-dias placeholder="todo dia"
+            title="Vazio: todo dia. Exemplos: &quot;seg, qui&quot; · &quot;1, 15&quot; · &quot;último&quot; · &quot;última sexta&quot; · &quot;primeira segunda&quot;."
+            spellcheck="false">
         </span>
         <span data-proxima></span>
       </label>
@@ -830,12 +833,35 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     botaoVender.classList.toggle('parando', estado);
   }
 
+  const MINHA_VEZ = 'venda-rapida';
+
+  /**
+   * Pede a vez e espera por ela, dizendo na tela por quem se espera.
+   *
+   * Sem este aviso, um painel que espera e' indistinguivel de um painel travado — e a venda pode
+   * ficar parada cinco minutos enquanto o ginasio corre, que e' tempo de sobra para alguem achar
+   * que a ferramenta quebrou.
+   */
+  const esperarAVez = async (dizer) => {
+    const vez = globalThis.PPX?.vez;
+    if (!vez?.pedir) return () => {}; // nucleo antigo: segue como antes, sem fila
+    const dono = vez.dono();
+    if (dono && dono.id !== MINHA_VEZ) dizer(`Esperando o ${vez.nome(dono.id)} terminar…`);
+    return vez.pedir(MINHA_VEZ);
+  };
+
   /** Uma passagem pela lista. O botao e o relogio entram pela mesma porta. */
   async function rodarVenda() {
     ocupado(true);
+    let soltar = null;
     try {
+      soltar = await esperarAVez(mostrar);
+      // Prazo esgotado: nao se vende as cegas por cima de quem esta' a usar o jogo. O relogio
+      // automatico marca a proxima rodada como sempre.
+      if (!soltar) return mostrar('Desisti: o jogo ficou ocupado tempo demais.', true);
       await vender(mostrar);
     } finally {
+      if (soltar) soltar();
       parar = false;
       ocupado(false);
     }
@@ -893,8 +919,42 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   const campoModo = painel.querySelector('[data-modo]');
   const camposMinutos = painel.querySelector('[data-campos-minutos]');
   const campoProxima = painel.querySelector('[data-proxima]');
+  // ---- a agenda, fechada ate' alguem querer configurar ---------------------
+  //
+  // Os controles ficam atras de um botao que mostra o que ja' ficou combinado. Configurar isto e'
+  // coisa de poucas vezes por ano; **ver** o que foi combinado e' coisa de todo dia, e era so' isso
+  // que o painel precisava de mostrar sempre.
+  //
+  // O campo de texto continua existindo, escondido dentro do editor: e' nele que o valor mora, e e'
+  // por isso que toda a fiacao abaixo — gravar, validar, agendar — ficou como estava.
+  const diasNaMarcacao = painel.querySelector('[data-dias]');
+  const editorDias = globalThis.PPX?.agenda?.montarControles({
+    resumoDe: (dias) =>
+      globalThis.PPX.agenda.resumo({ dias, horarios: campoHorarios.value.trim() }),
+  });
+  const campoDias = editorDias ? editorDias.campo : diasNaMarcacao;
+  if (editorDias) {
+    // O modo, os minutos e os horarios mudam-se de casa para dentro do editor: a parte de
+    // configurar abre e fecha inteira, em vez de meia dentro e meia fora.
+    campoModo.parentElement.insertBefore(editorDias.el, campoModo);
+    editorDias.corpo.prepend(
+      campoModo,
+      painel.querySelector('[data-campos-minutos]'),
+      campoHorarios.parentElement,
+    );
+    diasNaMarcacao.remove();
+  }
   let relogio = 0;
   let proxima = 0;
+  /**
+   * O motivo de nao haver nada marcado, quando nao ha'.
+   *
+   * Precisa de viver fora de `desenharAuto`, que roda de segundo em segundo: escrever a mensagem
+   * direto no campo fazia ela durar **um segundo** e ser apagada pelo proximo desenho. O defeito
+   * ja' existia antes do campo de dias — so' que com um campo so' era mais facil adivinhar o que
+   * faltava, entao ninguem reparou.
+   */
+  let semAgenda = '';
 
   function configAuto() {
     const salvo = ler(CHAVE_AUTO, null) ?? {};
@@ -905,72 +965,36 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       min: minimo,
       max: Math.max(minimo, maximo),
       horarios: String(salvo.horarios ?? ''),
+      // Vazio quer dizer todo dia: e' como esta ferramenta sempre se comportou.
+      dias: String(salvo.dias ?? ''),
       modo: salvo.modo === 'horarios' ? 'horarios' : 'minutos',
       ultima: Number(salvo.ultima) || 0,
     };
   }
 
   /**
-   * As janelas de horario em que o ciclo pode agir, lidas de "08:00-09:00, 18:00-20:00".
+   * Quanto falta, em ms, ate' o instante sorteado da proxima ocorrencia — ou `null` se nao ha'.
    *
-   * Vazio quer dizer "a qualquer hora", que e' o modo de so' minutagem — o unico que existia antes.
-   * Uma janela que termina antes de comecar atravessa a meia-noite: 22:00-02:00 vale assim.
-   */
-  function janelas() {
-    const achadas = [];
-    for (const parte of String(configAuto().horarios).split(/[;,]/)) {
-      const casa =
-        /^\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*(?:-|as|ate|até)\s*(\d{1,2})(?::(\d{2}))?\s*h?\s*$/i.exec(
-          parte,
-        );
-      if (!casa) continue;
-      const minuto = (hora, min) => (Number(hora) % 24) * 60 + (Number(min ?? 0) % 60);
-      achadas.push({ inicio: minuto(casa[1], casa[2]), fim: minuto(casa[3], casa[4]) });
-    }
-    return achadas;
-  }
-
-  /**
-   * As janelas como instantes de verdade, de ontem, hoje e amanha, em ordem de abertura.
+   * A conta inteira mora em `agenda.js`, partilhada com a outra automacao e com o ginasio: as tres
+   * tinham esta mesma logica copiada, e acrescentar "toda semana" e "todo mes" em tres copias seria
+   * acrescentar o mesmo defeito em tres lugares. Ver o cabecalho de `agenda.js`.
    *
-   * Em minutos do dia nao da' para dizer "esta janela ja' foi usada": 08:00 de hoje e 08:00 de
-   * amanha sao o mesmo numero. Com instantes absolutos, cada abertura e' unica e pode ser
-   * comparada com a hora da ultima rodada. Ontem entra na conta por causa das janelas que
-   * atravessam a meia-noite.
-   */
-  function proximasJanelas(agora) {
-    const todas = [];
-    for (const { inicio, fim } of janelas()) {
-      const duracao = ((fim - inicio + 1440) % 1440 || 1440) * 60000;
-      for (const dia of [-1, 0, 1]) {
-        const abre = new Date(agora);
-        abre.setHours(0, 0, 0, 0);
-        abre.setDate(abre.getDate() + dia);
-        abre.setMinutes(inicio);
-        todas.push({ abre: abre.getTime(), fecha: abre.getTime() + duracao });
-      }
-    }
-    return todas.sort((a, b) => a.abre - b.abre);
-  }
-
-  /**
-   * Quanto falta, em ms, ate' o instante sorteado da proxima janela — ou `null` se nao ha' janela.
-   *
-   * Uma rodada por janela: a que ja' recebeu a sua fica para tras pela comparacao com `ultima`.
-   * O instante e' sorteado dentro da janela inteira, e nao na abertura, porque agir sempre as
-   * 08:00 em ponto e' o padrao mais visivel que existe. Com a janela ja' aberta, o sorteio vale do
-   * momento atual ate' o fechamento.
+   * Sem o calendario — alguem com uma mistura de versoes do pacote —, o modo por horario simplesmente
+   * nao agenda, em vez de agendar errado.
    */
   function esperaDaJanela(agora = new Date()) {
-    const quando = agora.getTime();
-    const ultima = configAuto().ultima;
-    for (const { abre, fecha } of proximasJanelas(agora)) {
-      if (fecha <= quando || abre <= ultima) continue;
-      const comeco = Math.max(abre, quando);
-      if (comeco >= fecha) continue;
-      return comeco - quando + Math.random() * (fecha - comeco);
-    }
-    return null;
+    const { horarios, dias, ultima } = configAuto();
+    const calendario = globalThis.PPX?.agenda;
+    if (!calendario) return null;
+    return calendario.esperaDaAgenda({ horarios, dias }, ultima, agora);
+  }
+
+  /** A agenda esta' completa? Usado para marcar o campo, e nao para esconder o problema. */
+  function agendaValida() {
+    const { horarios, dias } = configAuto();
+    const calendario = globalThis.PPX?.agenda;
+    if (!calendario) return false;
+    return calendario.valida({ modo: 'horarios', horarios, dias });
   }
 
   /** Mostra so' os campos do modo escolhido: dois conjuntos a' vista e' o que confundia. */
@@ -978,6 +1002,9 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     const porHorario = campoModo.value === 'horarios';
     camposMinutos.style.display = porHorario ? 'none' : '';
     campoHorarios.parentElement.style.display = porHorario ? '' : 'none';
+    // "A cada tantos minutos" nao tem dia nenhum para escolher: deixar as listas a' vista ali seria
+    // oferecer um controle que nao faz nada.
+    editorDias?.usarDias(porHorario);
   }
 
   /** Cada ciclo sorteia o seu proprio tempo: um intervalo fixo e' o padrao mais obvio que existe. */
@@ -992,7 +1019,12 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     auto.classList.toggle('parando', ligado);
     if (!ligado) {
       auto.textContent = 'Iniciar';
-      campoProxima.textContent = '';
+      campoProxima.textContent = semAgenda;
+      return;
+    }
+    if (semAgenda) {
+      auto.textContent = 'Parar';
+      campoProxima.textContent = semAgenda;
       return;
     }
     if (!proxima) {
@@ -1002,17 +1034,35 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     }
     const falta = Math.max(0, proxima - Date.now());
     const dois = (n) => String(n).padStart(2, '0');
+    const DIA = 86400000;
     // A contagem sozinha nao responde "quando e' que isso acontece?". A hora por extenso responde,
     // e e' ela que mostra, no modo horario, que a rodada vai cair dentro da janela.
     const quando = new Date(proxima);
-    campoProxima.textContent = `próxima às ${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
+    const hora = `${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
+    // **A data entra quando deixa de ser obvia.** Com agenda semanal ou mensal, "proxima as 20:38"
+    // sozinho e' quase uma pegadinha: a hora esta' certa e o dia pode ser daqui a tres semanas.
+    const meiaNoite = new Date();
+    meiaNoite.setHours(0, 0, 0, 0);
+    const diasAte = Math.floor((quando - meiaNoite) / DIA);
+    campoProxima.textContent =
+      diasAte === 0
+        ? `próxima às ${hora}`
+        : diasAte === 1
+          ? `amanhã às ${hora}`
+          : `${dois(quando.getDate())}/${dois(quando.getMonth() + 1)} às ${hora}`;
     const horas = Math.floor(falta / 3600000);
     const mm = Math.floor((falta % 3600000) / 60000);
     const ss = Math.floor((falta % 60000) / 1000);
     // Com janelas de horario a espera passa facil de uma hora, e "115:14" nao se le' como tempo.
-    auto.textContent = horas
-      ? `Parar · ${horas}:${dois(mm)}:${dois(ss)}`
-      : `Parar · ${dois(mm)}:${dois(ss)}`;
+    // Com agenda semanal ou mensal passa de **centenas** de horas: "576:29:43" foi o que apareceu
+    // na banca com "ultima sexta", e nao e' um relogio, e' um numero. Acima de um dia, conta-se em
+    // dias — a precisao ao segundo nao serve para nada a essa distancia.
+    const dias = Math.floor(falta / DIA);
+    auto.textContent = dias
+      ? `Parar · ${dias}d ${horas % 24}h`
+      : horas
+        ? `Parar · ${horas}:${dois(mm)}:${dois(ss)}`
+        : `Parar · ${dois(mm)}:${dois(ss)}`;
   }
 
   function agendarVenda() {
@@ -1025,10 +1075,22 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
       // Modo horario sem nenhuma janela legivel: nao da' para marcar nada, e dizer isso e' melhor
       // do que um ciclo ligado que nunca acontece.
       proxima = 0;
+      // Dizer **o que** falta, e nao so' que falta: com dois campos, "nenhum horario valido" manda
+      // a pessoa olhar para o campo errado metade das vezes.
+      const { horarios, dias } = configAuto();
+      const calendario = globalThis.PPX?.agenda;
+      const sobrou = calendario?.diasNaoEntendidos(dias) || [];
+      semAgenda = !calendario
+        ? 'o calendário não carregou'
+        : sobrou.length
+          ? `não entendi "${sobrou[0]}" nos dias`
+          : !calendario.janelasDe(horarios).length
+            ? 'nenhum horário válido'
+            : 'esses dias nunca chegam';
       desenharAuto();
-      campoProxima.textContent = 'nenhum horário válido';
       return;
     }
+    semAgenda = '';
     proxima = Date.now() + ms;
     relogio = setTimeout(() => void rodadaAuto(), ms);
     desenharAuto();
@@ -1059,23 +1121,50 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
     campoMin.value = minimo;
     campoMax.value = maximo;
     const horarios = campoHorarios.value.trim();
+    const dias = campoDias.value.trim();
     gravar(CHAVE_AUTO, {
       ...ler(CHAVE_AUTO, {}),
       ligado,
       min: minimo,
       max: maximo,
       horarios,
+      dias,
       modo: campoModo.value,
     });
     atualizarModo();
     // Texto que nao vira janela nenhuma fica marcado: aceitar em silencio faria o ciclo
     // ficar parado para sempre sem ninguem entender por que.
-    campoHorarios.classList.toggle('erro', Boolean(horarios) && !janelas().length);
+    const calendario = globalThis.PPX?.agenda;
+    campoHorarios.classList.toggle(
+      'erro',
+      Boolean(horarios) && !(calendario?.janelasDe(horarios).length > 0),
+    );
+    // E o campo de dias tem o seu proprio aviso. Um pedaco que nao se entendeu nao pode ser
+    // ignorado: "ultima quarta" com um engano viraria uma automacao sem dia nenhum marcado.
+    const sobrou = calendario?.diasNaoEntendidos(dias) || [];
+    campoDias.classList.toggle('erro', sobrou.length > 0);
+    // Com as listas isto nao acontece — elas so' escrevem o que o calendario entende. O aviso fica
+    // de pe' para quem tem o campo de texto antigo, e para o dia em que uma lista nova errar.
+    campoDias.title = sobrou.length
+      ? `Não entendi: ${sobrou.join(', ')}. ${calendario.DICA_DIAS}`
+      : calendario?.DICA_DIAS || '';
+    // O resumo no botao fechado tem de acompanhar o horario tambem, e nao so' os dias.
+    editorDias?.resumir();
   };
 
   auto.addEventListener('click', () => {
     const ligar = !configAuto().ligado;
     salvarAuto(ligar);
+    // **Nao se liga um relogio que nunca vai disparar.** Com a agenda incompleta ou com um
+    // pedaco que nao se entendeu, ligar deixaria o botao dizendo "Parar" para sempre, sem
+    // nada acontecer — e a pessoa so' descobriria no dia em que fosse conferir.
+    if (ligar && configAuto().modo === 'horarios' && !agendaValida()) {
+      salvarAuto(false);
+      // Quem escreve a mensagem e' o proprio agendamento, que descobre o motivo. Redesenhar aqui
+      // por cima dela era o que a apagava.
+      agendarVenda();
+      return;
+    }
     if (ligar) {
       // Por minutagem, comecar e' vender: a primeira rodada sai agora. Por horario nao — a graca do
       // modo e' a rodada cair dentro da janela, entao aqui so' se marca a proxima.
@@ -1095,12 +1184,15 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   };
   campoModo.addEventListener('change', mudouFaixa);
   campoHorarios.addEventListener('change', mudouFaixa);
+  campoDias.addEventListener('change', mudouFaixa);
   campoMin.addEventListener('change', mudouFaixa);
   campoMax.addEventListener('change', mudouFaixa);
 
   campoModo.value = configAuto().modo;
   atualizarModo();
   campoHorarios.value = configAuto().horarios;
+  if (editorDias) editorDias.escrever(configAuto().dias);
+  else campoDias.value = configAuto().dias;
   campoMin.value = configAuto().min;
   campoMax.value = configAuto().max;
   // Recarregar a pagina nao e' pedir uma venda: o ciclo ligado volta a contar o tempo, mas a

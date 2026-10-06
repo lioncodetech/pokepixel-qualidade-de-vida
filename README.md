@@ -784,6 +784,122 @@ Na banca, com as três ligadas ao mesmo tempo, o percurso foi:
 A ferramenta também abre a porta `PPX.cacadas` (`nomes`, `atual`, `ir`), igual à do Times — quem
 chama recebe o resultado em vez de adivinhar lendo a tela.
 
+## Agenda: toda semana, todo mês, ou um dia por mês
+
+As automações sempre souberam duas formas de marcar hora: **a cada tantos minutos** e **uma vez
+entre tais horários**. Agora a agenda inteira vive atrás de um botão que mostra o que já ficou
+combinado:
+
+```
+[Parar · 24d 0h] vender   última sexta do mês · 20:00-21:00   ▾
+```
+
+Clicando nele, a parte de configurar abre — e tudo o que ela pede é escolher em listas:
+
+| repetir | o que aparece |
+| --- | --- |
+| todo dia | nada mais: é o que já era |
+| dias da semana | a lista dos sete, marque quantos quiser |
+| dias do mês | a lista de 1 a 31, mais **último dia** |
+| um dia por mês | *primeira / segunda / terceira / quarta / última* + o dia da semana |
+
+"Uma vez por semana" é um dia marcado na lista; "vários dias na semana" são vários. Fechada, a
+agenda volta a ser uma linha de texto que diz o combinado.
+
+### Fechada por padrão, e por isso pode ser larga
+
+A primeira versão disto pedia os dias num campo de texto — `última sexta`, `1, 15` — e o argumento
+era o espaço: três painéis apertados não cabem sete caixinhas e dois seletores.
+
+O argumento caiu quando a parte passou a ficar **fechada**. Quem configura uma agenda o faz poucas
+vezes por ano; quem a lê, lê todo dia. Decorar uma sintaxe para usar três vezes por ano é o pior dos
+dois mundos — e, com a configuração escondida atrás de um botão, não havia mais nada a economizar.
+
+O texto continua sendo o formato guardado, só que agora quem o escreve são as listas. Isso tem uma
+consequência boa: **o calendário não mudou nada**, os testes de mesa continuam valendo, e quem já
+tinha escrito à mão não perde nada — as listas leem de volta. Uma mistura que as listas não sabem
+representar (`seg, 15`, escrito à mão numa versão anterior) não é sobrescrita: apagar em silêncio o
+que a pessoa montou seria pior do que não oferecer o controle.
+
+O campo de horários continua sendo texto, como sempre foi: `20:00-21:00`, e aceita mais de uma
+janela por vírgula.
+
+### O calendário é um só
+
+As três ferramentas tinham a leitura de horários copiada linha por linha, uma da outra. Acrescentar
+semana e mês em três cópias seria acrescentar o mesmo defeito em três lugares e corrigi-lo em dois.
+Agora a conta inteira mora em `agenda.js`, e as funções são puras de propósito — é o que permite
+exercitar virada de mês, ano bissexto e "dia 31" em `testes/agenda.test.mjs`, em vez de esperar o
+calendário chegar lá para descobrir.
+
+### As decisões que custaram pensar
+
+**O dia que o mês não tem simplesmente não acontece.** `31` não existe em novembro nem em
+fevereiro. Arrastar para o dia 1 seguinte seria agir num dia que ninguém pediu; recuar para o 30
+seria o mesmo. Quem quer dizer "o fim do mês" escreve `último`.
+
+**A última não é a quinta.** Um mês tem quatro ou cinco sextas. `última sexta` é a última de cada
+mês, não um número fixo que às vezes não existe.
+
+**O que não foi entendido fica marcado, e o relógio não liga.** Com as listas isto deixou de
+acontecer — elas só escrevem o que o calendário entende —, mas a defesa ficou de pé para quem tem
+texto de uma versão anterior. A primeira versão ignorava o pedaço ruim e, sem nenhuma regra válida,
+"todo dia" era o resultado: quem escrevesse `última quarta` com um engano teria a automação rodando
+**trinta vezes por mês** em vez de uma. Não agir é recuperável; agir trinta vezes não é.
+
+**Ocorrência perdida fica perdida.** Computador desligado na segunda à noite: ao ligar na terça, a
+automação não dispara "o que ficou devendo". Ela espera a próxima segunda. Disparar o atrasado seria
+agir numa hora que ninguém escolheu, que é justamente o que estas janelas evitam.
+
+**A distância passou a ser dita em dias.** Com `última sexta`, o botão mostrava
+*"Parar · 576:29:43"* — isso não é um relógio, é um número. Acima de um dia conta-se em dias, e a
+data aparece quando deixa de ser óbvia: *"30/10 às 20:43"*. O ginásio tinha o mesmo problema ao
+contrário — dizia *"amanhã"* para qualquer coisa que não fosse hoje, inclusive para daqui a três
+semanas.
+
+Quem já tem uma agenda montada não perde nada: campo de dias vazio é todo dia, que é exatamente
+como as três ferramentas se comportavam antes.
+
+## A fila: uma ferramenta de cada vez
+
+Três relógios automáticos vivem neste pacote — a venda, a compra e o ginásio. Até aqui cada
+ferramenta só se protegia **de si mesma**: a venda não começava duas vendas, o ginásio não começava
+dois ginásios, e nenhuma sabia que as outras existiam. Com três relógios no ar, o cruzamento não era
+hipótese, era questão de tempo. E o pior deles é calado:
+
+- o ginásio dá **dois F5** no meio da corrida. Uma venda a meio caminho morre ali sem dizer nada, e
+  só volta a ser tentada no intervalo seguinte;
+- o ginásio fecha os menus da barra de cima e as janelas abertas para conseguir abrir a dele. A
+  janela que ele fecha pode ser a loja que a compra estava usando;
+- venda e compra disputam a mesma loja do Mark, cada uma lendo uma mochila que a outra está mudando.
+
+Agora há uma fila. Quem quer agir pede a vez, e espera a sua — em ordem de chegada. O painel que
+espera diz por quem: *"Esperando o Ginásio do dia terminar…"*, porque um painel que espera é
+indistinguível de um painel travado.
+
+### Por que a vez mora na `sessionStorage`
+
+Duas exigências ao mesmo tempo, e só ela atende as duas.
+
+**Tem de atravessar o F5.** O ginásio recarrega a página de propósito, duas vezes por corrida, e a
+vez tem de continuar sendo dele do outro lado — senão a venda entra entre a recarga e a retomada,
+que é exatamente a fresta que a fila existe para fechar.
+
+**Tem de ser por aba.** O LionMultInstance abre várias janelas do jogo ao mesmo tempo. Uma fila
+guardada no `localStorage` seria compartilhada, e a instância A ficaria esperando pela B sem razão
+nenhuma.
+
+### E se alguém morrer segurando a vez
+
+Quem está com ela bate de dois em dois segundos. Sem batida por 45 segundos, a vez é dada por
+abandonada e a próxima entra. O número não é arbitrário: tem de ser maior que a recarga mais lenta
+do ginásio — durante o F5 ninguém bate, e ele ainda espera a tela limpar, até 15 segundos. Curto
+demais, a venda rouba a vez no meio da recarga; longo demais, um erro segura a fila.
+
+Medido em `testes/banca-vez.html`, que atravessa um F5 de verdade — e que acusa a falha nos dois
+sentidos: tirando a proteção da travessia, a banca diz *"é de: ninguém"* e uma venda nova entra no
+meio da recarga.
+
 ## Senha: quando a extensão é recarregada por baixo da aba
 
 Recarregar a extensão — em `chrome://extensions`, ou reinstalando o pacote pela loja — **não mexe

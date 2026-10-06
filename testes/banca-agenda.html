@@ -1,0 +1,200 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca das agendas</title>
+<!--
+  Banca dos painéis da venda, da compra e do ginásio — só a parte da agenda, sem o jogo por baixo.
+
+  O que ela prova, e que nenhum teste de mesa prova: os três painéis sobem com o calendário
+  partilhado, o campo de dias aparece junto do de horários, o que foi escrito é gravado e relido
+  através do F5, e o que o calendário não entendeu fica marcado em vez de passar calado.
+
+  O que ela **não** prova: vender, comprar ou desafiar. Isso só existe no jogo.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../nucleo.js`.
+-->
+<style>
+  body { margin: 0; min-height: 100vh; background: #1b2430; color: #dbe3ee;
+    font: 14px/1.6 system-ui, sans-serif; padding: 16px; }
+  pre { background: #0005; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+    max-width: 52em; font-size: 12px; }
+  .mau { color: #ff9b9b; }
+</style>
+<h3>Banca das agendas</h3>
+<p>Os três painéis estão na tela. O relatório é automático.</p>
+<pre data-saida>correndo…</pre>
+
+<script>
+  const saida = document.querySelector('[data-saida]');
+  const linhas = [];
+  const dizer = (t, mau) => {
+    linhas.push((mau ? '\u2716 ' : '\u2022 ') + t);
+    saida.innerHTML = linhas
+      .map((l) => (l.startsWith('\u2716') ? `<span class="mau">${l}</span>` : l))
+      .join('\n');
+  };
+  const conferir = (certo, t) => dizer(t, !certo);
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Os painéis são do pacote inteiro: o núcleo registra, o calendário publica `PPX.agenda`, e cada
+  // ferramenta se monta sozinha. Carregados na ordem do manifest.
+  const carregar = (src) =>
+    new Promise((ok, falhou) => {
+      const el = document.createElement('script');
+      el.src = `${src}?t=${Date.now()}`;
+      el.onload = ok;
+      el.onerror = () => falhou(new Error(src));
+      document.head.append(el);
+    });
+
+  (async () => {
+    for (const f of ['../nucleo.js', '../agenda.js', '../venda-rapida.js', '../loja-rapida.js', '../gym.js'])
+      await carregar(f);
+    await esperar(1200);
+
+    const cal = window.PPX?.agenda;
+    conferir(Boolean(cal), 'o calendário está publicado em PPX.agenda');
+    if (!cal) return;
+
+    // ---- os três painéis subiram, com o campo de dias ao lado do de horários ----
+    for (const [id, nome] of [
+      ['lioncode-venda-rapida', 'venda'],
+      ['lioncode-loja-rapida', 'compra'],
+      ['lioncode-gym', 'ginásio'],
+    ]) {
+      const p = document.getElementById(id);
+      conferir(Boolean(p), `o painel da ${nome} subiu`);
+      if (p) conferir(p.querySelector('[data-dias]') !== null, `a ${nome} tem campo de dias`);
+    }
+
+    // ---- escrever uma agenda semanal e ver se ela é gravada e entendida ----
+    const venda = document.getElementById('lioncode-venda-rapida');
+    const modo = venda.querySelector('[data-modo]');
+    const horas = venda.querySelector('[data-horarios]');
+    const dias = venda.querySelector('[data-dias]');
+
+    // A agenda comeca FECHADA: so' o resumo a' vista.
+    const botaoAbre = venda.querySelector('.ppx-ag-abre');
+    const corpo = venda.querySelector('.ppx-ag-corpo');
+    const resumoVisivel = () => venda.querySelector('[data-ag-resumo]')?.textContent?.trim() || '';
+    conferir(Boolean(botaoAbre), 'a agenda tem um botao que a abre');
+    conferir(corpo?.hidden === true, 'e comeca fechada');
+    conferir(corpo?.contains(modo) === true, 'o modo mudou-se para dentro dela');
+    conferir(corpo?.contains(horas) === true, 'e os horarios tambem');
+
+    botaoAbre.click();
+    await esperar(100);
+    conferir(corpo.hidden === false, 'o botao abre a agenda');
+
+    modo.value = 'horarios';
+    modo.dispatchEvent(new Event('change', { bubbles: true }));
+    horas.value = '20:00-21:00';
+    horas.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(100);
+
+    // ---- e agora pelas LISTAS, que foi o pedido: nada de decorar sintaxe ----
+    // Os controles do editor sao marcados: dentro do mesmo corpo vivem tambem os do painel
+    // (o modo, os minutos, os horarios), e um `select` generico pegaria o errado.
+    const tipo = corpo.querySelector('[data-ag-tipo]');
+    const listaSemana = corpo.querySelector('[data-ag-semana]');
+    conferir(Boolean(tipo) && Boolean(listaSemana), 'ha uma lista de modo e uma de dias da semana');
+    tipo.value = 'semana';
+    tipo.dispatchEvent(new Event('change', { bubbles: true }));
+    for (const o of listaSemana.options) o.selected = o.value === '1' || o.value === '4';
+    listaSemana.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+
+    const guardado = JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto') || '{}');
+    // As listas escrevem a forma por extenso; a abreviatura continua valendo para quem a digitou.
+    conferir(guardado.dias === 'segunda, quinta', `a venda gravou os dias (${guardado.dias})`);
+    conferir(guardado.horarios === '20:00-21:00', 'a venda gravou os horários');
+    conferir(!dias.classList.contains('erro'), 'dias válidos não ficam marcados');
+    conferir(
+      cal.resumo({ dias: guardado.dias, horarios: guardado.horarios }) === 'segunda, quinta · 20:00-21:00',
+      'e o calendário lê de volta o que o painel gravou',
+    );
+
+    // ---- o resumo no botao fechado diz a agenda inteira ----
+    conferir(
+      resumoVisivel().includes('segunda, quinta'),
+      `o botao fechado mostra a agenda (${resumoVisivel()})`,
+    );
+    conferir(resumoVisivel().includes('20:00-21:00'), 'inclusive o horário');
+
+    // ---- texto escrito à mão numa versão anterior continua valendo ----
+    //
+    // "seg, 15" é uma mistura que as listas não sabem representar. Sobrescrevê-la ao abrir seria
+    // apagar em silêncio o que a pessoa montou — então ela fica como está.
+    const antes = JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto') || '{}');
+    localStorage.setItem('lioncode:venda-rapida:auto', JSON.stringify({ ...antes, dias: 'seg, 15' }));
+    const cal2 = cal.resumo({ dias: 'seg, 15', horarios: '20:00-21:00' });
+    conferir(cal2.includes('segunda') && cal2.includes('dia 15'), `mistura antiga continua lida (${cal2})`);
+    localStorage.setItem('lioncode:venda-rapida:auto', JSON.stringify(antes));
+
+    // ---- com uma lista não dá para escrever lixo, mas o aviso continua de pé ----
+    dias.value = 'seg, blargh';
+    dias.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+    conferir(dias.classList.contains('erro'), 'o que o calendário não entendeu fica marcado');
+
+    const botao = venda.querySelector('[data-auto]');
+    botao.click();
+    await esperar(300);
+    const depois = JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto') || '{}');
+    conferir(depois.ligado !== true, 'e o relógio NÃO liga com a agenda quebrada');
+    conferir(
+      (venda.querySelector('[data-proxima]')?.textContent || '').includes('blargh'),
+      `o painel diz o que não entendeu (${venda.querySelector('[data-proxima]')?.textContent})`,
+    );
+
+    // ---- consertado, o relógio liga e marca uma data de verdade ----
+    // Conserta pelas listas: "um dia por mês" + "última" + "sexta".
+    tipo.value = 'ordinal';
+    tipo.dispatchEvent(new Event('change', { bubbles: true }));
+    const listaOrdinal = corpo.querySelector('[data-ag-ordinal]');
+    const listaDia = corpo.querySelector('[data-ag-dia]');
+    listaOrdinal.value = '-1';
+    listaDia.value = '5';
+    listaDia.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+    conferir(dias.value === 'ultima sexta', `as listas escreveram o texto (${dias.value})`);
+    botao.click();
+    await esperar(400);
+    const ligado = JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto') || '{}');
+    conferir(ligado.ligado === true, 'com a agenda boa, o relógio liga');
+    const proxima = venda.querySelector('[data-proxima]')?.textContent || '';
+    // 6/10/2026 é uma terça; a última sexta de outubro é dia 30. É esse o instante esperado.
+    conferir(/\d\d:\d\d/.test(proxima), `e marca um instante (${proxima})`);
+    conferir(proxima.startsWith('30/10'), 'e a última sexta de outubro é dia 30');
+
+    // ---- a distância tem de ser legível ----
+    //
+    // Foi o ecrã que ensinou isto, não o teste: com "última sexta" o botão dizia
+    // "Parar · 576:29:43". Não é um relógio, é um número — e "próxima às 20:38", sozinho, é quase
+    // uma pegadinha quando o dia é daqui a três semanas.
+    const rotulo = botao.textContent;
+    conferir(!/\d{3,}:/.test(rotulo), `a contagem não vira centenas de horas (${rotulo})`);
+    conferir(/\d+d \d+h/.test(rotulo), 'a mais de um dia, conta-se em dias');
+    conferir(/\d\d\/\d\d às \d\d:\d\d/.test(proxima), `e a data aparece quando não é óbvia (${proxima})`);
+
+    // ---- o ginásio guarda os dias por região ----
+    const gym = document.getElementById('lioncode-gym');
+    const caixaKanto = gym.querySelector('[data-agenda="KANTO"]');
+    const diasKanto = caixaKanto?.querySelector('[data-dias]');
+    conferir(Boolean(diasKanto), 'o ginásio tem um editor de agenda por região');
+    conferir(
+      caixaKanto?.querySelector('.ppx-ag-corpo')?.hidden === true,
+      'e ele também começa fechado',
+    );
+    if (diasKanto) {
+      diasKanto.value = '1, 15';
+      diasKanto.dispatchEvent(new Event('change', { bubbles: true }));
+      await esperar(200);
+      const ag = JSON.parse(localStorage.getItem('lioncode:gym:agenda') || '{}');
+      conferir(ag.KANTO?.dias === '1, 15', `e grava por região (KANTO: ${ag.KANTO?.dias})`);
+      conferir(ag.JOHTO?.dias === '', 'sem contaminar a outra');
+    }
+
+    const maus = linhas.filter((l) => l.startsWith('\u2716')).length;
+    dizer(maus ? `${maus} falha(s)` : 'tudo passou');
+  })().catch((e) => dizer('estourou: ' + e.message, true));
+</script>

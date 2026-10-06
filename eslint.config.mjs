@@ -18,6 +18,7 @@ export default [
         window: 'readonly',
         document: 'readonly',
         localStorage: 'readonly',
+        sessionStorage: 'readonly',
         globalThis: 'readonly',
         console: 'readonly',
         setTimeout: 'readonly',

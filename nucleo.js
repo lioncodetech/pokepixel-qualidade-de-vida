@@ -14,6 +14,7 @@
   const CHAVE_POS = 'lioncode:pokepixel:menu-pos';
   const CHAVE_ABERTO = 'lioncode:pokepixel:menu-aberto';
   const CHAVE_VISIVEIS = 'lioncode:pokepixel:visiveis';
+  const CHAVE_VEZ = 'lioncode:pokepixel:vez';
 
   const ler = (chave, padrao) => {
     try {
@@ -29,6 +30,176 @@
       /* modo anonimo, ou armazenamento cheio: continua funcionando, so' nao lembra. */
     }
   };
+
+  // --------------------------------------------------------------- a vez
+  //
+  // ATE' AQUI NAO HAVIA FILA NENHUMA. Cada ferramenta se protegia de si mesma — a venda nao comeca
+  // duas vendas, o ginasio nao comeca dois ginasios — e nenhuma sabia que as outras existiam. Com
+  // tres relogios automaticos no ar (venda, compra e ginasio), o cruzamento nao e' hipotese: e'
+  // questao de tempo. E o cruzamento pior e' calado:
+  //
+  // - o ginasio da' **dois F5** no meio da corrida dele. Uma venda a meio caminho morre ali, sem
+  //   dizer nada, e volta a ser tentada so' no proximo intervalo;
+  // - o ginasio fecha os menus da barra de cima e as janelas abertas para conseguir abrir a dele.
+  //   A janela que ele fecha pode ser a loja que a compra estava a usar;
+  // - venda e compra disputam a mesma loja do Mark, cada uma lendo uma mochila que a outra esta' a
+  //   mudar.
+  //
+  // Daqui em diante ha' uma fila: quem quer agir pede a vez, e espera a sua.
+  //
+  // **A vez mora na `sessionStorage`, e isso e' uma escolha, nao um detalhe.** Ela tem de
+  // atravessar os F5 do ginasio — senao a venda tomaria a vez no meio da recarga, que e' justamente
+  // o buraco que se quer tapar. E tem de ser **por aba**: o LionMultInstance abre varias janelas do
+  // jogo ao mesmo tempo, e uma fila partilhada faria a instancia A esperar pela B sem razao
+  // nenhuma. `sessionStorage` e' as duas coisas: sobrevive a' recarga e nao sai da aba.
+
+  /** De quanto em quanto tempo quem esta' com a vez diz que ainda esta' vivo. */
+  const BATIDA = 2000;
+  /**
+   * Sem dar sinal por este tempo, a vez e' dada por abandonada.
+   *
+   * Tem de ser maior do que a recarga mais lenta do ginasio: durante o F5 ninguem bate, e o
+   * ginasio so' retoma depois de esperar a tela limpar (ate' 15 s). Curto demais, a venda rouba a
+   * vez no meio da recarga. Longo demais, uma ferramenta que estourou segura a fila. 45 s fica com
+   * folga dos dois lados.
+   */
+  const ABANDONO = 45000;
+
+  const lerVez = () => {
+    try {
+      return JSON.parse(sessionStorage.getItem(CHAVE_VEZ)) || null;
+    } catch {
+      return null;
+    }
+  };
+  const gravarVez = (valor) => {
+    try {
+      if (valor) sessionStorage.setItem(CHAVE_VEZ, JSON.stringify(valor));
+      else sessionStorage.removeItem(CHAVE_VEZ);
+    } catch {
+      /* sem armazenamento: a fila vale so' em memoria, que ainda e' melhor do que nada. */
+    }
+  };
+
+  /** A vez de agora, ja' descontando a abandonada. */
+  const vezViva = () => {
+    const vez = lerVez();
+    if (!vez?.id) return null;
+    if (Date.now() - Number(vez.batida || 0) > ABANDONO) {
+      gravarVez(null);
+      return null;
+    }
+    return vez;
+  };
+
+  /** Quem esta' a' espera, em ordem de chegada. So' em memoria: um F5 e todos pedem de novo. */
+  const fila = [];
+  let pulso = 0;
+  const avisos = new Set();
+  const avisar = () => {
+    for (const fn of avisos) {
+      try {
+        fn(vezViva(), fila.map((e) => e.id));
+      } catch {
+        /* quem ouve nao derruba quem fala */
+      }
+    }
+  };
+
+  const bater = (id) => {
+    const vez = lerVez();
+    if (vez?.id === id) gravarVez({ ...vez, batida: Date.now() });
+  };
+
+  const tomar = (id) => {
+    gravarVez({ id, desde: Date.now(), batida: Date.now() });
+    clearInterval(pulso);
+    pulso = setInterval(() => bater(id), BATIDA);
+    avisar();
+  };
+
+  const largar = (id) => {
+    const vez = lerVez();
+    if (vez && vez.id !== id) return; // nao se solta a vez de outro
+    clearInterval(pulso);
+    pulso = 0;
+    gravarVez(null);
+    avisar();
+    const seguinte = fila.shift();
+    if (seguinte) {
+      clearTimeout(seguinte.prazo);
+      tomar(seguinte.id);
+      seguinte.ok(() => largar(seguinte.id));
+    }
+  };
+
+  const VEZ = {
+    /**
+     * Pede a vez e espera por ela. Devolve a funcao que a solta, ou `null` se o prazo acabou.
+     *
+     * Reentrante por dono: quem ja' tem a vez a recebe de volta na hora. E' o que permite ao
+     * ginasio atravessar os proprios F5 — do outro lado da recarga ele pede outra vez, e a vez
+     * ainda e' dele.
+     */
+    pedir(id, { espera = 15 * 60 * 1000 } = {}) {
+      return new Promise((ok) => {
+        const dono = vezViva();
+        if (!dono || dono.id === id) {
+          tomar(id);
+          return ok(() => largar(id));
+        }
+        const entrada = { id, ok, prazo: 0 };
+        entrada.prazo = setTimeout(() => {
+          const onde = fila.indexOf(entrada);
+          if (onde >= 0) fila.splice(onde, 1);
+          avisar();
+          ok(null);
+        }, espera);
+        fila.push(entrada);
+        avisar();
+      });
+    },
+
+    /** Quem esta' com a vez agora, ou `null`. */
+    dono: () => vezViva(),
+
+    /**
+     * O nome de mostrar de uma ferramenta, para o painel que espera poder dizer por quem espera.
+     *
+     * "Esperando o Ginásio do dia terminar" e' uma frase; "esperando gym" e' um identificador
+     * interno vazado para a tela de quem nao tem de saber que ele existe.
+     */
+    nome: (id) => CATALOGO.find((f) => f.id === id)?.nome || id,
+
+    /** Quem esta' na fila, em ordem. */
+    esperando: () => fila.map((e) => e.id),
+
+    /** Sai da fila sem ter chegado a agir. */
+    desistir(id) {
+      for (let i = fila.length - 1; i >= 0; i -= 1)
+        if (fila[i].id === id) {
+          clearTimeout(fila[i].prazo);
+          fila[i].ok(null);
+          fila.splice(i, 1);
+        }
+      avisar();
+    },
+
+    /** Avisa sempre que a vez ou a fila mudam, para os paineis poderem dizer o que esperam. */
+    aoMudar(fn) {
+      avisos.add(fn);
+      return () => avisos.delete(fn);
+    },
+  };
+
+  // Uma aba que fecha no meio de uma corrida nao pode deixar a vez presa para a seguinte. Fora
+  // isto, quem resolve e' o `ABANDONO`.
+  addEventListener('pagehide', () => {
+    const vez = lerVez();
+    // So' se nao houver tarefa a atravessar a recarga: o ginasio recarrega de proposito, e ali a
+    // vez TEM de continuar dele.
+    if (vez && !localStorage.getItem('lioncode:gym:tarefa')) gravarVez(null);
+  });
 
   /**
    * As ferramentas que este pacote tem, com nome e atalho, independentemente de terem conseguido
@@ -161,6 +332,9 @@
   globalThis.PPX = {
     /** O canto guardado, partilhado por todas as janelinhas do pacote. */
     canto,
+
+    /** A fila: quem quer agir no jogo pede a vez aqui. Ver o bloco "a vez", acima. */
+    vez: VEZ,
 
     /** A ferramenta entrega aqui como se mostra e se esconde; o menu passa a comandar isso. */
     controlar(id, aplicar) {

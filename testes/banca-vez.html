@@ -1,0 +1,156 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca da fila</title>
+<!--
+  Banca da fila (`PPX.vez`), fora do jogo.
+
+  O que ela prova, e que nenhuma leitura de código prova:
+
+  1. duas ferramentas não correm ao mesmo tempo — a segunda espera a primeira;
+  2. a ordem é a de chegada;
+  3. **a vez atravessa o F5 do ginásio.** Era a fresta que a fila existe para fechar: o ginásio
+     recarrega a página duas vezes por corrida, e sem isto a venda entraria entre a recarga e a
+     retomada, no exato instante em que ninguém está a olhar;
+  4. uma ferramenta que morre sem soltar não prende a fila para sempre;
+  5. e a fila é **por aba**: duas janelas do jogo no LionMultInstance não esperam uma pela outra.
+
+  Abra pelo servidor estático do projeto. `?caso=` escolhe o teste; sem nada, roda todos os que
+  cabem numa carga só.
+-->
+<style>
+  body { margin: 0; background: #151a22; color: #dbe3ee; font: 14px/1.6 system-ui, sans-serif; padding: 20px; }
+  pre { background: #0005; padding: 12px; border-radius: 8px; white-space: pre-wrap; max-width: 60em; }
+  b { color: #8fe3a8; }
+  .mau { color: #ff9b9b; }
+</style>
+<h3>Banca da fila</h3>
+<pre data-saida>correndo…</pre>
+
+<script>
+  // O núcleo monta um menu e espera módulos; aqui só interessa `PPX.vez`.
+  const saida = document.querySelector('[data-saida]');
+  // As linhas atravessam o F5 do caso 3: sem isto, metade do relatorio some na recarga — que e'
+  // justamente a recarga que esta banca existe para medir.
+  const linhas = JSON.parse(sessionStorage.getItem('banca:vez:linhas') || '[]');
+  const dizer = (t, mau) => {
+    linhas.push((mau ? '✖ ' : '• ') + t);
+    sessionStorage.setItem('banca:vez:linhas', JSON.stringify(linhas));
+    saida.innerHTML = linhas.map((l) => (l.startsWith('✖') ? `<span class="mau">${l}</span>` : l)).join('\n');
+  };
+  const conferir = (certo, t) => dizer(t, !certo);
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const script = document.createElement('script');
+  script.src = `../nucleo.js?t=${Date.now()}`;
+  document.head.append(script);
+
+  script.onload = async () => {
+    const vez = window.PPX?.vez;
+    if (!vez) return dizer('PPX.vez não existe', true);
+
+    const etapa = sessionStorage.getItem('banca:vez:etapa');
+
+    // ---- caso 3, segunda metade: do outro lado do F5 -----------------------
+    if (etapa === 'depois-do-f5') {
+      sessionStorage.removeItem('banca:vez:etapa');
+      const dono = vez.dono();
+      conferir(dono?.id === 'gym', `3. depois do F5 a vez ainda é do ginásio (é de: ${dono?.id ?? 'ninguém'})`);
+
+      // E a venda, que pediu antes da recarga, não pode ter agido no meio dela.
+      // **A prova que interessa.** Uma venda NOVA, pedida do outro lado da recarga e antes de o
+      // ginasio retomar, nao pode conseguir a vez: e' exactamente esse o instante em que ela
+      // entrava e morria no F5 seguinte. (A promessa da venda da carga anterior morreu com a
+      // pagina, entao ela sozinha nao provava nada.)
+      let vendaEntrou = false;
+      void vez.pedir('venda-rapida', { espera: 600 }).then((s) => {
+        if (s) {
+          vendaEntrou = true;
+          s();
+        }
+      });
+      await esperar(900);
+      conferir(!vendaEntrou, '3. uma venda nova NAO consegue a vez durante a recarga do ginasio');
+
+      // O ginásio retoma: pede outra vez e recebe na hora, por ser o dono.
+      const t0 = Date.now();
+      const soltar = await vez.pedir('gym');
+      conferir(Boolean(soltar) && Date.now() - t0 < 200, '3. o ginásio recupera a própria vez na hora');
+      soltar();
+      localStorage.removeItem('lioncode:gym:tarefa');
+      conferir(vez.dono() === null, '3. e ao soltar, a vez fica livre');
+      const maus = linhas.filter((l) => l.charAt(0) !== '•').length;
+      dizer(maus ? `${maus} falha(s)` : 'tudo passou');
+      sessionStorage.removeItem('banca:vez:linhas');
+      return;
+    }
+
+    // ---- caso 1 e 2: exclusão e ordem de chegada ---------------------------
+    const ordem = [];
+    const soltarGym = await vez.pedir('gym');
+    conferir(Boolean(soltarGym), '1. quem chega primeiro pega a vez');
+    conferir(vez.dono()?.id === 'gym', '1. e a vez é dele');
+
+    let vendaAgiu = false;
+    const venda = vez.pedir('venda-rapida').then((s) => {
+      vendaAgiu = true;
+      ordem.push('venda');
+      return s;
+    });
+    const compra = vez.pedir('loja-rapida').then((s) => {
+      ordem.push('compra');
+      return s;
+    });
+    await esperar(300);
+    conferir(!vendaAgiu, '1. a venda NÃO corre enquanto o ginásio tem a vez');
+    conferir(
+      JSON.stringify(vez.esperando()) === JSON.stringify(['venda-rapida', 'loja-rapida']),
+      `2. a fila guarda a ordem de chegada (${vez.esperando().join(' → ')})`,
+    );
+
+    soltarGym();
+    const sVenda = await venda;
+    await esperar(100);
+    conferir(ordem[0] === 'venda', '2. ao soltar, quem entra é a venda, que chegou primeiro');
+    conferir(ordem.length === 1, '1. e a compra continua à espera, não entra junto');
+    sVenda();
+    const sCompra = await compra;
+    conferir(ordem[1] === 'compra', '2. e só então a compra');
+    sCompra();
+
+    // ---- caso 4: quem morre sem soltar não prende a fila -------------------
+    sessionStorage.setItem(
+      'lioncode:pokepixel:vez',
+      JSON.stringify({ id: 'venda-rapida', desde: Date.now() - 99999, batida: Date.now() - 99999 }),
+    );
+    conferir(vez.dono() === null, '4. uma vez sem sinal há muito tempo é dada por abandonada');
+    const sDepois = await vez.pedir('gym');
+    conferir(Boolean(sDepois), '4. e a seguinte consegue agir');
+    sDepois();
+
+    // ---- caso 5: por aba, não por perfil -----------------------------------
+    conferir(
+      localStorage.getItem('lioncode:pokepixel:vez') === null,
+      '5. a vez não está no localStorage — duas janelas do jogo não esperam uma pela outra',
+    );
+
+    // ---- caso 3, primeira metade: o F5 do ginásio --------------------------
+    if (new URLSearchParams(location.search).get('caso') === 'f5' || true) {
+      const s = await vez.pedir('gym');
+      conferir(Boolean(s), '3. o ginásio pega a vez e vai recarregar sem soltar');
+      // É isto que marca "há tarefa a atravessar": o núcleo não limpa a vez no pagehide quando há.
+      localStorage.setItem('lioncode:gym:tarefa', JSON.stringify({ etapa: 'recarregar-volta' }));
+      // A venda pede a vez e fica à espera; se ela agir durante a recarga, a marca fica gravada.
+      void vez.pedir('venda-rapida').then((soltar) => {
+        if (soltar) {
+          sessionStorage.setItem('banca:vez:vendaAgiu', '1');
+          soltar();
+        }
+      });
+      sessionStorage.setItem('banca:vez:etapa', 'depois-do-f5');
+      sessionStorage.removeItem('banca:vez:vendaAgiu');
+      dizer('… recarregando a página, como o ginásio faz …');
+      await esperar(500);
+      location.reload();
+    }
+  };
+</script>

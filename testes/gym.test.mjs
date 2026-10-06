@@ -350,13 +350,22 @@ test('a agenda e a mesma da venda e da loja rapidas', () => {
   // Pedido assim: "vou colocar o range de horario igual ao do de vendas e compras". O formato e a
   // logica sao os de la' — janela por virgula, instante sorteado dentro da janela, UMA rodada por
   // janela —, e nao um desenho novo.
+  // **Esta asserção era ao contrário, e deixou de fazer sentido.** Ela exigia que o ginásio e a
+  // venda tivessem as MESMAS linhas de código de horário — a duplicação era a garantia de que o
+  // comportamento era o mesmo. Com "toda semana" e "todo mês", manter três cópias seria acrescentar
+  // o mesmo defeito em três lugares e corrigi-lo em dois. Agora o calendário é um só, e o que se
+  // protege é isso: ninguém volta a ter a conta em casa.
   const venda = ler('venda-rapida.js');
-  for (const pedaço of [
-    'const minuto = (hora, min) => (Number(hora) % 24) * 60 + (Number(min ?? 0) % 60);',
-    'const duracao = ((fim - inicio + 1440) % 1440 || 1440) * 60000;',
-    'if (fecha <= quando || abre <= ultima) continue;',
-  ])
-    assert.ok(venda.includes(pedaço) && codigo.includes(pedaço), `as duas tem: ${pedaço}`);
+  const loja = ler('loja-rapida.js');
+  for (const [nome, fonte] of [['ginásio', codigo], ['venda', venda], ['loja', loja]]) {
+    assert.match(fonte, /PPX\?\.agenda/, `${nome} não usa o calendário partilhado`);
+    assert.doesNotMatch(
+      fonte,
+      /const minuto = \(hora, min\) =>/,
+      `${nome} voltou a ter a leitura de horário em casa`,
+    );
+    assert.doesNotMatch(fonte, /abre <= ultima/, `${nome} voltou a ter a conta da janela em casa`);
+  }
   // Uma janela por regiao, porque as regioes pedem times diferentes.
   assert.match(codigo, /const REGIOES = \['KANTO', 'JOHTO'\]/);
   assert.match(codigo, /const timesDe = \(regiao\) => escolhas\(\)\.porRegiao\[regiao\]/);
