@@ -849,6 +849,8 @@ PPX.modulo(
             <input type="text" data-horas="KANTO" placeholder="08:00-09:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
             <span data-agenda="KANTO"></span>
+            <button type="button" class="ja" data-ir-regiao="KANTO"
+              title="Fazer o ginásio de Kanto agora">▶</button>
           </div>
           <div class="linha">
             <span class="sinal" data-sinal="JOHTO"></span>
@@ -856,6 +858,8 @@ PPX.modulo(
             <input type="text" data-horas="JOHTO" placeholder="19:00-20:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
             <span data-agenda="JOHTO"></span>
+            <button type="button" class="ja" data-ir-regiao="JOHTO"
+              title="Fazer o ginásio de Johto agora">▶</button>
           </div>
           <div class="linha reset">
             <span>servidor reseta às</span>
@@ -912,6 +916,15 @@ PPX.modulo(
       /* O editor da agenda ocupa a linha inteira: fechado e' um botao, aberto sao listas. */
       #lioncode-gym .agenda [data-agenda] { flex: 1; min-width: 0; display: flex; }
       #lioncode-gym .agenda [data-agenda] .ppx-ag { flex: 1; min-width: 0; }
+      /* O botao de ir de cada regiao: pequeno, porque a linha ja' esta' cheia, e presente nas
+         duas casas em que a regiao aparece — na linha da agenda e no resumo minimizado. */
+      #lioncode-gym .ja {
+        flex: 0 0 auto; background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a;
+        border-radius: 5px; padding: 0 6px; font: inherit; font-size: 11px; line-height: 18px;
+        cursor: pointer;
+      }
+      #lioncode-gym .ja:hover:not(:disabled) { background: #26344c; }
+      #lioncode-gym .ja:disabled { opacity: .35; cursor: default; }
       #lioncode-gym .agenda .reset { color: #8b97a8; font-size: 12px; }
       #lioncode-gym .agenda .reset input { max-width: 64px; flex: 0 0 auto; }
       #lioncode-gym .agenda .proxima { margin: 0; color: #8b97a8; font-size: 12px; min-height: 1.2em; }
@@ -1072,6 +1085,15 @@ PPX.modulo(
      * so' no `title` do ponto. Minimizado ninguem vai parar o mouse em cima de um ponto de dez
      * pixels para descobrir se o ginasio de hoje ja' foi feito.
      */
+    /**
+     * Ha' uma corrida em andamento?
+     *
+     * A tarefa guardada conta tanto quanto a variavel: a sequencia do ginasio passa por F5 no
+     * meio, e depois de um deles `correndo` e' falso numa pagina onde o ginasio ainda esta' a
+     * meio caminho.
+     */
+    const emCorrida = () => correndo || Boolean(tarefa());
+
     const pintarResumo = () => {
       const caixa = campo('[data-resumo]');
       if (!caixa) return;
@@ -1090,8 +1112,19 @@ PPX.modulo(
         diz.className = 'quando';
         // Cinza dispensa palavra: o ponto ja' diz que nao foi feito, e a hora de um ginasio que
         // nao aconteceu nao existe.
-        diz.textContent = feito ? `${rotulo}${hora ? ` ${hora}` : ''}` : '—';
-        linha.append(ponto, nome, diz);
+        const emAndamento = tarefa()?.regiao === regiao;
+        diz.textContent = emAndamento ? 'indo…' : feito ? `${rotulo}${hora ? ` ${hora}` : ''}` : '—';
+        // **O botao de ir tambem aqui, e nao so' no painel aberto.** Minimizado e' o estado em que
+        // este painel vive: mandar abrir tudo para clicar num botao desfaz o motivo de o ter
+        // minimizado — era esse o pedido.
+        const ja = document.createElement('button');
+        ja.type = 'button';
+        ja.className = 'ja';
+        ja.dataset.irRegiao = regiao;
+        ja.textContent = '\u25b6';
+        ja.title = `Fazer o ginásio de ${nome.textContent} agora`;
+        ja.disabled = emCorrida();
+        linha.append(ponto, nome, diz, ja);
         caixa.append(linha);
       }
       const proxima = campo('[data-proxima]')?.textContent || '';
@@ -1184,6 +1217,12 @@ PPX.modulo(
       campo('[data-recarregar]').disabled = sim;
       for (const s of ['[data-regiao]', '[data-time-gym]', '[data-time-volta]'])
         campo(s).disabled = sim;
+      // Os botoes de ir de cada regiao travam junto: duas corridas ao mesmo tempo nao existe, e um
+      // botao que aceita o clique e nao faz nada e' pior do que um botao apagado.
+      for (const b of painel.querySelectorAll('[data-ir-regiao]')) b.disabled = sim;
+      // O resumo minimizado tem os seus proprios botoes, feitos a cada desenho: e' ele que os
+      // apaga, e de passagem troca o resultado de hoje por "indo…".
+      pintarResumo();
     };
 
     /** Troca de time pelo Times, e devolve o que ele respondeu. */
@@ -1530,6 +1569,43 @@ PPX.modulo(
     campo('[data-ir]').addEventListener('click', () => {
       if (correndo || tarefa()) return;
       comecar(campo('[data-regiao]').value);
+    });
+
+    /**
+     * Ir agora numa regiao, pelo botao da linha dela.
+     *
+     * O "Fazer o ginásio de hoje" vai na regiao que a lista mostra; estes vao na regiao da propria
+     * linha, que e' o que se quer quando se esta' a olhar para o placar e se ve' que um dos dois
+     * ainda nao foi feito.
+     *
+     * A lista acompanha, em vez de ficar apontando para a outra: ela manda no "Voltar para a
+     * caçada" e nos times a' vista, e deixa-la para tras faria o proximo clique agir noutro lugar.
+     * Quem grava e enche as listas e' o proprio `change` que ja' existia.
+     */
+    painel.addEventListener('click', (evento) => {
+      const botao = evento.target.closest?.('[data-ir-regiao]');
+      if (!botao) return;
+      const regiao = botao.dataset.irRegiao;
+      // **Uma recusa nao pode passar calada.** Minimizado, a linha de estado esta' escondida: sem
+      // isto, clicar sem ter time escolhido pareceria um botao que nao faz nada. A frase ja' existe
+      // — o que faltava era abrir o painel onde ela esta' escrita.
+      const mostrarOMotivo = () => {
+        if (!minimizado) return;
+        minimizado = false;
+        gravar(CHAVE_MIN, false);
+        aplicarMinimo();
+      };
+      if (emCorrida()) {
+        dizer('Já há uma corrida em andamento — espere ela acabar ou pare.', true);
+        mostrarOMotivo();
+        return;
+      }
+      const lista = campo('[data-regiao]');
+      if (lista.value !== regiao) {
+        lista.value = regiao;
+        lista.dispatchEvent(new Event('change'));
+      }
+      if (!comecar(regiao)) mostrarOMotivo();
     });
 
     /**

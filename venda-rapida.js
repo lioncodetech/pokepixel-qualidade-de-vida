@@ -1201,6 +1201,93 @@ PPX.modulo({ id: 'venda-rapida', nome: 'Venda rápida', atalhos: 'Alt+D esconde 
   else desenharAuto();
   setInterval(desenharAuto, 1000);
 
+  // ---- levar esta configuracao para outra conta ----------------------------
+  //
+  // O mesmo jogo corre em varias janelas do LionMultInstance, e cada uma tem o seu proprio
+  // armazenamento: deixar a venda do jeito certo numa conta e repetir a mao em todas as outras e'
+  // trabalho em que se erra. O que vai no arquivo e' o que **voce** escolheu; o que a extensao
+  // descobriu sozinha — a contagem da ultima lista — fica de fora, porque e' um retrato desta
+  // conta, e o carimbo da ultima rodada tambem, porque e' estado do relogio e nao configuracao.
+
+  /** Poe' os campos e a lista de acordo com o que esta' guardado. Usado depois de importar. */
+  const recarregarDaConfig = () => {
+    campoTeto.value = teto();
+    campoLote.value = lote();
+    confirma.checked = ler(CHAVE_CONFIRMA, false);
+    caixaItens.checked = ler(CHAVE_ITENS, false);
+    campoModo.value = configAuto().modo;
+    campoHorarios.value = configAuto().horarios;
+    if (editorDias) editorDias.escrever(configAuto().dias);
+    else campoDias.value = configAuto().dias;
+    campoMin.value = configAuto().min;
+    campoMax.value = configAuto().max;
+    atualizarModo();
+    desenhar();
+    // O relogio tem de passar a contar pela agenda nova, e nao pela que estava em memoria.
+    clearTimeout(relogio);
+    proxima = 0;
+    semAgenda = '';
+    if (configAuto().ligado) agendarVenda();
+    else desenharAuto();
+  };
+
+  const entre = (valor, menor, maior, padrao) =>
+    Math.min(maior, Math.max(menor, Math.round(Number(valor)) || padrao));
+
+  const botoesConfig = globalThis.PPX?.config?.montarBotoes({
+    id: 'venda-rapida',
+    nome: 'Venda rápida',
+    coletar: () => {
+      // `ultima` fica de fora de proposito: importar o carimbo de outra conta faria a janela de
+      // hoje passar por ja' usada, e a venda de hoje nao aconteceria.
+      const { ultima, ...automatico } = configAuto();
+      void ultima;
+      return {
+        raridades: escolhidas(),
+        teto: teto(),
+        lote: lote(),
+        confirmar: ler(CHAVE_CONFIRMA, false),
+        itens: ler(CHAVE_ITENS, false),
+        automatico,
+      };
+    },
+    aplicar: (dados) => {
+      // Importar no meio de uma venda trocaria o teto e o lote com a venda ja' a correr por eles.
+      if (emVenda) throw new Error('não dá para importar no meio de uma venda — pare primeiro');
+      // Cada campo e' lido como se viesse de fora, porque vem: um arquivo editado a mao nao pode
+      // virar um teto de "abc" nem uma raridade que esta extensao nao vende.
+      const nomes = new Set(RARIDADES.map((r) => r.nome));
+      if (Array.isArray(dados.raridades))
+        gravar(
+          CHAVE_RARIDADES,
+          dados.raridades.filter((n) => nomes.has(n) && !TRAVADAS.has(n)),
+        );
+      if (dados.teto !== undefined) gravar(CHAVE_TETO, entre(dados.teto, 1, 9999, TETO_PADRAO));
+      if (dados.lote !== undefined) gravar(CHAVE_LOTE, entre(dados.lote, 1, 500, LOTE_PADRAO));
+      if (dados.confirmar !== undefined) gravar(CHAVE_CONFIRMA, dados.confirmar === true);
+      if (dados.itens !== undefined) gravar(CHAVE_ITENS, dados.itens === true);
+      const auto = dados.automatico;
+      if (auto && typeof auto === 'object') {
+        const minimo = entre(auto.min, 1, 1440, 60);
+        gravar(CHAVE_AUTO, {
+          // O carimbo e' desta conta e fica onde estava.
+          ...ler(CHAVE_AUTO, {}),
+          ligado: auto.ligado === true,
+          min: minimo,
+          max: Math.max(minimo, entre(auto.max, 1, 1440, minimo)),
+          horarios: String(auto.horarios ?? ''),
+          dias: String(auto.dias ?? ''),
+          modo: auto.modo === 'horarios' ? 'horarios' : 'minutos',
+        });
+      }
+      recarregarDaConfig();
+      const quantas = escolhidas().length;
+      return `Configuração importada: ${quantas} raridade${quantas === 1 ? '' : 's'}, até o nível ${teto()}.`;
+    },
+    avisar: (frase) => mostrar(frase),
+  });
+  if (botoesConfig) painel.querySelector('.rodape').append(botoesConfig.el);
+
   // O × e' esconder, igual ao atalho: fica gravado, atravessa o F5 e o menu do pacote passa a
   // mostrar a ferramenta como oculta. Antes ele so' apagava o painel da tela — na carga seguinte
   // ele voltava sozinho, e enquanto isso o menu continuava a dizer que estava a' vista.

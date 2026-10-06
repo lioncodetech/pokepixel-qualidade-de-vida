@@ -15,6 +15,7 @@
   const CHAVE_ABERTO = 'lioncode:pokepixel:menu-aberto';
   const CHAVE_VISIVEIS = 'lioncode:pokepixel:visiveis';
   const CHAVE_VEZ = 'lioncode:pokepixel:vez';
+  const CHAVE_SUMICO = 'lioncode:pokepixel:sumico';
 
   const ler = (chave, padrao) => {
     try {
@@ -473,6 +474,7 @@
     <div class="legenda">
       O botão do meio mostra, esconde ou liga o efeito — e fica assim no próximo F5.
       A chave verde ativa ou desativa a ferramenta inteira nesta janela.
+      <b>Alt+Z</b> esconde todas as janelas de uma vez; <b>Alt+X</b> traz de volta as que estavam à vista.
     </div>
     <div class="rodape"></div>`;
   const lista = menu.querySelector('ul');
@@ -484,9 +486,14 @@
   aba.title = 'Abrir o menu das ferramentas (Alt+Q)';
 
   let aberto = ler(CHAVE_ABERTO, false) === true;
+  // A lista do que estava a' vista quando se escondeu tudo, ou `null` quando nao se escondeu.
+  // Mora aqui em cima porque `pintar` a consulta, e ela tem de existir antes do primeiro desenho.
+  let sumico = ler(CHAVE_SUMICO, null);
   const pintar = () => {
     menu.classList.toggle('aberto', aberto);
-    aba.classList.toggle('aberta', !aberto);
+    // Escondido tudo, a abinha tambem sai: ela e' a ultima janelinha em cima do jogo. Alt+Q
+    // continua abrindo o menu, entao o caminho de volta nao depende de ela estar a' vista.
+    aba.classList.toggle('aberta', !aberto && !Array.isArray(sumico));
     // Quem acabou de aparecer so' agora tem medidas: e' aqui que ele vai para o canto guardado.
     if (montado) colocar();
   };
@@ -554,8 +561,7 @@
    * A ferramenta que roda no mundo da pagina nao e' alcancavel daqui por chamada de funcao: o
    * recado vai por um evento no DOM, que os dois mundos partilham.
    */
-  function alternarVisivel(m) {
-    const mostrar = !estaVisivel(m.id);
+  function aplicarVisivel(m, mostrar) {
     if (m.proprio) {
       // Quem guarda e' a propria ferramenta, na chave dela; aqui so' se manda aplicar.
       m.estado = mostrar;
@@ -575,6 +581,57 @@
         new CustomEvent('ppx-visivel', { detail: JSON.stringify({ id: m.id, mostrar }) }),
       );
     }
+    desenhar();
+  }
+
+  const alternarVisivel = (m) => aplicarVisivel(m, !estaVisivel(m.id));
+
+  /**
+   * Esconder tudo, e trazer de volta exatamente o que estava a' vista.
+   *
+   * SAO DOIS ATALHOS, e nao um que alterna — a mesma regra de cada ferramenta deste pacote, e pelo
+   * mesmo motivo: com um atalho so' nunca se sabe em que estado se esta' sem olhar, e quem aperta
+   * duas vezes volta ao comeco. Alt+Z esconde, Alt+X mostra, e apertar o mesmo de novo nao desfaz
+   * nada.
+   *
+   * **ESCONDER DUAS VEZES NAO PODE APAGAR A LISTA.** E' o unico jeito de este par se estragar:
+   * com tudo ja' escondido, um segundo Alt+Z gravaria uma lista vazia por cima da boa, e o Alt+X
+   * seguinte nao teria o que trazer de volta. Por isso o segundo Alt+Z nao faz nada.
+   *
+   * **O QUE VOLTA E' O QUE ESTAVA**, e nao tudo. Quem escondeu o Raridades ontem nao o quer de
+   * volta por ter dado um Alt+Z hoje. A lista do que estava a' vista fica guardada, e e' por ela
+   * que a volta se faz.
+   *
+   * **AS FERRAMENTAS DE EFEITO NAO ENTRAM.** "Ocultar popups" e "Sem grafico" nao tem janela
+   * nenhuma na tela: o botao delas liga e desliga o que elas fazem com a pagina. Apaga-las aqui
+   * nao limparia a tela — mudaria o comportamento do jogo, que nao e' o que estes atalhos prometem.
+   *
+   * A abinha do menu some junto, que e' o ponto de limpar a tela. Alt+Q continua abrindo o menu:
+   * mesmo sem a aba, nunca se fica sem o caminho de volta.
+   */
+  const comJanela = () => modulos.filter((m) => !m.efeito && m.aplicar);
+
+  function esconderTudo() {
+    // Ja' escondido, nao ha' nada a esconder — e refazer a lista aqui seria apaga-la.
+    if (Array.isArray(sumico)) return;
+    const janelas = comJanela();
+    sumico = janelas.filter((m) => estaVisivel(m.id)).map((m) => m.id);
+    gravar(CHAVE_SUMICO, sumico);
+    for (const m of janelas) if (estaVisivel(m.id)) aplicarVisivel(m, false);
+    // O menu aberto por cima da tela limpa seria a unica janela restante.
+    if (aberto) abrir(false);
+    pintar();
+    desenhar();
+  }
+
+  function mostrarTudo() {
+    if (!Array.isArray(sumico)) return;
+    const voltam = sumico;
+    sumico = null;
+    gravar(CHAVE_SUMICO, null);
+    for (const m of comJanela())
+      if (voltam.includes(m.id) && !estaVisivel(m.id)) aplicarVisivel(m, true);
+    pintar();
     desenhar();
   }
 
@@ -681,7 +738,16 @@
   addEventListener(
     'keydown',
     (e) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.code !== 'KeyQ') return;
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      // Alt+Z limpa a tela inteira de uma vez; Alt+X traz de volta o que estava a' vista.
+      if (e.code === 'KeyZ' || e.code === 'KeyX') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.code === 'KeyZ') esconderTudo();
+        else mostrarTudo();
+        return;
+      }
+      if (e.code !== 'KeyQ') return;
       e.preventDefault();
       e.stopPropagation();
       abrir(!aberto);

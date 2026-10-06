@@ -4,6 +4,7 @@ As dez ferramentas de qualidade de vida do PokePixel num pacote só, com um menu
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
+**Alt+Z** esconde todas as janelas de uma vez; **Alt+X** traz de volta as que estavam à vista.
 
 | ferramenta | o que faz | atalhos |
 | --- | --- | --- |
@@ -41,6 +42,32 @@ vista.
 
 Quando uma ferramenta ainda não se anunciou — porque está desativada, ou porque não carregou — o
 botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que não aconteceria.
+
+## Alt+Z e Alt+X: limpar a tela inteira
+
+**Alt+Z** esconde todas as janelas do pacote de uma vez. **Alt+X** traz de volta.
+
+São dois, e não um que alterna — a mesma regra de cada ferramenta aqui, pelo mesmo motivo: com um
+atalho só nunca se sabe em que estado se está sem olhar, e quem aperta duas vezes volta ao começo.
+Apertar o mesmo de novo não desfaz nada.
+
+Isso é mais que gosto neste par. Com tudo já escondido, um segundo Alt+Z refaria a lista do que
+estava à vista — que a essa altura é vazia — e o Alt+X seguinte não teria o que trazer de volta. Por
+isso o segundo Alt+Z simplesmente não faz nada.
+
+**O que volta é o que estava.** A ferramenta que você já tinha escondido continua escondida: a lista
+do que estava à vista fica guardada, e é por ela que a volta se faz. Sem isso, o atalho seria uma
+armadilha — um Alt+Z para dar uma olhada no jogo e, na volta, quatro janelas que você não queria.
+
+**As duas ferramentas de efeito não entram.** "Ocultar popups" e "Sem gráfico" não têm janela
+nenhuma na tela; o botão delas liga e desliga o que fazem com a página. Apagá-las aqui não limparia
+nada — mudaria o comportamento do jogo, que não é o que os atalhos prometem.
+
+**A abinha `PokePixel` some junto**, que é o ponto de limpar a tela. O caminho de volta não depende
+dela: Alt+Q continua abrindo o menu mesmo com tudo escondido.
+
+O estado atravessa o F5, como todo o resto do pacote. Medido em `testes/banca-sumico.html`, que
+recarrega a página de verdade no meio do caminho.
 
 ## Mover o menu
 
@@ -623,8 +650,8 @@ região com o resultado escrito ao lado — `Kanto  Vitória 22:24` — e a linh
 
 ```
 GYM                □ ×
-● Kanto  Vitória 22:24
-● Johto  —
+● Kanto  Vitória 22:24  ▶
+● Johto  —              ▶
 próximo: Johto hoje às 19:10
 ```
 
@@ -637,6 +664,26 @@ pixels para saber como acabou — o `title` continua lá, com a frase inteira.
 Cinza não ganha palavra nenhuma, só um traço: o ponto já diz que não foi feito, e a hora de um
 ginásio que não aconteceu não existe. A mensagem do que está acontecendo *agora* continua só no
 painel inteiro. A escolha de minimizar fica guardada.
+
+### O botão `▶`: ir agora, na região daquela linha
+
+Cada região tem o seu. O `Fazer o ginásio de hoje` vai na região que a lista mostra; o `▶` vai na
+região da **própria linha**, que é o que se quer quando se está olhando para o placar e se vê que um
+dos dois ainda não foi feito. A lista acompanha o clique em vez de ficar apontando para a outra —
+ela manda no `Voltar para a caçada` e nos times à vista, e deixá-la para trás faria o próximo clique
+agir noutro lugar.
+
+**Ele existe também no painel minimizado**, e é esse o ponto: minimizado é o estado em que este
+painel vive. Mandar abrir tudo para clicar num botão desfaz o motivo de o ter minimizado.
+
+Enquanto algo corre, os dois ficam apagados e a linha da região em andamento diz `indo…` no lugar do
+resultado. Duas corridas ao mesmo tempo não existe, e um botão que aceita o clique sem fazer nada é
+pior do que um botão apagado.
+
+Uma recusa — time não escolhido, por exemplo — **abre o painel**. A linha de estado, onde a frase
+está escrita, fica escondida quando o painel está minimizado: sem isso, o clique pareceria um botão
+quebrado. O caminho é o mesmo do botão de sempre, com a mesma máquina de estados: o manual e o
+automático não podem ser dois fluxos, cada um com os seus próprios enganos.
 
 ### Voltar para a caçada
 
@@ -899,6 +946,50 @@ demais, a venda rouba a vez no meio da recarga; longo demais, um erro segura a f
 Medido em `testes/banca-vez.html`, que atravessa um F5 de verdade — e que acusa a falha nos dois
 sentidos: tirando a proteção da travessia, a banca diz *"é de: ninguém"* e uma venda nova entra no
 meio da recarga.
+
+## Levar a configuração para outra conta
+
+A venda e a compra ganharam **Exportar** e **Importar** no rodapé. O mesmo jogo corre em várias
+janelas do LionMultInstance, uma por conta, e cada janela tem o seu próprio armazenamento: deixar a
+venda do jeito certo numa conta e repetir a mão em todas as outras — raridades, teto, lote, horários,
+dias — é trabalho que ninguém quer fazer duas vezes, e é trabalho em que se erra. Exporta de uma,
+importa nas outras. De quebra, é a única cópia de segurança que estas configurações têm.
+
+O arquivo é um JSON com a data no nome: `venda-rapida-config-2026-10-06.json`. Se o navegador
+recusar o download, a configuração vai para a área de transferência, que entre duas janelas do
+LionMultInstance serve igual.
+
+### O que viaja, e o que fica
+
+Viaja o que **você** escolheu: as raridades marcadas, o teto, o lote, as caixinhas, o modo e a
+agenda; na compra, os alvos de cada item e a variação.
+
+Fica o que a extensão descobriu sozinha — o catálogo da loja, o estoque, o saldo, a contagem da
+última lista. São retratos do jogo **daquela** conta, e levar o retrato de uma para a outra seria
+mostrar números que não são dela. A próxima atualização da mochila os refaz.
+
+E fica o carimbo da última rodada. Ele é estado do relógio, não configuração: importá-lo faria a
+janela de hoje passar por já usada, e a rodada de hoje simplesmente não aconteceria — sem erro
+nenhum na tela.
+
+### As duas recusas
+
+**Um arquivo da compra não entra na venda.** São duas configurações com campos parecidos e
+significados diferentes; aplicar uma na outra passaria calado e só apareceria no dia em que a
+automação agisse na hora errada. O pacote carrega o nome da ferramenta, e a mensagem diz de qual
+ele é — *"arquivo errado"* manda procurar no escuro.
+
+**Só entra o que a ferramenta reconhece.** Quem aplica é ela, campo a campo, e não o importador
+escrevendo no armazenamento o que vier escrito: um JSON editado à mão não vira um teto de `abc`, nem
+uma raridade que esta extensão não vende, nem um alvo negativo, nem uma chave qualquer no
+`localStorage` do jogo.
+
+E não se importa no meio de uma rodada: trocar o teto, o lote ou os alvos com a automação já
+correndo por eles seria mudar as regras no meio do jogo — e a venda não tem desfazer.
+
+Medido em `testes/banca-config.html`, que exporta, mexe em tudo, importa de volta e confere a tela,
+o armazenamento e as recusas — sem baixar nada: o clique do download é interceptado e o conteúdo é
+lido do próprio `blob:` que a extensão criou.
 
 ## Senha: quando a extensão é recarregada por baixo da aba
 

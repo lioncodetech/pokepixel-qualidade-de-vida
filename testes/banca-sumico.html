@@ -1,0 +1,172 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do Alt+Z e do Alt+X</title>
+<!--
+  Banca do "esconder tudo", fora do jogo.
+
+  O que ela prova, e que nenhum teste de texto prova: o Alt+Z apaga as janelas todas **e** a abinha
+  do menu, o estado atravessa um F5 de verdade, e o Alt+X traz de volta **só o que estava à vista**
+  — a ferramenta que já estava escondida continua escondida. E que apertar o mesmo duas vezes não
+  desfaz nada: um segundo Alt+Z com tudo escondido apagaria a lista da volta.
+
+  Ela também prova o que o atalho não faz: as ferramentas de efeito ("Ocultar popups", "Sem
+  gráfico") não entram. Elas não têm janela nenhuma na tela; apagá-las aqui não limparia nada,
+  mudaria o comportamento do jogo.
+
+  A banca recarrega a si mesma uma vez — a fase vive na `sessionStorage`, como na banca da fila.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../nucleo.js`.
+-->
+<style>
+  body { margin: 0; min-height: 100vh; background: #1b2430; color: #dbe3ee;
+    font: 14px/1.6 system-ui, sans-serif; padding: 16px; }
+  pre { background: #0005; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+    max-width: 56em; font-size: 12px; }
+  .mau { color: #ff9b9b; }
+</style>
+<h3>Banca do Alt+Z e do Alt+X</h3>
+<p>Ela recarrega a página uma vez, de propósito. O relatório é automático.</p>
+<pre data-saida>correndo…</pre>
+
+<script>
+  const CHAVE = 'banca:sumico:linhas';
+  const saida = document.querySelector('[data-saida]');
+  const linhas = JSON.parse(sessionStorage.getItem(CHAVE) || '[]');
+  const pintar = () => {
+    saida.innerHTML = linhas
+      .map((l) => (l.startsWith('✖') ? `<span class="mau">${l}</span>` : l))
+      .join('\n');
+    sessionStorage.setItem(CHAVE, JSON.stringify(linhas));
+  };
+  const dizer = (t, mau) => {
+    linhas.push((mau ? '✖ ' : '• ') + t);
+    pintar();
+  };
+  const conferir = (certo, t) => dizer(t, !certo);
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+  pintar();
+
+  const carregar = (src) =>
+    new Promise((ok, falhou) => {
+      const el = document.createElement('script');
+      el.src = `${src}?t=${Date.now()}`;
+      el.onload = ok;
+      el.onerror = () => falhou(new Error(src));
+      document.head.append(el);
+    });
+
+  /** Os atalhos como o navegador os entrega: o núcleo escuta na fase de captura, no `window`. */
+  const tecla = (code) => {
+    dispatchEvent(new KeyboardEvent('keydown', { code, altKey: true, bubbles: true }));
+  };
+  const esconderTudo = () => tecla('KeyZ');
+  const mostrarTudo = () => tecla('KeyX');
+
+  const painel = (id) => document.getElementById(id);
+  const aVista = (id) => {
+    const el = painel(id);
+    return Boolean(el) && getComputedStyle(el).display !== 'none';
+  };
+  /** A abinha "PokePixel" mora na sombra do núcleo; só a classe diz se ela está na tela. */
+  const abaAVista = () => {
+    const host = [...document.body.children].find((e) => e.shadowRoot?.querySelector('.aba'));
+    const aba = host?.shadowRoot.querySelector('.aba');
+    return Boolean(aba) && aba.classList.contains('aberta');
+  };
+
+  const IDS = {
+    'venda-rapida': 'lioncode-venda-rapida',
+    'loja-rapida': 'lioncode-loja-rapida',
+    gym: 'lioncode-gym',
+  };
+
+  (async () => {
+    const fase = sessionStorage.getItem('banca:sumico:fase') || '1';
+    if (fase === '1') {
+      // Começar do zero: o que sobrou de uma corrida anterior mentiria sobre o que estava à vista.
+      linhas.length = 0;
+      for (const chave of Object.keys(localStorage))
+        if (chave.startsWith('lioncode:')) localStorage.removeItem(chave);
+    }
+
+    for (const f of ['../nucleo.js', '../ocultar-popups.js', '../agenda.js', '../config.js',
+      '../venda-rapida.js', '../loja-rapida.js', '../gym.js'])
+      await carregar(f);
+    await esperar(1400);
+
+    if (fase === '1') {
+      conferir(Object.values(IDS).every(aVista), 'os três painéis começam à vista');
+      conferir(abaAVista(), 'e a abinha do menu também');
+
+      // Uma ferramenta escondida à mão, ANTES do atalho: é ela que prova que a volta não é "tudo".
+      const gym = painel(IDS.gym);
+      gym.querySelector('[data-fechar]').click();
+      await esperar(200);
+      conferir(!aVista(IDS.gym), 'o ginásio foi escondido à mão');
+
+      esconderTudo();
+      await esperar(300);
+      conferir(!Object.values(IDS).some(aVista), 'o Alt+Z apagou todas as janelas');
+      conferir(!abaAVista(), 'e a abinha do menu junto');
+      const guardado = JSON.parse(localStorage.getItem('lioncode:pokepixel:sumico') || 'null');
+      conferir(
+        Array.isArray(guardado) && guardado.includes('venda-rapida') && !guardado.includes('gym'),
+        `ele guardou só o que estava à vista (${JSON.stringify(guardado)})`,
+      );
+      // O efeito não entra: "Ocultar popups" não tem janela nenhuma para apagar.
+      conferir(!guardado.includes('ocultar-popups'), 'e as ferramentas de efeito ficam de fora');
+
+      // **Apertar o mesmo de novo não desfaz nada**, e aqui isso é mais do que gosto: um segundo
+      // Alt+Z gravaria uma lista vazia por cima da boa, e a volta não teria o que trazer.
+      esconderTudo();
+      await esperar(200);
+      conferir(
+        localStorage.getItem('lioncode:pokepixel:sumico') === JSON.stringify(guardado),
+        'um segundo Alt+Z não apaga a lista da volta',
+      );
+
+      sessionStorage.setItem('banca:sumico:fase', '2');
+      dizer('— recarregando a página —');
+      await esperar(400);
+      location.reload();
+      return;
+    }
+
+    // ---- depois do F5 ------------------------------------------------------
+    conferir(!Object.values(IDS).some(aVista), 'depois do F5 continua tudo escondido');
+    conferir(!abaAVista(), 'e a abinha também');
+
+    mostrarTudo();
+    await esperar(300);
+    conferir(aVista(IDS['venda-rapida']) && aVista(IDS['loja-rapida']), 'o Alt+X traz de volta');
+    // **O que volta é o que estava.** Quem escondeu o ginásio não o quer de volta por ter dado
+    // um Alt+X — é esta a linha que o atalho existe para não quebrar.
+    conferir(!aVista(IDS.gym), 'mas NÃO o ginásio, que já estava escondido antes');
+    conferir(abaAVista(), 'e a abinha do menu volta com elas');
+    conferir(
+      localStorage.getItem('lioncode:pokepixel:sumico') === 'null' ||
+        localStorage.getItem('lioncode:pokepixel:sumico') === null,
+      'e a lista guardada é descartada',
+    );
+
+    // Mostrar de novo, sem nada escondido, também não faz nada — nem traz o ginásio de volta.
+    mostrarTudo();
+    await esperar(250);
+    conferir(!aVista(IDS.gym), 'um segundo Alt+X não traz o que estava escondido à mão');
+
+    // ---- e o Alt+Z seguinte só esconde o que agora está à vista ------------
+    esconderTudo();
+    await esperar(300);
+    const segunda = JSON.parse(localStorage.getItem('lioncode:pokepixel:sumico') || 'null');
+    conferir(
+      Array.isArray(segunda) && !segunda.includes('gym'),
+      `o ginásio continua fora da conta (${JSON.stringify(segunda)})`,
+    );
+    mostrarTudo();
+    await esperar(300);
+
+    sessionStorage.removeItem('banca:sumico:fase');
+    const maus = linhas.filter((l) => l.startsWith('✖')).length;
+    dizer(maus ? `${maus} falha(s)` : 'tudo passou');
+  })().catch((e) => dizer('estourou: ' + e.message, true));
+</script>

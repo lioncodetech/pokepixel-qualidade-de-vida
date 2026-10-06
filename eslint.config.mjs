@@ -35,6 +35,9 @@ export default [
         devicePixelRatio: 'readonly',
         location: 'readonly',
         navigator: 'readonly',
+        // O arquivo de configuracao exportado: um Blob com URL propria, e nada mais.
+        Blob: 'readonly',
+        URL: 'readonly',
         CSS: 'readonly',
         MutationObserver: 'readonly',
         ResizeObserver: 'readonly',

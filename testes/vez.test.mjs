@@ -112,6 +112,7 @@ const FORA = {
   'nucleo.js': 'é a própria fila, e o menu',
   'nucleo-main.js': 'ponte para o mundo da página, não age',
   'agenda.js': 'calendário puro: diz quando, nunca age',
+  'config.js': 'exporta e importa configuração; não toca no jogo, só no armazenamento',
   'senha.js': 'só preenche campos quando a pessoa clica',
   'sem-grafico.js': 'esconde o desenho do jogo, não interage com ele',
   'ocultar-popups.js': 'fecha popups, não abre janela nem clica em ação do jogo',

@@ -1,0 +1,206 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do exportar e importar</title>
+<!--
+  Banca do arquivo de configuração — os painéis da venda e da compra, sem o jogo por baixo.
+
+  O que ela prova, e que o teste de mesa não prova: os dois botões aparecem no rodapé, o Exportar
+  monta mesmo um arquivo (com nome, tipo e conteúdo), e o Importar aplica o que vem dele — na tela
+  e no armazenamento — sem ninguém abrir a janela de escolher arquivo à mão.
+
+  Como ela evita baixar nada: o clique do `<a download>` é interceptado, e o conteúdo é lido do
+  próprio `blob:` que a extensão criou. É o caminho de verdade, do começo ao fim, menos o último
+  passo — que é do navegador, e não nosso.
+
+  O que ela **não** prova: vender ou comprar. Isso só existe no jogo.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../nucleo.js`.
+-->
+<style>
+  body { margin: 0; min-height: 100vh; background: #1b2430; color: #dbe3ee;
+    font: 14px/1.6 system-ui, sans-serif; padding: 16px; }
+  pre { background: #0005; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+    max-width: 56em; font-size: 12px; }
+  .mau { color: #ff9b9b; }
+</style>
+<h3>Banca do exportar e importar</h3>
+<p>Os dois painéis estão na tela. O relatório é automático.</p>
+<pre data-saida>correndo…</pre>
+
+<script>
+  const saida = document.querySelector('[data-saida]');
+  const linhas = [];
+  const dizer = (t, mau) => {
+    linhas.push((mau ? '✖ ' : '• ') + t);
+    saida.innerHTML = linhas
+      .map((l) => (l.startsWith('✖') ? `<span class="mau">${l}</span>` : l))
+      .join('\n');
+  };
+  const conferir = (certo, t) => dizer(t, !certo);
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const carregar = (src) =>
+    new Promise((ok, falhou) => {
+      const el = document.createElement('script');
+      el.src = `${src}?t=${Date.now()}`;
+      el.onload = ok;
+      el.onerror = () => falhou(new Error(src));
+      document.head.append(el);
+    });
+
+  /** Clica no Exportar e devolve { nome, tipo, texto } sem deixar o navegador baixar nada. */
+  const exportar = async (painel) => {
+    const original = HTMLAnchorElement.prototype.click;
+    let pego = null;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download) pego = { nome: this.download, href: this.href };
+      else original.call(this);
+    };
+    try {
+      painel.querySelector('[data-cfg-exportar]').click();
+      await esperar(200);
+    } finally {
+      HTMLAnchorElement.prototype.click = original;
+    }
+    if (!pego) return null;
+    const resposta = await fetch(pego.href);
+    return { nome: pego.nome, tipo: resposta.headers.get('content-type'), texto: await resposta.text() };
+  };
+
+  /** Entrega um arquivo ao campo escondido daquela ferramenta, como se alguém o tivesse escolhido. */
+  const importar = async (id, nome, texto) => {
+    const campo = document.querySelector(`input[data-cfg-arquivo="${id}"]`);
+    if (!campo) return false;
+    const dt = new DataTransfer();
+    dt.items.add(new File([texto], nome, { type: 'application/json' }));
+    campo.files = dt.files;
+    campo.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(300);
+    return true;
+  };
+
+  (async () => {
+    // Começar do zero: a banca é de configuração, e o que sobrou de uma corrida anterior mentiria.
+    for (const chave of Object.keys(localStorage))
+      if (chave.startsWith('lioncode:')) localStorage.removeItem(chave);
+
+    for (const f of ['../nucleo.js', '../agenda.js', '../config.js', '../venda-rapida.js', '../loja-rapida.js'])
+      await carregar(f);
+    await esperar(1200);
+
+    conferir(Boolean(window.PPX?.config), 'o arquivo de configuração está publicado em PPX.config');
+    if (!window.PPX?.config) return;
+
+    const venda = document.getElementById('lioncode-venda-rapida');
+    const loja = document.getElementById('lioncode-loja-rapida');
+    for (const [painel, nome] of [[venda, 'venda'], [loja, 'compra']]) {
+      conferir(Boolean(painel), `o painel da ${nome} subiu`);
+      conferir(
+        Boolean(painel?.querySelector('.rodape [data-cfg-exportar]')) &&
+          Boolean(painel?.querySelector('.rodape [data-cfg-importar]')),
+        `a ${nome} tem Exportar e Importar no rodapé`,
+      );
+    }
+    if (!venda || !loja) return;
+
+    // ---- deixar a venda configurada de um jeito reconhecível --------------
+    const marcar = (rotulo, ligada) => {
+      const bloco = [...venda.querySelectorAll('.raridade')].find(
+        (b) => b.querySelector('span')?.textContent === rotulo,
+      );
+      const caixa = bloco?.querySelector('input');
+      if (caixa && caixa.checked !== ligada) caixa.click();
+    };
+    marcar('Fraca', true);
+    marcar('Comum', true);
+    const teto = venda.querySelector('[data-teto]');
+    teto.value = '9';
+    teto.dispatchEvent(new Event('change', { bubbles: true }));
+    const modo = venda.querySelector('[data-modo]');
+    modo.value = 'horarios';
+    modo.dispatchEvent(new Event('change', { bubbles: true }));
+    const horas = venda.querySelector('[data-horarios]');
+    horas.value = '20:00-21:00';
+    horas.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+
+    // ---- exportar ---------------------------------------------------------
+    const arquivo = await exportar(venda);
+    conferir(Boolean(arquivo), 'o Exportar entrega um arquivo');
+    if (!arquivo) return;
+    conferir(/^venda-rapida-config-\d{4}-\d{2}-\d{2}\.json$/.test(arquivo.nome),
+      `com nome e data (${arquivo.nome})`);
+    conferir((arquivo.tipo || '').includes('application/json'), `e tipo JSON (${arquivo.tipo})`);
+    const pacote = JSON.parse(arquivo.texto);
+    conferir(pacote.ferramenta === 'venda-rapida', 'o pacote diz de qual ferramenta é');
+    conferir(pacote.dados.teto === 9, `e leva o que estava na tela (teto ${pacote.dados.teto})`);
+    conferir(
+      pacote.dados.raridades.join() === 'Fraca,Comum',
+      `e as raridades marcadas (${pacote.dados.raridades.join(', ')})`,
+    );
+    conferir(pacote.dados.automatico.horarios === '20:00-21:00', 'e a agenda');
+    conferir(!('ultima' in pacote.dados.automatico), 'mas NÃO o carimbo da última rodada');
+    conferir(!('contagem' in pacote.dados), 'nem a contagem da última lista, que é desta conta');
+
+    // ---- mexer em tudo, e depois importar de volta -------------------------
+    marcar('Fraca', false);
+    marcar('Comum', false);
+    teto.value = '1';
+    teto.dispatchEvent(new Event('change', { bubbles: true }));
+    horas.value = '03:00-04:00';
+    horas.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(200);
+    // Um carimbo local, para provar que ele fica: ele é desta conta, não do arquivo.
+    const auto = JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto'));
+    localStorage.setItem('lioncode:venda-rapida:auto', JSON.stringify({ ...auto, ultima: 123456 }));
+
+    conferir(await importar('venda-rapida', arquivo.nome, arquivo.texto), 'o campo de arquivo existe');
+    conferir(teto.value === '9', `o Importar devolve o teto à tela (${teto.value})`);
+    conferir(horas.value === '20:00-21:00', 'e a agenda');
+    const guardado = JSON.parse(localStorage.getItem('lioncode:venda-rapida:raridades') || '[]');
+    conferir(guardado.join() === 'Fraca,Comum', `e as raridades ao armazenamento (${guardado.join(', ')})`);
+    const marcada = [...venda.querySelectorAll('.raridade')].find(
+      (b) => b.querySelector('span')?.textContent === 'Fraca',
+    )?.querySelector('input')?.checked;
+    conferir(marcada === true, 'e a lista da tela foi redesenhada');
+    conferir(
+      JSON.parse(localStorage.getItem('lioncode:venda-rapida:auto')).ultima === 123456,
+      'o carimbo desta conta ficou onde estava',
+    );
+    const aviso = venda.querySelector('[data-aviso]')?.textContent || '';
+    conferir(/importada/i.test(aviso), `e o painel diz o que aconteceu (${aviso})`);
+
+    // ---- a recusa que mais importa ----------------------------------------
+    await importar('loja-rapida', arquivo.nome, arquivo.texto);
+    const recusa = loja.querySelector('[data-aviso]')?.textContent || '';
+    conferir(/outra ferramenta/i.test(recusa), `a compra recusa o arquivo da venda (${recusa})`);
+    conferir(
+      localStorage.getItem('lioncode:loja-rapida:quantidades') === null,
+      'e não escreveu nada no armazenamento dela',
+    );
+
+    // ---- lixo não vira configuração ---------------------------------------
+    await importar('venda-rapida', 'qualquer.json', 'isto nao e json');
+    conferir(
+      /não consegui lê-lo|não é uma configuração/i.test(venda.querySelector('[data-aviso]').textContent),
+      'e um arquivo qualquer é recusado com explicação',
+    );
+    conferir(teto.value === '9', 'sem desfazer o que já estava configurado');
+
+    // ---- e a compra faz a sua própria volta --------------------------------
+    const variacao = loja.querySelector('[data-variacao]');
+    variacao.value = '7';
+    variacao.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(150);
+    const daLoja = await exportar(loja);
+    conferir(JSON.parse(daLoja.texto).dados.variacao === 7, 'a compra exporta a variação');
+    variacao.value = '0';
+    variacao.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar(150);
+    await importar('loja-rapida', daLoja.nome, daLoja.texto);
+    conferir(variacao.value === '7', `e a reconhece de volta (${variacao.value})`);
+
+    const maus = linhas.filter((l) => l.startsWith('✖')).length;
+    dizer(maus ? `${maus} falha(s)` : 'tudo passou');
+  })().catch((e) => dizer('estourou: ' + e.message, true));
+</script>

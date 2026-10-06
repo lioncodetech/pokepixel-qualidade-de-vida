@@ -79,6 +79,23 @@ Duas regras que já custaram caro:
   e o campo fica marcado;
 - **ocorrência perdida fica perdida.** Nada de disparar o atrasado ao ligar o computador.
 
+## Exportar e importar passa pelo `config.js`
+
+`PPX.config.montarBotoes({ id, nome, coletar, aplicar, avisar })` dá os dois botões a qualquer
+ferramenta. O `config.js` não sabe o que é um teto nem uma raridade: ele empacota, entrega o
+arquivo, recusa o que não presta e devolve os dados. Quem decide o que entra e o que sai é a
+ferramenta — e é por isso que acrescentar isto numa ferramenta nova não mexe no `config.js`.
+
+Três regras, e cada uma já tem o seu teste em `testes/config.test.mjs`:
+
+1. **O que a extensão descobriu sozinha não viaja.** Catálogo, estoque, saldo, contagem de lista:
+   são o retrato do jogo daquela conta. Levar o retrato de uma conta para outra é mostrar números
+   que não são dela.
+2. **Carimbo de relógio não é configuração.** Importar o `ultima` de outra conta faz a janela de
+   hoje passar por já usada, e a rodada de hoje não acontece — calada.
+3. **O que chega é lido como se viesse de fora, porque vem.** Quem aplica é a ferramenta, campo a
+   campo, com limite e tipo. Nunca escreva no armazenamento a chave que vier no arquivo.
+
 ## O resto
 
 - Reproduza antes de consertar. Uma banca construída sobre a suposição só confirma a suposição.

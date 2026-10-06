@@ -417,6 +417,30 @@ test('os dois cinemas sao coisas diferentes', () => {
   assert.ok(entra >= 0 && entra < espera, 'entra na arena antes de esperar o combate');
 });
 
+test('cada regiao tem o seu botao de ir, e ele vive tambem no minimizado', () => {
+  // Minimizado é o estado em que este painel vive. Mandar abrir o painel inteiro para clicar num
+  // botão desfaz o motivo de o ter minimizado — era esse o pedido.
+  for (const regiao of ['KANTO', 'JOHTO']) assert.match(codigo, new RegExp(`data-ir-regiao="${regiao}"`));
+  assert.match(codigo, /ja\.dataset\.irRegiao = regiao;/, 'o resumo minimizado faz o seu');
+
+  const clique = codigo.slice(codigo.indexOf("evento.target.closest?.('[data-ir-regiao]')"));
+  const corpo = clique.slice(0, clique.indexOf('\n    });'));
+  // **O mesmo caminho do botão de sempre.** Um segundo fluxo de "ir ao ginásio" teria os seus
+  // próprios enganos: a caçada guardada antes de sair, o alvo sorteado, a máquina de estados.
+  assert.match(corpo, /comecar\(regiao\)/);
+  assert.match(corpo, /emCorrida\(\)/, 'recusa enquanto algo está a correr');
+  // A corrida guardada conta tanto quanto a variável: depois de um F5 no meio do ciclo, `correndo`
+  // é falso numa página onde o ginásio ainda está a meio caminho.
+  assert.match(codigo, /const emCorrida = \(\) => correndo \|\| Boolean\(tarefa\(\)\);/);
+
+  const travar = codigo.slice(codigo.indexOf('const travarBotoes = (sim) => {'));
+  assert.match(
+    travar.slice(0, travar.indexOf('\n    };')),
+    /\[data-ir-regiao\]/,
+    'os botões novos travam junto com os outros',
+  );
+});
+
 test('minimizado mostra o placar, e so esconde o que tapa o jogo', () => {
   // Minimizado era so' a etiqueta `GYM`. Esta' errado: minimizado e' justamente o estado em que o
   // ginasio corre sozinho, e abrir o painel inteiro so' para ver se o ponto ja' esta' verde
@@ -428,7 +452,7 @@ test('minimizado mostra o placar, e so esconde o que tapa o jogo', () => {
   assert.match(codigo, /#lioncode-gym\.minimizado \.corpo \{ display: none; \}/);
   // A palavra fica escrita: ninguem para o mouse em cima de um ponto de dez pixels para saber
   // como acabou o ginasio de hoje.
-  assert.match(codigo, /diz\.textContent = feito \? `\$\{rotulo\}/);
+  assert.match(codigo, /diz\.textContent = emAndamento \? 'indo…' : feito \? `\$\{rotulo\}/);
   // Cor, palavra e title saem do mesmo lugar que o ponto da agenda: um placar so'.
   assert.match(codigo, /const legendaDe = \(regiao\) => \{/);
   const pintar = codigo.slice(codigo.indexOf('const pintarPlacar = () => {'));

@@ -1498,6 +1498,89 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
     gravar(CHAVE_VARIACAO, valor);
   });
 
+  // ---- levar esta configuracao para outra conta ----------------------------
+  //
+  // Igual a' venda, e pelo mesmo motivo: varias janelas do LionMultInstance, um armazenamento em
+  // cada uma. O que vai no arquivo sao os alvos por item e a automacao; o catalogo, o estoque e o
+  // saldo ficam de fora — sao o retrato do jogo **desta** conta, e levar o retrato de uma para a
+  // outra seria mostrar numeros que nao sao dela. A proxima atualizacao da mochila os refaz.
+
+  /** Poe' os campos e a lista de acordo com o que esta' guardado. Usado depois de importar. */
+  const recarregarDaConfig = () => {
+    confirma.checked = ler(CHAVE_CONFIRMA, true);
+    variacao.value = String(variacaoPct());
+    campoModo.value = configAuto().modo;
+    campoHorarios.value = configAuto().horarios;
+    if (editorDias) editorDias.escrever(configAuto().dias);
+    else campoDias.value = configAuto().dias;
+    campoMin.value = configAuto().min;
+    campoMax.value = configAuto().max;
+    atualizarModo();
+    desenhar();
+    // O relogio tem de passar a contar pela agenda nova, e nao pela que estava em memoria.
+    clearTimeout(relogio);
+    proxima = 0;
+    semAgenda = '';
+    if (configAuto().ligado) agendarCompra();
+    else desenharAuto();
+  };
+
+  const entre = (valor, menor, maior, padrao) =>
+    Math.min(maior, Math.max(menor, Math.round(Number(valor)) || padrao));
+
+  const botoesConfig = globalThis.PPX?.config?.montarBotoes({
+    id: 'loja-rapida',
+    nome: 'Loja rápida',
+    coletar: () => {
+      // `ultima` fica de fora de proposito: importar o carimbo de outra conta faria a janela de
+      // hoje passar por ja' usada, e a compra de hoje nao aconteceria.
+      const { ultima, ...automatico } = configAuto();
+      void ultima;
+      return {
+        alvos: ler(CHAVE_QTD, {}),
+        confirmar: ler(CHAVE_CONFIRMA, true),
+        variacao: variacaoPct(),
+        automatico,
+      };
+    },
+    aplicar: (dados) => {
+      // Importar no meio de uma compra trocaria os alvos com a compra ja' a correr por eles.
+      if (emCompra || comprandoTudo)
+        throw new Error('não dá para importar no meio de uma compra — pare primeiro');
+      // Os alvos vem de fora: so' entra nome com numero, e numero inteiro que nao seja negativo.
+      if (dados.alvos && typeof dados.alvos === 'object' && !Array.isArray(dados.alvos)) {
+        const limpos = {};
+        for (const [nome, valor] of Object.entries(dados.alvos)) {
+          const alvo = Math.round(Number(valor));
+          if (Number.isFinite(alvo) && alvo >= 0) limpos[nome] = alvo;
+        }
+        gravar(CHAVE_QTD, limpos);
+      }
+      if (dados.confirmar !== undefined) gravar(CHAVE_CONFIRMA, dados.confirmar === true);
+      if (dados.variacao !== undefined)
+        gravar(CHAVE_VARIACAO, Math.min(50, Math.max(0, Math.round(Number(dados.variacao)) || 0)));
+      const auto = dados.automatico;
+      if (auto && typeof auto === 'object') {
+        const minimo = entre(auto.min, 1, 1440, 60);
+        gravar(CHAVE_AUTO_COMPRA, {
+          // O carimbo e' desta conta e fica onde estava.
+          ...ler(CHAVE_AUTO_COMPRA, {}),
+          ligado: auto.ligado === true,
+          min: minimo,
+          max: Math.max(minimo, entre(auto.max, 1, 1440, minimo)),
+          horarios: String(auto.horarios ?? ''),
+          dias: String(auto.dias ?? ''),
+          modo: auto.modo === 'horarios' ? 'horarios' : 'minutos',
+        });
+      }
+      recarregarDaConfig();
+      const quantos = Object.values(ler(CHAVE_QTD, {})).filter((n) => n > 0).length;
+      return `Configuração importada: ${quantos} ${quantos === 1 ? 'item com alvo' : 'itens com alvo'}.`;
+    },
+    avisar: (frase) => mostrar(frase),
+  });
+  if (botoesConfig) painel.querySelector('.rodape').append(botoesConfig.el);
+
   // Desenhar por ultimo: a lista le' `tudo` e `ocupado`, que so' existem depois da fiacao acima.
   desenhar();
   desenharSaldo();
