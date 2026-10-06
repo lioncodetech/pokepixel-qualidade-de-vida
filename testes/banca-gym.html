@@ -5,8 +5,21 @@
   Banca do painel do Ginásio, fora do jogo.
 
   O que ela prova: o painel sobe, lê os times do `PPX.times`, guarda as escolhas, e **a máquina de
-  estados sobrevive a uma recarga** — que é a parte mais delicada desta ferramenta, porque o passo
-  do F5 leva consigo tudo o que estiver só na memória.
+  estados sobrevive às duas recargas** — que é a parte mais delicada desta ferramenta, porque cada
+  F5 leva consigo tudo o que estiver só na memória.
+
+  Corrida inteira medida aqui com `?jogo=1`, em três cargas de página (ou seja, dois F5):
+
+    c1  time:Gym Kanto
+    c1  F5
+    c2  npc -> ginasio -> desafiar -> entrar-na-arena -> continuar
+    c2  F5 (a tarefa já atravessa com etapa "time-volta", "Vitória!" e venceu: true)
+    c3  time:Hunt
+
+  Os dois pontos que isto prova e que nenhum teste de texto prova: o time da caçada é montado
+  **depois** da segunda recarga, e o resultado do combate atravessa o F5 em vez de se perder nele.
+  A corrida acaba em "não guardei de qual caçada você saiu" porque aqui não há caçada nenhuma —
+  é a falha certa, dita com o motivo.
 
   O que ela não prova: nada que dependa do DOM do jogo. Sair da caçada, abrir o NPC, desafiar,
   esperar o combate. Isso só existe no jogo, e foi medido lá antes de ser escrito.

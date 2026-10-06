@@ -396,10 +396,10 @@ diferentes. A **Elite Four fica de fora**, por pedido.
 
 ```
 guardar a caçada → VOLTAR À CIDADE → time do ginásio → F5 → NPC GYM
-    → aba da região → o marcado HOJE → DESAFIAR → combate → time de volta → a caçada
+    → aba da região → o marcado HOJE → DESAFIAR → combate → F5 → time de volta → a caçada
 ```
 
-### Três coisas que só apareceram fazendo
+### O que só apareceu fazendo
 
 **Não é preciso andar.** O pedido original falava em "correr para o ginásio". Não é preciso: o
 "Conversar" do NPC GYM foi clicado com o NPC **fora da tela** e a janela abriu. Nenhum passo desta
@@ -408,6 +408,18 @@ ferramenta move o personagem — o que teria sido, de longe, a parte mais frági
 **O F5 é obrigatório** entre trocar o time e desafiar. Sem ele o painel do ginásio continua vendo a
 equipe antiga: medido, seis Pokémon no HUD e *"Pokémon equipados 1/3"* na janela, mesmo fechando e
 reabrindo. Desafiar assim entregaria um ginásio reforçado por uma condição que você de facto cumpre.
+
+**A segunda recarga é outra coisa.** O F5 acima é técnico e obrigatório; o que vem depois do
+combate é precaução, pedida depois de aparecerem erros na troca de equipe ali. Faz sentido com o
+que já se sabia deste ponto: a página chega ao fim da luta depois de um cinema, de uma tela de
+resumo e dos banners que nascem por cima dela — é a parte mais suja da corrida. Começar a volta de
+uma página limpa custa uns segundos num orçamento de dois a três minutos, e a máquina de estados
+que o primeiro F5 obrigou a existir já paga o custo de atravessar uma recarga.
+
+O resultado do combate é gravado **antes** de a página ir embora: sem isso a recarga apagaria quem
+ganhou, e o placar do dia registaria uma vitória como derrota. E quem espera os anúncios nascerem
+é a carga seguinte, não a etapa que recarrega — o anúncio que atrapalha é justamente o que ainda
+não existe deste lado do F5.
 
 **O combate é automático e o cronômetro é um teto.** O relógio marcava 15 minutos num combate que
 durou **67 segundos**. Quem diz que acabou é o título do resumo, que já vem com "Vitória!" ou

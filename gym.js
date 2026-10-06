@@ -24,6 +24,13 @@
 //    E' por causa deste F5 que existe a maquina de estados guardada no armazenamento: a recarga
 //    mata tudo o que estiver so' na memoria, e a tarefa precisa continuar do outro lado.
 //
+//    HA' UMA SEGUNDA RECARGA, e ela nao tem a mesma natureza. Esta nao conserta uma leitura
+//    errada do jogo: e' precaucao antes de montar o time da cacada. Depois do combate a pagina
+//    passou por um cinema, uma tela de resumo e os banners que nascem por cima dela, e era ali
+//    que apareciam erros na troca de equipe. Comecar essa parte de uma pagina limpa custa uns
+//    segundos num orcamento de dois a tres minutos, e a maquina de estados que o primeiro F5
+//    obrigou a existir ja' paga o custo de atravessar a recarga.
+//
 // 3. O COMBATE E' AUTOMATICO e o cronometro da tela e' um **teto**, nao a duracao. Esperar ele
 //    zerar seria esperar 15 minutos por algo que levou 67 segundos. Quem diz que acabou e' o
 //    titulo do resumo, que ja' vem com o resultado dentro. Ver `esperarOCombate`.
@@ -638,10 +645,34 @@ PPX.modulo(
     // consigo tudo o que estiver so' na memoria. Cada etapa e' escrita **antes** de ser executada,
     // para que uma recarga no meio volte a tentar aquela etapa em vez de pular para a seguinte.
 
-    const ETAPAS = ['sair', 'time-gym', 'recarregar', 'desafiar', 'time-volta', 'voltar'];
+    const ETAPAS = [
+      'sair',
+      'time-gym',
+      'recarregar',
+      'desafiar',
+      'recarregar-volta',
+      'time-volta',
+      'voltar',
+    ];
     /** As etapas de cada orcamento. O combate fica fora: dura o que durar. */
     const DA_ENTRADA = ['sair', 'time-gym', 'recarregar', 'desafiar'];
-    const DA_SAIDA = ['time-volta', 'voltar'];
+    const DA_SAIDA = ['recarregar-volta', 'time-volta', 'voltar'];
+    /**
+     * As duas recargas da sequencia, com a razao de cada uma na propria mensagem.
+     *
+     * A primeira e' tecnica e obrigatoria: sem ela o painel do ginasio continua a ver a equipe
+     * antiga (ver o cabecalho deste ficheiro). A segunda e' outra coisa — a pagina chega ao fim do
+     * combate depois de um cinema, uma tela de resumo e os banners que nascem por cima, e e' ali
+     * que apareciam erros ao montar o time da cacada. Recomecar de uma pagina limpa antes de
+     * mexer na equipe custa uns segundos de um orcamento de dois a tres minutos.
+     *
+     * Quem decide a etapa seguinte e' a ordem em `ETAPAS`, e nao um nome escrito aqui: com duas
+     * recargas, um destino cravado em cada uma seria duas oportunidades de o par sair trocado.
+     */
+    const RECARGAS = {
+      recarregar: 'Recarregando — o ginásio só enxerga a equipe nova depois disto…',
+      'recarregar-volta': 'Atualizando a página antes de montar o time da caçada…',
+    };
     /**
      * Quantos cliques cada etapa ainda vai dar. E' a conta que reparte o orcamento.
      *
@@ -656,6 +687,7 @@ PPX.modulo(
       'time-gym': 1,
       recarregar: 0,
       desafiar: 4,
+      'recarregar-volta': 0,
       'time-volta': 1,
       voltar: 3,
     };
@@ -1260,11 +1292,15 @@ PPX.modulo(
         return r.ok ? { ok: true } : { ok: false, erro: `não montei o time do ginásio: ${r.erro}` };
       }
 
-      if (etapa === 'recarregar') {
+      if (RECARGAS[etapa]) {
         // A etapa seguinte ja' esta' gravada antes da recarga, senao a pagina voltaria e repetiria
         // esta, num ciclo de F5 sem fim.
-        dizer('Recarregando — o ginásio só enxerga a equipe nova depois disto…');
-        dados.etapa = 'desafiar';
+        //
+        // Nao se espera a tela limpar aqui: quem faz isso e' a carga seguinte, que ja' comeca por
+        // `esperarTelaLimpa` antes de retomar a tarefa. O aneuncio que interessa e' o que nasce
+        // **depois** da recarga, e esse ainda nao existe deste lado.
+        dizer(RECARGAS[etapa]);
+        dados.etapa = ETAPAS[ETAPAS.indexOf(etapa) + 1];
         guardarTarefa(dados);
         await espera(600);
         location.reload();

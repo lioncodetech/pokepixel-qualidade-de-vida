@@ -39,15 +39,84 @@ test('a espera pelo combate tem saida para os dois casos tristes', () => {
   assert.doesNotMatch(codigo, /querySelector\('\.pokeidle-gym-battle'\)/);
 });
 
+/** A lista de etapas lida do próprio ficheiro, para a ordem ser percorrida e não só casada. */
+const etapas = JSON.parse(
+  codigo
+    .slice(codigo.indexOf('const ETAPAS = ['))
+    .match(/\[[^\]]*\]/s)[0]
+    .replace(/'/g, '"')
+    .replace(/,(\s*])/g, '$1'),
+);
+/** Os nomes das recargas, também lidos do ficheiro. */
+const recargas = Object.keys(
+  Object.fromEntries(
+    [...codigo.slice(codigo.indexOf('const RECARGAS = {')).matchAll(/'?([\w-]+)'?:/g)]
+      .map((m) => [m[1], true])
+      .slice(0, 2),
+  ),
+);
+
 test('o F5 e uma etapa, e a seguinte e gravada antes dele', () => {
   // Medido: com seis Pokémon no HUD, o painel do ginásio insistia em "equipados 1/3" mesmo depois
   // de fechar e reabrir. Só a recarga acerta. Daí a etapa — e daí a máquina de estados guardada.
-  assert.match(codigo, /ETAPAS = \['sair', 'time-gym', 'recarregar', 'desafiar', 'time-volta', 'voltar'\]/);
-  const bloco = codigo.slice(codigo.indexOf("if (etapa === 'recarregar')"));
-  const grava = bloco.indexOf("dados.etapa = 'desafiar'");
+  assert.deepEqual(etapas, [
+    'sair',
+    'time-gym',
+    'recarregar',
+    'desafiar',
+    'recarregar-volta',
+    'time-volta',
+    'voltar',
+  ]);
+  const bloco = codigo.slice(codigo.indexOf('if (RECARGAS[etapa])'));
+  const grava = bloco.indexOf('dados.etapa = ETAPAS[ETAPAS.indexOf(etapa) + 1]');
   const recarrega = bloco.indexOf('location.reload()');
   assert.ok(grava >= 0 && grava < recarrega, 'recarrega antes de gravar a etapa seguinte');
   // Sem isso a página voltaria, repetiria esta etapa e recarregaria outra vez, para sempre.
+
+  // **E nenhuma recarga pode ser a última etapa.** O destino sai da ordem da lista: se uma recarga
+  // ficasse no fim, `ETAPAS[i + 1]` seria `undefined`, a tarefa gravaria uma etapa que não existe
+  // e a corrida morreria depois do F5, calada.
+  assert.equal(recargas.length, 2);
+  for (const nome of recargas) {
+    const onde = etapas.indexOf(nome);
+    assert.ok(onde >= 0, `${nome} está em RECARGAS mas não em ETAPAS`);
+    assert.ok(onde < etapas.length - 1, `${nome} é a última etapa e não teria para onde seguir`);
+  }
+});
+
+test('a pagina e atualizada antes de montar o time da cacada', () => {
+  // Pedido do utilizador: "antes de montar o time para ir para a hunt atualize a página, pois
+  // estou vendo dar erros". Faz sentido com o que já se sabe deste ponto da sequência — a página
+  // chega ali depois do cinema, da tela de resumo e dos banners que nascem por cima dela, e é a
+  // parte mais suja da corrida.
+  //
+  // Esta recarga não é da mesma natureza da primeira: aquela conserta uma leitura errada do jogo,
+  // medida; esta é precaução. O custo é uns segundos num orçamento de 2 a 3 minutos.
+  const recarga = etapas.indexOf('recarregar-volta');
+  assert.equal(etapas[recarga + 1], 'time-volta', 'a recarga vem imediatamente antes do time');
+
+  // O orçamento da saída tem de começar NA recarga, e não depois dela: `alvoSaida` é marcado ao
+  // entrar em `DA_SAIDA[0]`, e se a recarga ficasse fora da fase o tempo da volta seria repartido
+  // a partir de uma página que já tinha recarregado — ou não seria marcado nenhum.
+  assert.match(codigo, /DA_SAIDA = \['recarregar-volta', 'time-volta', 'voltar'\]/);
+  assert.match(codigo, /'recarregar-volta': 0,/);
+
+  // **O resultado do combate é gravado antes de a página ir embora.** Sem isto a recarga apagaria
+  // quem ganhou, e o placar do dia registaria uma vitória como derrota — ou nada.
+  const desafiar = codigo.slice(
+    codigo.indexOf("if (etapa === 'desafiar')"),
+    codigo.indexOf("if (etapa === 'time-volta')"),
+  );
+  const gravou = desafiar.indexOf('guardarTarefa(dados);');
+  assert.ok(desafiar.indexOf('dados.resultado = luta.texto') < gravou);
+  assert.ok(desafiar.indexOf('dados.venceu = luta.venceu') < gravou);
+
+  // E quem espera o anúncio nascer é a carga seguinte, não a etapa que recarrega: o anúncio que
+  // atrapalha é justamente o que ainda não existe deste lado do F5.
+  const retomada = codigo.slice(codigo.indexOf('const retomar = async () =>'));
+  const limpa = retomada.indexOf('esperarTelaLimpa(15000');
+  assert.ok(limpa >= 0 && limpa < retomada.indexOf('continuarTarefa()'));
 });
 
 test('a cacada e guardada antes do primeiro passo', () => {
