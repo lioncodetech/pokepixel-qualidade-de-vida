@@ -63,6 +63,25 @@ test('o caminho de volta nao depende da abinha', () => {
   assert.match(atalho.slice(0, 700), /e\.code !== 'KeyQ'/, 'e Alt+Q continua abrindo o menu');
 });
 
+test('nenhuma ferramenta disputa uma tecla do LionMultInstance', () => {
+  // O LMI escuta estas **por fora da página**, no processo do aplicativo: a extensão não ganha essa
+  // disputa, e nem deveria tentar. Alt+R era das Caçadas até a 1.8.1 — esconder uma caçada
+  // rearranjava a grade de views junto.
+  const DO_APP = { KeyR: 'restaurar a grade', KeyM: 'silenciar a view' };
+  const arquivos = readdirSync(new URL('../', import.meta.url)).filter(
+    (nome) => nome.endsWith('.js') && nome !== 'eslint.config.mjs',
+  );
+  for (const nome of arquivos) {
+    const codigo = ler(nome);
+    for (const [tecla, oQue] of Object.entries(DO_APP))
+      assert.doesNotMatch(
+        codigo,
+        new RegExp(`code === '${tecla}'`),
+        `${nome} usa Alt+${tecla.slice(3)}, que no LionMultInstance é "${oQue}"`,
+      );
+  }
+});
+
 test('nenhuma ferramenta disputa o Alt+Z nem o Alt+X com o nucleo', () => {
   // O pacote tem dezoito atalhos em Alt. Um atalho novo que caia em cima deste faria as duas coisas
   // ao mesmo tempo, e o relato seria "o atalho às vezes funciona".

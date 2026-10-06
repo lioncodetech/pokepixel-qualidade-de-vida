@@ -14,7 +14,7 @@ PPX.modulo(
   {
     id: 'cacadas',
     nome: 'Caçadas',
-    atalhos: 'Alt+R esconde · Alt+E mostra',
+    atalhos: 'Alt+W esconde · Alt+E mostra',
   },
   () => {
     'use strict';
@@ -239,7 +239,7 @@ PPX.modulo(
       <header>
         <strong data-titulo>Caçadas</strong>
         <button type="button" data-minimizar title="Minimizar">–</button>
-        <button type="button" data-fechar title="Esconder (Alt+R)">×</button>
+        <button type="button" data-fechar title="Esconder (Alt+W)">×</button>
       </header>
       <div class="resumo" data-resumo>
         <div class="cima">
@@ -706,9 +706,14 @@ PPX.modulo(
     }
 
     addEventListener('resize', recolocar);
+    // Alt+W esconde, Alt+E mostra — vizinhas, como nas outras ferramentas.
+    //
+    // **ERA Alt+R, e deixou de ser.** O proprio LionMultInstance usa Alt+R para restaurar a grade
+    // das views, e ele escuta a tecla por fora da pagina: a extensao nao tem como ganhar essa
+    // disputa, e nem devia tentar. Quem escondia uma cacada rearranjava a janela inteira junto.
     addEventListener('keydown', (evento) => {
       if (!evento.altKey || evento.ctrlKey || evento.metaKey) return;
-      if (evento.code === 'KeyR') {
+      if (evento.code === 'KeyW') {
         evento.preventDefault();
         mostrarPainel(false);
         globalThis.PPX?.anotar?.('cacadas', false);

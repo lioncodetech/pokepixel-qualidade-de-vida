@@ -16,7 +16,7 @@ janela em que você está.
 | Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+J esconde · Alt+K mostra · Alt+L arruma |
 | Times | guarda composições de equipe e troca para uma delas num clique | Alt+T esconde · Alt+Y mostra |
 | Ginásio do dia | sai da caçada, troca o time, desafia o ginásio de hoje e volta | Alt+G esconde · Alt+H mostra |
-| Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+R esconde · Alt+E mostra |
+| Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+W esconde · Alt+E mostra |
 | Raridades | lista todos os seus Pokémon com o número da raridade, e filtra por faixa | Alt+A esconde · Alt+S mostra |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive

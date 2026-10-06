@@ -68,9 +68,11 @@ test('a barra de cima leva clique cru, e o resto clique de gente', () => {
 
 test('a ferramenta esta no catalogo, no manifest e com atalho proprio', () => {
   const nucleo = ler('nucleo.js');
-  assert.match(nucleo, /\{ id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt\+R esconde · Alt\+E mostra' \}/);
-  // O atalho não pode colidir com os que já existem.
-  for (const tecla of ['KeyR', 'KeyE'])
+  assert.match(nucleo, /\{ id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt\+W esconde · Alt\+E mostra' \}/);
+  // Era Alt+R até a 1.8.1: o próprio LionMultInstance usa Alt+R para restaurar a grade de views, e
+  // ele escuta a tecla por fora da página. Esconder uma caçada rearranjava a janela inteira junto.
+  // O guarda contra as teclas do aplicativo está em `atalho-tudo.test.mjs`.
+  for (const tecla of ['KeyW', 'KeyE'])
     for (const outro of ['times.js', 'gym.js', 'layout-padrao.js'])
       assert.doesNotMatch(ler(outro), new RegExp(`code === '${tecla}'`), `${tecla} livre em ${outro}`);
   const manifest = JSON.parse(ler('manifest.json'));
