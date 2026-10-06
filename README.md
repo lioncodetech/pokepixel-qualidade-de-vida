@@ -784,6 +784,36 @@ Na banca, com as três ligadas ao mesmo tempo, o percurso foi:
 A ferramenta também abre a porta `PPX.cacadas` (`nomes`, `atual`, `ir`), igual à do Times — quem
 chama recebe o resultado em vez de adivinhar lendo a tela.
 
+## Senha: quando a extensão é recarregada por baixo da aba
+
+Recarregar a extensão — em `chrome://extensions`, ou reinstalando o pacote pela loja — **não mexe
+nas abas já abertas**. O script antigo continua a correr, com os botões na tela, mas perde a
+ligação à extensão. Dali em diante toda ida ao `chrome.storage` atira `Extension context
+invalidated.`, e era isso que aparecia no botão: um erro em jargão, a senha digitada a não ir para
+lado nenhum — e os campos a fechar por cima, levando embora o que tinha acabado de ser escrito.
+
+Três consertos, todos medidos em `testes/banca-senha.html`, que tem um `chrome.storage` de mentira
+que se pode estragar de propósito:
+
+- **a ligação caída é reconhecida**, por `chrome.runtime.id`, que é o sinal que o próprio navegador
+  usa. O aviso chega quando a caixa aparece, antes de alguém digitar, e diz o que fazer —
+  *"recarregue a página (F5)"* — em vez de citar o erro. Esse aviso **não some sozinho**: nada
+  naquela aba volta a funcionar até o F5, e um aviso que desaparece convida a tentar de novo;
+- **um erro não fecha mais os campos.** A senha ficava sem ser guardada *e* sumia da tela;
+- **calado também é falha.** Com a ligação caída há chamadas que não atiram nada: simplesmente
+  nunca respondem. Sem prazo o botão ficava mudo para sempre. Agora há cinco segundos e, passados
+  eles, *"o armazenamento não respondeu"*.
+
+Nada se perde num desses episódios: o que já estava guardado continua guardado, do outro lado do
+F5. O que se perdia era o que fosse digitado **depois** do erro.
+
+### Por que não cair para o localStorage
+
+Pareceria resiliência e seriam duas coisas ruins ao mesmo tempo. O `chrome.storage` é da extensão;
+o localStorage é da origem, e a página do jogo lê tudo o que estiver lá — a senha passaria a ser
+legível pelo próprio jogo. E a carga seguinte, já com a extensão viva, leria do `chrome.storage` e
+diria *"nada guardado"*: guardar num lugar e ler de outro é pior do que dizer que falhou.
+
 ## O que não aparece na mochila é zero
 
 A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como

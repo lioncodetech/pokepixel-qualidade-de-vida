@@ -1,0 +1,132 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca da Senha</title>
+<!--
+  Banca dos botões de login, fora do jogo.
+
+  Aqui há uma tela de login de mentira e um `chrome.storage` de mentira que se pode estragar de
+  propósito. É isso que a banca serve para provar: o que a caixa faz quando o armazenamento da
+  extensão **falha**, que é o caso que ninguém testa até acontecer.
+
+    ?api=ok      chrome.storage normal
+    ?api=morta   toda chamada atira "Extension context invalidated." — é o que acontece a um
+                 content script antigo depois de a extensão ser recarregada com a aba aberta
+    ?api=lenta   responde, mas só depois de 2 s
+    ?api=muda    aceita a chamada e nunca chama de volta — a falha que não atira erro nenhum
+    ?api=nenhuma não há `chrome` nenhum: o caminho do localStorage
+
+  A senha nunca sai daqui: o `chrome.storage` de mentira guarda em memória e some ao fechar a aba.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../senha.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #141821;
+    color: #d8e0ec;
+    font-family: system-ui, sans-serif;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 30em;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    background: #0005;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  form {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    display: grid;
+    gap: 8px;
+    width: 220px;
+  }
+  input {
+    padding: 7px 9px;
+    border-radius: 7px;
+    border: 1px solid #3a4152;
+    background: #11151d;
+    color: #e6e9ef;
+  }
+  pre {
+    background: #0005;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 32em;
+    white-space: pre-wrap;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca da <b>Senha</b>. A tela de login está no canto de baixo à esquerda; a caixa da extensão
+    aparece à direita. Troque o armazenamento pela barra de endereço:
+    <code>?api=ok</code>, <code>?api=morta</code>, <code>?api=lenta</code>,
+    <code>?api=muda</code>, <code>?api=nenhuma</code>.
+  </p>
+  <pre data-saida>—</pre>
+</div>
+
+<form autocomplete="on">
+  <input type="text" autocomplete="username" placeholder="usuário do jogo" />
+  <input type="password" autocomplete="current-password" placeholder="senha do jogo" />
+</form>
+
+<script>
+  window.PPX = { modulo: (meta, fn) => fn(), visivel: () => true, controlar: () => {} };
+
+  const modo = new URLSearchParams(location.search).get('api') || 'ok';
+  const saida = document.querySelector('[data-saida]');
+  const dizer = (t) => (saida.textContent = t);
+
+  // O `chrome.storage.local` de mentira: guarda em memória, responde por callback como o de
+  // verdade, e sabe adoecer.
+  if (modo !== 'nenhuma') {
+    const caixote = {};
+    const responder = (valor, cb) => {
+      if (modo === 'morta') throw new Error('Extension context invalidated.');
+      if (modo === 'muda') return; // nunca chama de volta
+      const entregar = () => cb(valor);
+      if (modo === 'lenta') setTimeout(entregar, 2000);
+      else entregar();
+    };
+    window.chrome = {
+      runtime: modo === 'morta' ? {} : { id: 'banca' },
+      storage: {
+        local: {
+          get: (chave, cb) => responder({ [chave]: caixote[chave] }, cb),
+          set: (obj, cb) => {
+            if (modo === 'morta') throw new Error('Extension context invalidated.');
+            if (modo === 'muda') return;
+            Object.assign(caixote, obj);
+            // Não mostra a senha: mostra que ela chegou, e o tamanho.
+            dizer(
+              'guardado: ' +
+                Object.keys(obj)
+                  .map((k) => `${k} (${String(obj[k]).length} caracteres)`)
+                  .join(', '),
+            );
+            responder(undefined, cb);
+          },
+          remove: (chave, cb) => {
+            delete caixote[chave];
+            dizer('apagado: ' + chave);
+            responder(undefined, cb);
+          },
+        },
+      },
+    };
+  }
+  window.__caixote = () => (modo === 'nenhuma' ? { ...localStorage } : null);
+
+  const script = document.createElement('script');
+  script.src = `../senha.js?t=${Date.now()}`;
+  document.head.append(script);
+</script>

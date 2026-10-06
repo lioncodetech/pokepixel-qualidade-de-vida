@@ -4,16 +4,47 @@ PPX.modulo({ id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' }, 
   const CHAVE_POS = 'pp-senha-pos';
   const api = globalThis.chrome && chrome.storage && chrome.storage.local;
 
+  /**
+   * A extensao morreu por baixo desta aba?
+   *
+   * **E' o defeito que trouxe esta parte a ser revista.** Recarregar a extensao (em
+   * `chrome://extensions`, ou reinstalando o pacote) nao mexe nas abas ja' abertas: o content
+   * script continua a correr, com os seus botoes na tela, mas perde a ligacao a' extensao. A
+   * partir dai' **toda** chamada a `chrome.storage` atira `Extension context invalidated.`, e era
+   * isso que aparecia no botao — com a senha digitada a nao ir para lado nenhum.
+   *
+   * `chrome.runtime.id` e' o sinal canonico: existe enquanto a ligacao existe, e some' quando ela
+   * cai. Serve para avisar **antes** de a pessoa digitar, em vez de depois.
+   */
+  const extensaoMorta = () => Boolean(api) && !globalThis.chrome?.runtime?.id;
+  const eraOContexto = (e) => /context invalidated/i.test(String(e?.message || e));
+
+  /** Prazo de qualquer ida ao armazenamento. Ver `pedir`. */
+  const PACIENCIA = 5000;
+
   // O chrome.storage do Electron responde por callback, nao por promessa. Chamar so a forma
   // moderna deixava o botao travado no primeiro passo, sem erro visivel.
   const pedir = (metodo, arg) =>
     new Promise((ok, falhou) => {
       if (!api) return ok(null);
-      try {
-        const r = api[metodo](arg, (valor) => ok(valor));
-        if (r && typeof r.then === 'function') r.then(ok, falhou);
-      } catch (e) {
+      if (extensaoMorta()) return falhou(new Error('context invalidated'));
+      // Com a ligacao caida ha' chamadas que nao atiram: simplesmente nunca chamam de volta. Sem
+      // prazo, o `await` ficava pendurado para sempre e o botao nao dizia nada — que e' a mesma
+      // falha silenciosa que o comentario acima descreve, por outro caminho.
+      const prazo = setTimeout(() => falhou(new Error('o armazenamento não respondeu')), PACIENCIA);
+      const pronto = (valor) => {
+        clearTimeout(prazo);
+        ok(valor);
+      };
+      const ruim = (e) => {
+        clearTimeout(prazo);
         falhou(e);
+      };
+      try {
+        const r = api[metodo](arg, (valor) => pronto(valor));
+        if (r && typeof r.then === 'function') r.then(pronto, ruim);
+      } catch (e) {
+        ruim(e);
       }
     });
 
@@ -77,15 +108,36 @@ PPX.modulo({ id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' }, 
   entrada.placeholder = 'senha, e Enter';
   entrada.style.cssText = estiloCampo;
 
+  let voltas = new WeakMap();
   const recado = (alvo, texto, voltarPara) => {
     alvo.textContent = texto;
-    setTimeout(() => (alvo.textContent = voltarPara), 2500);
+    clearTimeout(voltas.get(alvo));
+    voltas.set(alvo, setTimeout(() => (alvo.textContent = voltarPara), 2500));
   };
+
+  /**
+   * O aviso que **fica**, para a extensao recarregada.
+   *
+   * Um recado de dois segundos e meio serve para "sem campo" ou "colado": some' e a pessoa segue.
+   * Nao serve aqui, porque nada nesta aba volta a funcionar ate' haver um F5 — e um aviso que
+   * desaparece convida a tentar de novo, que foi exactamente o que aconteceu. Entao este nao
+   * desaparece, e diz o que fazer em vez de citar o erro do navegador: "Extension context
+   * invalidated" nao e' uma instrucao para ninguem.
+   */
+  const avisarMorta = (alvo) => {
+    clearTimeout(voltas.get(alvo));
+    alvo.textContent = 'recarregue a página (F5)';
+    alvo.title =
+      'A extensão foi recarregada e esta aba ficou sem ligação a ela. ' +
+      'Nada se perdeu: o que já estava guardado continua guardado. Dê F5 nesta aba.';
+  };
+
   // Erro visivel no proprio botao: falha silenciosa nao da pista nenhuma de onde olhar.
   const comAviso = (fn, alvo, voltarPara) => async () => {
     try {
       await fn();
     } catch (e) {
+      if (extensaoMorta() || eraOContexto(e)) return avisarMorta(alvo);
       recado(alvo, 'erro: ' + String(e && e.message ? e.message : e).slice(0, 40), voltarPara);
     }
   };
@@ -227,8 +279,11 @@ PPX.modulo({ id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' }, 
     try {
       await salvarCampos();
     } catch (err) {
+      // **Nao se fecham os campos aqui.** Fechar apagava o que a pessoa acabara de digitar, por
+      // cima de um erro que ja' dizia que nada tinha sido guardado: a senha sumia da tela e do
+      // armazenamento ao mesmo tempo, e so' restava digitar tudo de novo para falhar outra vez.
+      if (extensaoMorta() || eraOContexto(err)) return avisarMorta(botao);
       recado(botao, 'erro ao guardar', 'Colar login');
-      fecharCampos();
     }
   });
 
@@ -319,6 +374,9 @@ PPX.modulo({ id: 'senha', nome: 'Senha', atalhos: 'botões na tela de login' }, 
     visivel = deveAparecer;
     caixa.style.display = deveAparecer ? 'flex' : 'none';
     if (deveAparecer && salva) posicionar(salva.x, salva.y);
+    // O aviso tem de chegar **antes** de a pessoa digitar a senha, e nao depois de ela carregar em
+    // Enter e ver o erro: na tela de login e' quando ela abre a caixa que da' para avisar a tempo.
+    if (deveAparecer && extensaoMorta()) avisarMorta(botao);
     if (!deveAparecer) fecharCampos();
   }
   setInterval(conferir, 1000);
