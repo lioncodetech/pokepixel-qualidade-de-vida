@@ -27,6 +27,7 @@ export default [
         requestAnimationFrame: 'readonly',
         addEventListener: 'readonly',
         removeEventListener: 'readonly',
+        dispatchEvent: 'readonly',
         getComputedStyle: 'readonly',
         innerWidth: 'readonly',
         innerHeight: 'readonly',

@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca das Raridades</title>
+<!--
+  Banca da lista de raridades, fora do jogo.
+
+  O `PokeIdle` daqui e' de mentira, mas a FORMA dos dados nao e': os campos, os nomes e os valores
+  foram tirados da conta real em 06/10/2026, com `PokeIdle.Api.getCreatures()` — inclusive as faixas
+  de `PokemonCardData.qualityBand`, que a ferramenta pergunta ao jogo em vez de cravar.
+
+  O que ela prova: as duas metades conversam (o painel nao enxerga `PokeIdle` sozinho), a lista sai
+  ordenada da maior raridade para a menor, o filtro de faixa aceita virgula, a contagem por lugar
+  bate, e uma resposta parcial e' denunciada em vez de passar por lista completa.
+
+  Com `?mudo=1` ninguem responde ao pedido: e' o caso de `raridades-main.js` nao ter entrado, e o
+  painel tem de dizer isso em vez de ficar para sempre em "lendo…".
+
+  Abra pelo servidor estatico do projeto; por `file://` o navegador recusa carregar `../raridades.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #2d5a3d;
+    font-family: system-ui, sans-serif;
+    color: #d8e6dc;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 30em;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    background: #0003;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #0004;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 32em;
+    white-space: pre-wrap;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca das <b>Raridades</b>. O jogo é de mentira, mas o formato dos dados foi medido na conta
+    real: 117 Pokémon — 16 na mochila, 100 no depósito, 1 no time. Com <code>?mudo=1</code> a ponte
+    não responde, e o painel tem de dizer isso. Com <code>?semponte=1</code> ninguém responde: a
+    espera acaba em 15 s com o motivo na tela.
+  </p>
+  <pre data-saida>—</pre>
+</div>
+<script>
+  window.PPX = { modulo: (meta, fn) => fn() };
+
+  // ---- o jogo de mentira, com a forma medida -------------------------------
+  const ESPECIES = [
+    'Dragonair', 'Togetic', 'Tyranitar', 'Mankey', 'Pidgey', 'Ralts', 'Kirlia', 'Magnemite',
+    'Scyther', 'Lapras', 'Snorlax', 'Gengar',
+  ];
+  const FAIXAS = {
+    weak: { min: 0.9, max: 0.99 },
+    common: { min: 1, max: 1.09 },
+    uncommon: { min: 1.1, max: 1.24 },
+    rare: { min: 1.25, max: 1.39 },
+    epic: { min: 1.4, max: 1.54 },
+    legendary: { min: 1.55, max: 1.69 },
+  };
+  const qualidadeDe = (m) => Object.keys(FAIXAS).find((k) => m >= FAIXAS[k].min && m <= FAIXAS[k].max) || 'epic';
+
+  let semente = 7;
+  const sorteio = () => ((semente = (semente * 1103515245 + 12345) % 2147483648) / 2147483648);
+
+  const criar = (onde, quantos) =>
+    Array.from({ length: quantos }, (_, i) => {
+      const m = 0.9 + sorteio() * 0.79;
+      return {
+        species_name: ESPECIES[i % ESPECIES.length],
+        nickname: i % 5 === 0 ? 'Apelido' + i : ESPECIES[i % ESPECIES.length],
+        quality_multiplier: m,
+        quality: qualidadeDe(m),
+        location: onde,
+        level: 1 + ((i * 7) % 60),
+        is_shiny: i % 23 === 0,
+        locked: i % 11 === 0,
+        sell_value: 1000 + i * 37,
+        // Campos que existem no jogo e que a ponte NAO deve repassar.
+        trainer_id: 'nao-deve-atravessar',
+        capture_signature: 'nao-deve-atravessar',
+      };
+    });
+
+  const TUDO = [...criar('team', 1), ...criar('inventory', 16), ...criar('storage', 100)];
+
+  if (!new URLSearchParams(location.search).has('mudo')) {
+    window.PokeIdle = {
+      PokemonCardData: { qualityBand: (q) => FAIXAS[q] || null },
+      Api: {
+        getCreatures: async (loc) => {
+          window.__chamadas = (window.__chamadas || 0) + 1;
+          const data = loc ? TUDO.filter((c) => c.location === loc) : TUDO;
+          return { data, next_cursor: '', paginated: false };
+        },
+        getCreaturesFresh: async (loc) => {
+          window.__frescas = (window.__frescas || 0) + 1;
+          const data = loc ? TUDO.filter((c) => c.location === loc) : TUDO;
+          return { data, next_cursor: '', paginated: false };
+        },
+      },
+    };
+  }
+
+  const carregarPainel = () => {
+    const painel = document.createElement('script');
+    painel.src = `../raridades.js?t=${Date.now()}`;
+    document.head.append(painel);
+  };
+
+  // `?semponte=1`: a metade do mundo da pagina nao entra, e ninguem responde ao pedido. E' o caso
+  // de um content script que falhou ao carregar — o painel tem de desistir e dizer o motivo, em vez
+  // de ficar para sempre em "lendo a sua colecao...".
+  if (new URLSearchParams(location.search).has('semponte')) {
+    carregarPainel();
+  } else {
+    const script = document.createElement('script');
+    script.src = `../raridades-main.js?t=${Date.now()}`;
+    script.onload = carregarPainel;
+    document.head.append(script);
+  }
+</script>

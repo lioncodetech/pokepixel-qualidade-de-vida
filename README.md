@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-As nove ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As dez ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -14,6 +14,9 @@ janela em que você está.
 | Venda rápida | vende pokémon pelas raridades que você marcar | Alt+D esconde · Alt+F mostra |
 | Layout padrão | põe as janelas do jogo no lugar que você escolheu | Alt+J esconde · Alt+K mostra · Alt+L arruma |
 | Times | guarda composições de equipe e troca para uma delas num clique | Alt+T esconde · Alt+Y mostra |
+| Ginásio do dia | sai da caçada, troca o time, desafia o ginásio de hoje e volta | Alt+G esconde · Alt+H mostra |
+| Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+R esconde · Alt+E mostra |
+| Raridades | lista todos os seus Pokémon com o número da raridade, e filtra por faixa | Alt+A esconde · Alt+S mostra |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
@@ -636,6 +639,57 @@ painel mesmo por cima do botão — ignorá-lo era a interface prometer uma cois
 Se você já estiver numa caçada, ele troca o time e para por aí: não faz sentido reentrar no que já
 se está. E segue o mesmo orçamento de 2 a 3 minutos do fim de um ginásio, porque é a mesma
 sequência, feita à mão.
+
+## Raridades: a coleção inteira numa tela
+
+Lista **todos** os seus Pokémon — mochila, depósito e time — com o número da raridade de cada um,
+ordenados do mais raro para o menos raro. Dois campos, `de` e `até`, filtram pela faixa que
+interessa; `Copiar a lista` leva o resultado para fora do jogo.
+
+Cada linha diz a espécie, a qualidade, o nível e onde o bicho está. Parar o mouse sobre o número
+mostra a faixa daquela qualidade — é a mesma leitura que a tela do jogo faz com `×1,45 / ×1,54`:
+serve para saber se um épico é um épico qualquer ou um épico quase perfeito.
+
+### Ela não abre um Pokémon sequer
+
+Na tela, o número da raridade só aparece abrindo um Pokémon de cada vez. Na conta em que isto foi
+medido seriam **117 aberturas** — lento, barulhento e frágil.
+
+Mas o jogo publica a própria API em `window.PokeIdle`, e `getCreatures` devolve a coleção inteira de
+uma vez, com `quality_multiplier` em cada registro. A ferramenta pergunta uma vez e pronto: nenhum
+clique no jogo, nenhuma janela aberta. O botão `↻` pergunta de novo, por fora do cache, para quando
+você acabou de capturar alguma coisa.
+
+### Por que ela tem duas metades
+
+`PokeIdle` vive no mundo da página. Um content script comum roda num `globalThis` separado: de lá,
+`PokeIdle` simplesmente não existe. Por isso há dois arquivos — `raridades-main.js` entra com
+`world: "MAIN"` e só responde pedidos; `raridades.js` desenha o painel e nunca toca no jogo. Os dois
+conversam por evento de DOM, o único canal que os dois mundos partilham.
+
+Só atravessa a ponte o que a lista usa: espécie, apelido, raridade, qualidade, lugar, nível, brilho,
+tranca e valor de venda. O registro do jogo também traz id de treinador, assinatura de captura e
+zona de origem — nada disso tem por que cruzar para ser descartado do outro lado.
+
+Cada pedido leva um eco de volta. Dois podem estar no ar ao mesmo tempo — o automático da abertura e
+um clique em `↻` —, e sem o eco a resposta do primeiro passaria pela do segundo, mostrando dados
+velhos sem nada na tela indicando isso. E a espera tem fim: se a outra metade não tiver entrado,
+ninguém responde nunca, e um painel preso em "lendo…" não diz o que está errado.
+
+### As faixas vêm do jogo
+
+Fraca 0,90–0,99 · comum 1,00–1,09 · incomum 1,10–1,24 · rara 1,25–1,39 · épica 1,40–1,54 · lendária
+1,55–1,69. Os números estão aqui para você, mas **não estão cravados no código**: a ferramenta
+pergunta ao jogo. Um número cravado seria uma mentira silenciosa no dia em que o jogo mexesse numa
+das faixas.
+
+O filtro aceita vírgula e ponto — ninguém digita `1.45` olhando para uma tela que escreve `×1,45` —
+e campo vazio significa "sem limite deste lado", não zero.
+
+### Minimizada
+
+Fica a contagem da faixa e o melhor da coleção: `19 de 117 na faixa` e `×1,688 Scyther`. O resto —
+a lista, os campos — sai da frente.
 
 ## Caçadas: atalhos para voltar numa tecla
 
