@@ -52,10 +52,12 @@ test('as ferramentas de efeito ficam de fora', () => {
   );
 });
 
-test('o caminho de volta nao depende da abinha', () => {
-  // A abinha some junto — é a última janelinha em cima do jogo. Se o Alt+Q também dependesse dela,
-  // esconder tudo seria uma porta sem maçaneta do lado de dentro.
-  assert.match(nucleo, /aba\.classList\.toggle\('aberta', !aberto && !Array\.isArray\(sumico\)\)/);
+test('a abinha do menu geral fica, e ha dois caminhos de volta', () => {
+  // A abinha é o menu geral do pacote, não uma das janelas que atrapalham a vista do jogo. Ela
+  // sumia junto até aqui, e esconder tudo virava uma porta sem maçaneta para quem não lembrasse
+  // do Alt+X. O estado de "escondido tudo" não pode voltar a entrar nesta conta.
+  assert.match(nucleo, /aba\.classList\.toggle\('aberta', !aberto\);/);
+  assert.doesNotMatch(nucleo, /aba\.classList\.toggle\('aberta'[^)]*sumico/);
   const atalho = nucleo.slice(nucleo.indexOf("if (!e.altKey || e.ctrlKey || e.metaKey) return;"));
   // Dois atalhos, não um que alterna: a mesma regra de cada ferramenta deste pacote.
   assert.match(atalho.slice(0, 700), /if \(e\.code === 'KeyZ'\) esconderTudo\(\);/, 'Alt+Z esconde');

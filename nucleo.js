@@ -491,9 +491,10 @@
   let sumico = ler(CHAVE_SUMICO, null);
   const pintar = () => {
     menu.classList.toggle('aberto', aberto);
-    // Escondido tudo, a abinha tambem sai: ela e' a ultima janelinha em cima do jogo. Alt+Q
-    // continua abrindo o menu, entao o caminho de volta nao depende de ela estar a' vista.
-    aba.classList.toggle('aberta', !aberto && !Array.isArray(sumico));
+    // A abinha **nao** sai com o Alt+Z. Ela e' o menu geral, e e' por ela que se volta: quem
+    // escondeu tudo costuma querer a tela do jogo limpa, nao o pacote inteiro desaparecido. Alt+Q
+    // tambem abre o menu, mas depender so' do atalho e' uma porta sem macaneta para quem esqueceu.
+    aba.classList.toggle('aberta', !aberto);
     // Quem acabou de aparecer so' agora tem medidas: e' aqui que ele vai para o canto guardado.
     if (montado) colocar();
   };
@@ -606,8 +607,9 @@
    * nenhuma na tela: o botao delas liga e desliga o que elas fazem com a pagina. Apaga-las aqui
    * nao limparia a tela — mudaria o comportamento do jogo, que nao e' o que estes atalhos prometem.
    *
-   * A abinha do menu some junto, que e' o ponto de limpar a tela. Alt+Q continua abrindo o menu:
-   * mesmo sem a aba, nunca se fica sem o caminho de volta.
+   * **A ABINHA DO MENU FICA.** Ela e' o menu geral do pacote, nao uma das janelas que se quer
+   * tirar da frente: o que estorva a vista do jogo sao os paineis das ferramentas. Deixa-la a'
+   * vista mantem o caminho de volta a um clique, sem depender de lembrar o Alt+X.
    */
   const comJanela = () => modulos.filter((m) => !m.efeito && m.aplicar);
 

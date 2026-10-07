@@ -63,8 +63,9 @@ armadilha — um Alt+Z para dar uma olhada no jogo e, na volta, quatro janelas q
 nenhuma na tela; o botão delas liga e desliga o que fazem com a página. Apagá-las aqui não limparia
 nada — mudaria o comportamento do jogo, que não é o que os atalhos prometem.
 
-**A abinha `PokePixel` some junto**, que é o ponto de limpar a tela. O caminho de volta não depende
-dela: Alt+Q continua abrindo o menu mesmo com tudo escondido.
+**A abinha `PokePixel` fica.** Ela é o menu geral do pacote, não uma das janelas que atrapalham a
+vista do jogo — o que estorva são os painéis das ferramentas. Deixá-la à vista mantém o caminho de
+volta a um clique, para quem não lembrar do Alt+X. Alt+Q também continua abrindo o menu.
 
 O estado atravessa o F5, como todo o resto do pacote. Medido em `testes/banca-sumico.html`, que
 recarrega a página de verdade no meio do caminho.
@@ -460,6 +461,16 @@ voltaria, repetiria a etapa do F5 e recarregaria outra vez, para sempre.
 
 Uma falha não recomeça do zero: a tarefa fica guardada na etapa em que parou, e a tentativa seguinte
 continua dali. Sair da caçada duas vezes não faria sentido nenhum.
+
+**São três tentativas, e depois para.** Antes não havia teto: um erro que não passa sozinho — o time
+apagado, o ginásio já feito hoje, a conta deslogada — virava uma tentativa de dez em dez minutos,
+para sempre, mexendo no jogo sem ninguém olhando. Três cobre o que de fato passa com o tempo (um
+anúncio preso, a página lenta); o que não passa em três não passa em trinta.
+
+Ao desistir, a tarefa é **descartada**, não só o relógio. Enquanto ela existisse, o painel se
+consideraria em corrida: os botões ficariam travados e a agenda do dia não arrancaria. O erro fica
+registrado no placar da região, para a desistência não passar despercebida a quem não estava à
+frente da tela.
 
 ### Derrota não é erro
 

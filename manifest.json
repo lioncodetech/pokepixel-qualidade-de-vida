@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokePixel - qualidade de vida",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "As dez ferramentas de qualidade de vida do PokePixel num pacote so, com um menu para ligar e desligar cada uma. Alt+Q abre o menu.",
   "permissions": [
     "storage"

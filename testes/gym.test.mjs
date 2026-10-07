@@ -151,9 +151,30 @@ test('a Elite Four fica de fora', () => {
 test('uma falha nao recomeca do zero', () => {
   // A tarefa fica guardada na etapa em que parou. Sair da caçada duas vezes não faria sentido.
   const bloco = codigo.slice(codigo.indexOf('async function falhou'));
-  assert.doesNotMatch(bloco.slice(0, bloco.indexOf('}')), /limparTarefa/);
+  // Só a desistência apaga a tarefa; o reagendamento, não — daí a janela ser o trecho entre o
+  // fim do `if` do teto e o fim da função.
+  const entreTentativas = bloco.slice(bloco.indexOf('dados.proxima ='));
+  assert.doesNotMatch(entreTentativas.slice(0, entreTentativas.indexOf('agendar();')), /limparTarefa/);
   assert.match(codigo, /dados\.proxima = Date\.now\(\) \+ ESPERA_APOS_FALHA/);
   assert.match(codigo, /ESPERA_APOS_FALHA = 10 \* 60 \* 1000/);
+});
+
+test('tres tentativas e para, em vez de insistir para sempre', () => {
+  // Era um laço sem fim: um erro que não passa sozinho — o time apagado, o ginásio já feito hoje,
+  // a conta deslogada — virava uma tentativa de dez em dez minutos, para sempre, mexendo no jogo
+  // sem ninguém olhando.
+  assert.match(codigo, /const MAX_TENTATIVAS = 3;/);
+  const bloco = codigo.slice(codigo.indexOf('async function falhou'));
+  assert.match(bloco, /if \(dados\.tentativas >= MAX_TENTATIVAS\) \{/);
+  const desistencia = bloco.slice(bloco.indexOf('MAX_TENTATIVAS) {'), bloco.indexOf('dados.proxima ='));
+  // A tarefa morta tem de sair: enquanto ela existe, `emCorrida()` responde que sim, os botões
+  // ficam travados e a agenda do dia não arranca — o painel ficaria preso para sempre.
+  assert.match(desistencia, /limparTarefa\(\);/);
+  assert.match(desistencia, /travarBotoes\(false\);/);
+  assert.match(desistencia, /clearTimeout\(agendado\);/);
+  // O resultado fica no placar, senão a desistência passaria despercebida a quem não estava à
+  // frente do ecrã.
+  assert.match(desistencia, /anotarPlacar\(dados\.regiao, 'erro', erro\);/);
 });
 
 test('nao se abre janela com um menu da barra aberto, nem com banner na frente', () => {

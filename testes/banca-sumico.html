@@ -4,8 +4,8 @@
 <!--
   Banca do "esconder tudo", fora do jogo.
 
-  O que ela prova, e que nenhum teste de texto prova: o Alt+Z apaga as janelas todas **e** a abinha
-  do menu, o estado atravessa um F5 de verdade, e o Alt+X traz de volta **só o que estava à vista**
+  O que ela prova, e que nenhum teste de texto prova: o Alt+Z apaga as janelas todas mas **deixa a
+  abinha do menu**, o estado atravessa um F5 de verdade, e o Alt+X traz de volta **só o que estava à vista**
   — a ferramenta que já estava escondida continua escondida. E que apertar o mesmo duas vezes não
   desfaz nada: um segundo Alt+Z com tudo escondido apagaria a lista da volta.
 
@@ -107,7 +107,9 @@
       esconderTudo();
       await esperar(300);
       conferir(!Object.values(IDS).some(aVista), 'o Alt+Z apagou todas as janelas');
-      conferir(!abaAVista(), 'e a abinha do menu junto');
+      // A abinha e' o menu geral, nao uma janela que atrapalhe a vista do jogo: ela fica, e e' o
+      // caminho de volta de quem nao lembrar do Alt+X.
+      conferir(abaAVista(), 'mas a abinha do menu fica');
       const guardado = JSON.parse(localStorage.getItem('lioncode:pokepixel:sumico') || 'null');
       conferir(
         Array.isArray(guardado) && guardado.includes('venda-rapida') && !guardado.includes('gym'),
@@ -134,7 +136,7 @@
 
     // ---- depois do F5 ------------------------------------------------------
     conferir(!Object.values(IDS).some(aVista), 'depois do F5 continua tudo escondido');
-    conferir(!abaAVista(), 'e a abinha também');
+    conferir(abaAVista(), 'e a abinha do menu continua à vista');
 
     mostrarTudo();
     await esperar(300);
@@ -142,7 +144,7 @@
     // **O que volta é o que estava.** Quem escondeu o ginásio não o quer de volta por ter dado
     // um Alt+X — é esta a linha que o atalho existe para não quebrar.
     conferir(!aVista(IDS.gym), 'mas NÃO o ginásio, que já estava escondido antes');
-    conferir(abaAVista(), 'e a abinha do menu volta com elas');
+    conferir(abaAVista(), 'e a abinha do menu segue onde estava');
     conferir(
       localStorage.getItem('lioncode:pokepixel:sumico') === 'null' ||
         localStorage.getItem('lioncode:pokepixel:sumico') === null,

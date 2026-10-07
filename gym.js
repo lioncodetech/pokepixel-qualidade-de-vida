@@ -83,6 +83,17 @@ PPX.modulo(
     const ESPERA_APOS_FALHA = 10 * 60 * 1000;
 
     /**
+     * Quantas tentativas antes de desistir.
+     *
+     * Sem este teto a tarefa reagendava-se para sempre: um erro que nao passa sozinho — o time
+     * apagado, o ginasio ja' feito hoje, a conta deslogada — virava uma tentativa de dez em dez
+     * minutos, para sempre, a mexer no jogo sem ninguem a olhar. Tres e' o que cobre o que de
+     * facto passa com o tempo (um anuncio preso, a pagina lenta); o que nao passa em tres nao
+     * passa em trinta.
+     */
+    const MAX_TENTATIVAS = 3;
+
+    /**
      * Teto da espera pelo combate. O relogio do jogo marca 15 min; isto e' rede de seguranca para o
      * caso de a tela de combate ficar presa, nao o tempo que se espera de facto.
      */
@@ -1492,12 +1503,27 @@ PPX.modulo(
     /**
      * O que fazer quando um passo falha: dizer, e marcar nova tentativa para daqui a dez minutos.
      *
-     * A tarefa **nao** e' apagada — ela fica guardada na etapa em que parou, e a nova tentativa
-     * continua dali em vez de refazer tudo. Sair da cacada duas vezes, por exemplo, nao faria
-     * sentido nenhum.
+     * A tarefa **nao** e' apagada entre tentativas — ela fica guardada na etapa em que parou, e a
+     * nova tentativa continua dali em vez de refazer tudo. Sair da cacada duas vezes, por exemplo,
+     * nao faria sentido nenhum.
+     *
+     * **NA TERCEIRA, DESISTE.** E a tarefa e' descartada, nao so' o relogio: enquanto ela existe,
+     * `emCorrida()` responde que sim, os botoes ficam travados e a agenda do dia nao arranca. Uma
+     * tarefa morta guardada deixaria o painel preso para sempre, que e' pior que o laco.
      */
     async function falhou(dados, erro) {
       dados.tentativas = (dados.tentativas || 0) + 1;
+      if (dados.tentativas >= MAX_TENTATIVAS) {
+        clearTimeout(agendado);
+        limparTarefa();
+        anotarPlacar(dados.regiao, 'erro', erro);
+        travarBotoes(false);
+        dizer(
+          `Desisti depois de ${MAX_TENTATIVAS} tentativas: ${erro}. Confira no jogo em que pé ficou a equipe.`,
+          true,
+        );
+        return;
+      }
       dados.proxima = Date.now() + ESPERA_APOS_FALHA;
       guardarTarefa(dados);
       // Laranja enquanto a tentativa seguinte nao chega. Se ela correr bem, o sinal vira verde —
@@ -1923,7 +1949,10 @@ PPX.modulo(
         const dados = tarefa();
         if (!dados) return;
         if (dados.proxima) {
-          dizer(`Tentativa ${dados.tentativas || 1} parou em "${dados.etapa}". Retomo em ${faltaPara(dados.proxima)}.`, true);
+          dizer(
+            `Tentativa ${dados.tentativas || 1} de ${MAX_TENTATIVAS} parou em "${dados.etapa}". Retomo em ${faltaPara(dados.proxima)}.`,
+            true,
+          );
           agendar();
           return;
         }
