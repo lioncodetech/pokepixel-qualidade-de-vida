@@ -5,7 +5,7 @@
   Banca do "esconder tudo", fora do jogo.
 
   O que ela prova, e que nenhum teste de texto prova: o Alt+Z apaga as janelas todas mas **deixa a
-  abinha do menu**, o estado atravessa um F5 de verdade, e o Alt+X traz de volta **só o que estava à vista**
+  abinha do menu e a caixa da senha**, o estado atravessa um F5 de verdade, e o Alt+X traz de volta **só o que estava à vista**
   — a ferramenta que já estava escondida continua escondida. E que apertar o mesmo duas vezes não
   desfaz nada: um segundo Alt+Z com tudo escondido apagaria a lista da volta.
 
@@ -27,6 +27,11 @@
 <h3>Banca do Alt+Z e do Alt+X</h3>
 <p>Ela recarrega a página uma vez, de propósito. O relatório é automático.</p>
 <pre data-saida>correndo…</pre>
+<!--
+  A caixa da senha só nasce onde há senha para digitar. Sem este campo ela nunca apareceria, e a
+  banca passaria dizendo que ela "ficou à vista" quando na verdade nunca esteve.
+-->
+<form><input type="password" placeholder="senha do jogo" /></form>
 
 <script>
   const CHAVE = 'banca:sumico:linhas';
@@ -74,6 +79,21 @@
     return Boolean(aba) && aba.classList.contains('aberta');
   };
 
+  /**
+   * A caixa da senha não tem id: ela é reconhecida pelo botão que a pessoa vê.
+   *
+   * Ela também não nasce junto com as outras — só aparece quando o laço de um em um segundo
+   * encontra o campo de senha —, então quem espera por ela espera de verdade.
+   */
+  const caixaDaSenha = () =>
+    [...document.body.children].find(
+      (e) => e.tagName === 'DIV' && e.textContent.includes('Colar login'),
+    );
+  const senhaAVista = () => {
+    const el = caixaDaSenha();
+    return Boolean(el) && getComputedStyle(el).display !== 'none';
+  };
+
   const IDS = {
     'venda-rapida': 'lioncode-venda-rapida',
     'loja-rapida': 'lioncode-loja-rapida',
@@ -90,13 +110,16 @@
     }
 
     for (const f of ['../nucleo.js', '../ocultar-popups.js', '../agenda.js', '../config.js',
-      '../venda-rapida.js', '../loja-rapida.js', '../gym.js'])
+      '../senha.js', '../venda-rapida.js', '../loja-rapida.js', '../gym.js'])
       await carregar(f);
-    await esperar(1400);
+    // 1400 ms cobre a montagem dos painéis; a caixa da senha depende de um laço de 1 s que só
+    // começa depois disso, então ela precisa de uma volta a mais.
+    await esperar(2400);
 
     if (fase === '1') {
       conferir(Object.values(IDS).every(aVista), 'os três painéis começam à vista');
       conferir(abaAVista(), 'e a abinha do menu também');
+      conferir(senhaAVista(), 'e a caixa da senha apareceu, porque há campo de senha na página');
 
       // Uma ferramenta escondida à mão, ANTES do atalho: é ela que prova que a volta não é "tudo".
       const gym = painel(IDS.gym);
@@ -110,6 +133,9 @@
       // A abinha e' o menu geral, nao uma janela que atrapalhe a vista do jogo: ela fica, e e' o
       // caminho de volta de quem nao lembrar do Alt+X.
       conferir(abaAVista(), 'mas a abinha do menu fica');
+      // Pedido explícito: ela só aparece na tela de login, onde não há vista do jogo a desimpedir,
+      // e um Alt+Z dado por engano ali escondia justamente o botão de entrar.
+      conferir(senhaAVista(), 'e a caixa da senha também fica');
       const guardado = JSON.parse(localStorage.getItem('lioncode:pokepixel:sumico') || 'null');
       conferir(
         Array.isArray(guardado) && guardado.includes('venda-rapida') && !guardado.includes('gym'),
@@ -137,6 +163,15 @@
     // ---- depois do F5 ------------------------------------------------------
     conferir(!Object.values(IDS).some(aVista), 'depois do F5 continua tudo escondido');
     conferir(abaAVista(), 'e a abinha do menu continua à vista');
+    conferir(senhaAVista(), 'e a caixa da senha continua à vista, depois do F5');
+    // A lista da volta é a prova de que ela não entrou na conta: se tivesse entrado, o Alt+X a
+    // devolveria — e o que não foi escondido não pode precisar de volta.
+    conferir(
+      !(JSON.parse(localStorage.getItem('lioncode:pokepixel:sumico') || '[]') || []).includes(
+        'senha',
+      ),
+      'e ela nunca entrou na lista do sumiço',
+    );
 
     mostrarTudo();
     await esperar(300);

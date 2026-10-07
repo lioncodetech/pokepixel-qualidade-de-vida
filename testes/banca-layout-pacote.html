@@ -1,0 +1,158 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca da arrumação do pacote</title>
+<!--
+  Banca do "arrumar as nossas janelas", fora do jogo.
+
+  O que ela prova, e que nenhum teste de texto prova: que salvar guarda o canto de cada janelinha
+  do pacote, que arrastar uma para longe e clicar em arrumar a traz de volta **sem recarregar a
+  página**, e que o arquivo exportado leva a arrumação inteira.
+
+  Ela prova também as duas recusas: um perfil com uma chave que não é nossa não escreve nada no
+  armazenamento, e um canto com formato inválido é ignorado em vez de ir para o lugar errado.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../nucleo.js`.
+-->
+<style>
+  body { margin: 0; min-height: 100vh; background: #1b2430; color: #dbe3ee;
+    font: 14px/1.6 system-ui, sans-serif; padding: 16px; }
+  pre { background: #0005; padding: 10px; border-radius: 8px; white-space: pre-wrap;
+    max-width: 56em; font-size: 12px; }
+  .mau { color: #ff9b9b; }
+</style>
+<h3>Banca da arrumação do pacote</h3>
+<p>Ela move painéis de verdade e manda arrumar. O relatório é automático.</p>
+<pre data-saida>correndo…</pre>
+
+<script>
+  const saida = document.querySelector('[data-saida]');
+  const linhas = [];
+  const pintar = () => {
+    saida.innerHTML = linhas
+      .map((l) => (l.startsWith('✖') ? `<span class="mau">${l}</span>` : l))
+      .join('\n');
+  };
+  const dizer = (t, mau) => {
+    linhas.push((mau ? '✖ ' : '• ') + t);
+    pintar();
+  };
+  const conferir = (certo, t) => dizer(t, !certo);
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const carregar = (src) =>
+    new Promise((ok, falhou) => {
+      const el = document.createElement('script');
+      el.src = `${src}?t=${Date.now()}`;
+      el.onload = ok;
+      el.onerror = () => falhou(new Error(src));
+      document.head.append(el);
+    });
+
+  const painelLayout = () => document.getElementById('lioncode-layout-padrao');
+  const clicar = (seletor) => painelLayout().querySelector(seletor).click();
+  const CHAVE_PERFIL = 'lioncode:layout-padrao:perfil';
+  const perfil = () => JSON.parse(localStorage.getItem(CHAVE_PERFIL) || 'null');
+
+  /** A janela da venda rápida serve de cobaia: ela monta sempre, sem depender do jogo. */
+  const ALVO = 'lioncode-venda-rapida';
+  const CHAVE_ALVO = 'lioncode:venda-rapida:posicao';
+  const esquerda = () => Math.round(document.getElementById(ALVO).getBoundingClientRect().left);
+
+  (async () => {
+    for (const chave of Object.keys(localStorage))
+      if (chave.startsWith('lioncode:')) localStorage.removeItem(chave);
+
+    for (const f of ['../nucleo.js', '../ocultar-popups.js', '../agenda.js', '../config.js',
+      '../venda-rapida.js', '../layout-padrao.js'])
+      await carregar(f);
+    await esperar(1400);
+
+    const alvo = document.getElementById(ALVO);
+    conferir(Boolean(alvo) && Boolean(painelLayout()), 'os dois painéis montaram');
+
+    // Numa janela mais estreita que o painel, `canto.aplicar` prende tudo em left:0 — e aí dois
+    // cantos diferentes dão a mesma medida, e a banca passaria por acidente dizendo que a peça
+    // "voltou ao lugar". Esta conferência existe para a banca falhar em vez de mentir.
+    conferir(
+      innerWidth > alvo.getBoundingClientRect().width + 120,
+      `a janela cabe o painel (${innerWidth}px de largura) — alargue a janela se isto falhar`,
+    );
+
+    // O menu só grava o canto dele quando é arrastado; numa página limpa a chave não existe, e
+    // guardá-la aqui é o que torna a fotografia comparável à de uma janela já usada.
+    localStorage.setItem(
+      'lioncode:pokepixel:menu-pos',
+      JSON.stringify({ x: 12, y: 12, direita: true, baixo: true }),
+    );
+
+    // ---- 1. salvar guarda o canto das nossas janelas --------------------------
+    // Arrastar de verdade seria um teste do arrasto, não da arrumação: o que importa aqui é que o
+    // canto guardado é lido e reposto, e o canto é gravado pelo próprio painel ao ser movido.
+    localStorage.setItem(CHAVE_ALVO, JSON.stringify({ x: 40, y: 40, direita: false, baixo: false }));
+    dispatchEvent(new Event('resize'));
+    await esperar(200);
+    const bom = esquerda();
+    conferir(bom > 0, `a venda está no canto bom (left ${bom}px)`);
+
+    clicar('[data-salvar]');
+    const guardado = perfil();
+    conferir(
+      Boolean(guardado?.pacote?.[CHAVE_ALVO]),
+      'salvar guardou o canto da venda junto com o resto',
+    );
+    conferir(
+      Object.keys(guardado.pacote).some((c) => c.endsWith(':menu-pos')),
+      'e o canto do próprio menu do pacote',
+    );
+
+    // ---- 2. arrumar traz de volta, sem F5 ------------------------------------
+    localStorage.setItem(
+      CHAVE_ALVO,
+      JSON.stringify({ x: 0, y: 0, direita: true, baixo: true }),
+    );
+    dispatchEvent(new Event('resize'));
+    await esperar(200);
+    const longe = esquerda();
+    // Sem esta comparação a prova seguinte passa por acidente: duas posições iguais fariam
+    // "voltou ao lugar" ser verdade sem nada ter voltado.
+    conferir(longe !== bom, `a venda foi para longe (left ${longe}px, era ${bom}px)`);
+
+    clicar('[data-arrumar]');
+    await esperar(300);
+    conferir(esquerda() === bom, 'e o botão de arrumar a trouxe de volta, sem recarregar a página');
+
+    // ---- 3. o que vem de fora não escolhe a chave ----------------------------
+    const intruso = 'pokeidle.conta-do-vizinho';
+    localStorage.removeItem(intruso);
+    const sujo = {
+      ...guardado,
+      pacote: {
+        ...guardado.pacote,
+        [intruso]: { x: 1, y: 1, direita: false, baixo: false },
+        [CHAVE_ALVO.replace(':posicao', ':posicao')]: { x: 'NAO', y: null },
+      },
+    };
+    const campoTexto = painelLayout().querySelector('[data-texto]');
+    campoTexto.value = JSON.stringify(sujo);
+    clicar('[data-usar]');
+    await esperar(300);
+    conferir(
+      localStorage.getItem(intruso) === null,
+      'uma chave que não é nossa não foi escrita no armazenamento',
+    );
+    conferir(
+      JSON.parse(localStorage.getItem(CHAVE_ALVO)).x === 40,
+      'e um canto com formato inválido foi ignorado, em vez de ir para o lugar errado',
+    );
+
+    // ---- 4. os botões de arquivo existem e são os do config.js ----------------
+    const cfg = painelLayout().querySelector('[data-arquivo] [data-cfg-exportar]');
+    conferir(Boolean(cfg), 'os botões de exportar e importar estão no painel');
+    conferir(
+      Boolean(document.querySelector('input[data-cfg-arquivo="layout-padrao"]')),
+      'e o seletor de arquivo mora fora do painel, para abrir mesmo com ele escondido',
+    );
+
+    dizer(linhas.some((l) => l.startsWith('✖')) ? 'HOUVE FALHA' : 'tudo passou');
+  })().catch((e) => dizer(`estourou: ${e.message}`, true));
+</script>

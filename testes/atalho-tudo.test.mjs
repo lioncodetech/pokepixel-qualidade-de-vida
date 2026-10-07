@@ -46,10 +46,19 @@ test('esconder duas vezes nao apaga a lista', () => {
 test('as ferramentas de efeito ficam de fora', () => {
   // "Ocultar popups" e "Sem gráfico" não têm janela nenhuma na tela: o botão delas liga e desliga
   // o que fazem com a página. Apagá-las aqui não limparia a tela — mudaria o jogo.
-  assert.match(
-    nucleo,
-    /const comJanela = \(\) => modulos\.filter\(\(m\) => !m\.efeito && m\.aplicar\);/,
-  );
+  assert.match(nucleo, /modulos\.filter\(\(m\) => !m\.efeito && m\.aplicar/);
+});
+
+test('a caixa de senha nao some de carona', () => {
+  // Pedido explícito, e com motivo: ela só aparece onde há senha para digitar — a tela em que o
+  // jogo nem começou e não há vista nenhuma a desimpedir. Um Alt+Z dado por engano ali escondia
+  // justamente o botão de entrar. Ela some pelo que a pessoa aponta: o botão de esconder dela.
+  assert.match(nucleo, /const FORA_DO_SUMICO = \['senha'\];/);
+  assert.match(nucleo, /!FORA_DO_SUMICO\.includes\(m\.id\)/);
+
+  // E continua sendo uma ferramenta comandável pelo menu: tirá-la da lista do atalho não pode
+  // virar tirá-la do menu, que é o único caminho que lhe sobrou.
+  assert.match(ler('senha.js'), /PPX\?\.controlar\?\.\('senha'/);
 });
 
 test('a abinha do menu geral fica, e ha dois caminhos de volta', () => {

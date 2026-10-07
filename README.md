@@ -63,6 +63,11 @@ armadilha — um Alt+Z para dar uma olhada no jogo e, na volta, quatro janelas q
 nenhuma na tela; o botão delas liga e desliga o que fazem com a página. Apagá-las aqui não limparia
 nada — mudaria o comportamento do jogo, que não é o que os atalhos prometem.
 
+**A caixa da senha fica.** Ela só aparece onde há senha para digitar — a tela em que o jogo nem
+começou e não há vista nenhuma a desimpedir. Um Alt+Z dado por engano ali escondia justamente o
+botão de entrar, e só o menu do pacote o trazia de volta. Agora ela some apenas pelo que você
+aponta: o botão de esconder dela, no menu.
+
 **A abinha `PokePixel` fica.** Ela é o menu geral do pacote, não uma das janelas que atrapalham a
 vista do jogo — o que estorva são os painéis das ferramentas. Deixá-la à vista mantém o caminho de
 volta a um clique, para quem não lembrar do Alt+X. Alt+Q também continua abrindo o menu.
@@ -139,7 +144,8 @@ tipos por 3,4 milhões** num clique. Ligar isso é uma decisão, não um padrão
 
 Um botão **Arrumar tudo** (ou **Alt+L**) e a tela inteira volta para o lugar: as janelas do jogo —
 Caçadas, Inventário, Loja do Mark, o que estiver aberto — mais os HUDs de equipe, chat, ações
-rápidas e a barra de ferramentas.
+rápidas e a barra de ferramentas, **e também as janelinhas deste pacote**: Times, Ginásio, Caçadas,
+Raridades, Venda, Compra e o próprio menu.
 
 O caminho é o mesmo que você faria à mão: arrume tudo como quiser uma vez, clique em **Salvar
 layout atual**, e daí em diante é um botão. O que está salvo aparece no painel: quantas peças, de
@@ -149,6 +155,33 @@ Como funciona por dentro: o jogo posiciona cada janela escrevendo `inset`, `widt
 próprio elemento, e aceita que outro código escreva por cima — a janela vai para lá e fica, inclusive
 quando é fechada e reaberta, porque o jogo reaproveita o mesmo elemento. Nada é pedido ao servidor e
 nada é feito com cliques simulados.
+
+### As janelinhas do pacote entram junto
+
+Cada ferramenta daqui guarda o canto dela numa chave própria, todas no mesmo formato e com o mesmo
+padrão de nome. É por isso que arrumá-las não exigiu uma linha em nenhuma das dez: o layout lê e
+escreve essas chaves, e no fim dispara um `resize` — que é o aviso que todas elas já escutavam para
+não ficar penduradas para fora quando a janela muda de tamanho. **Não precisa de F5.**
+
+Isso vale só no clique (ou no Alt+L) e na troca de layout. O *arrumar automático*, que roda a cada
+janela do jogo que abre e a cada vez que a tela muda de tamanho, não toca nos cantos do pacote: ali
+ele brigaria com você arrastando um painel naquele instante, e o `resize` do fim sairia de dentro do
+próprio tratador de `resize` — laço.
+
+**A caixa de senha fica de fora.** Ela guarda a posição em `chrome.storage.local`, que é outro
+armazenamento, assíncrono, e não aparece no `localStorage` onde o layout lê.
+
+### Levar a arrumação para outra janela, em arquivo
+
+Além do texto para copiar e colar, que continua ali e serve bem entre duas janelas abertas ao mesmo
+tempo, há **Exportar** e **Importar** — os mesmos botões da venda e da compra, vindos do
+`config.js`. O arquivo é para o resto: guardar a arrumação boa antes de mexer, e levá-la para uma
+janela que ainda não existe.
+
+O que chega de um arquivo é conferido duas vezes: **o nome da chave** tem de bater com o padrão das
+nossas, e **o valor** tem de ser um canto que o núcleo reconheça. Um JSON montado à mão não vira
+chave arbitrária no armazenamento do jogo. A mesma conferência passou a valer para as chaves do
+próprio jogo, que até aqui eram escritas de volta sem olhar.
 
 ### Minimizado, só o botão
 

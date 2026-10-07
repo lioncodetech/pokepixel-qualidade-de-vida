@@ -610,8 +610,16 @@
    * **A ABINHA DO MENU FICA.** Ela e' o menu geral do pacote, nao uma das janelas que se quer
    * tirar da frente: o que estorva a vista do jogo sao os paineis das ferramentas. Deixa-la a'
    * vista mantem o caminho de volta a um clique, sem depender de lembrar o Alt+X.
+   *
+   * **A SENHA FICA, E E' REGRA, NAO GOSTO.** A caixa de login so' aparece onde ha' senha para
+   * digitar — a tela em que o jogo ainda nao comecou e nao ha' vista nenhuma a desimpedir. Um
+   * Alt+Z dado por engano ali escondia justamente o botao de entrar, e so' o menu do pacote o
+   * trazia de volta. Ela some' pelo que a pessoa aponta, e nao de carona: o botao de esconder
+   * dela, no menu. `FORA_DO_SUMICO` e' a lista de quem nao entra nesta conta.
    */
-  const comJanela = () => modulos.filter((m) => !m.efeito && m.aplicar);
+  const FORA_DO_SUMICO = ['senha'];
+  const comJanela = () =>
+    modulos.filter((m) => !m.efeito && m.aplicar && !FORA_DO_SUMICO.includes(m.id));
 
   function esconderTudo() {
     // Ja' escondido, nao ha' nada a esconder — e refazer a lista aqui seria apaga-la.

@@ -59,6 +59,25 @@ PPX.modulo(
     /** O que o proprio jogo guarda sobre posicao de janela e aparencia. */
     const CHAVES_JOGO = /^pokeidle\.(window\.|chat\.expanded-rect|interface-preferences)/;
 
+    /**
+     * Onde as janelinhas **do pacote** guardam o canto delas.
+     *
+     * Cada ferramenta grava o seu canto numa chave sua, todas no mesmo formato e com o mesmo
+     * padrao de nome — e o menu, que nao e' ferramenta, usa `menu-pos`. Por isso arrumar as nossas
+     * janelas nao precisou de nada nas dez ferramentas: le-se e escreve-se aqui.
+     *
+     * **A caixa da senha fica de fora, e nao por esquecimento.** Ela guarda a posicao em
+     * `chrome.storage.local`, que e' outro armazenamento, assincrono, e nao aparece no
+     * `localStorage` — nao ha' o que ler daqui.
+     *
+     * Esta lista e' tambem a **lista de permissao da importacao**: o que vem no arquivo so' e'
+     * escrito se o nome bater com ela. Um JSON montado a mao nao vira chave arbitraria.
+     */
+    const CHAVES_PACOTE = /^lioncode:(?:[a-z-]+:posicao|pokepixel:menu-pos)$/;
+
+    /** Um canto guardado que o nucleo reconhece. Vale para o formato antigo tambem. */
+    const cantoValido = (v) => Boolean(globalThis.PPX?.canto?.doGuardado?.(v));
+
     const naTela = (el) => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
@@ -154,6 +173,7 @@ PPX.modulo(
         huds: {},
         paineis: {},
         jogo: {},
+        pacote: {},
       };
       // `.pokeidle-pokehub` e `.pokeidle-top-toolbar` sao o mesmo elemento, com as duas classes.
       // Sem o conjunto, a barra entraria duas vezes no layout e o painel contaria uma peca a mais
@@ -178,6 +198,12 @@ PPX.modulo(
       }
       for (const chave of Object.keys(localStorage)) {
         if (CHAVES_JOGO.test(chave)) perfil.jogo[chave] = localStorage.getItem(chave);
+        // O canto das nossas janelinhas vai lido, e nao como texto cru: e' assim que ele pode ser
+        // conferido campo a campo na volta, em vez de ser escrito de volta a's cegas.
+        if (CHAVES_PACOTE.test(chave)) {
+          const valor = ler(chave, null);
+          if (cantoValido(valor)) perfil.pacote[chave] = valor;
+        }
       }
       return perfil;
     }
@@ -209,10 +235,38 @@ PPX.modulo(
       return feitos;
     }
 
+    /**
+     * Poe as janelinhas do pacote nos cantos guardados. Devolve quantas mexeu.
+     *
+     * **Nao e' chamado pelo arrumar automatico, e isso e' a parte importante.** O automatico roda a
+     * cada janela do jogo que abre e a cada vez que a tela muda de tamanho; escrever os cantos ali
+     * brigaria com quem esta' a arrastar um painel naquele instante, e o `resize` do fim seria
+     * disparado de dentro do proprio tratador de `resize` — laco. Aqui so' entram o botao e a
+     * importacao, que sao as duas vezes em que a pessoa pediu.
+     *
+     * O `resize` no fim e' o que dispensa o F5: todas as dez ferramentas ja' recolocam o painel
+     * quando a tela muda de tamanho, entao avisar uma vez poe todas no lugar de uma so'.
+     */
+    function arrumarPacote(perfil) {
+      let n = 0;
+      for (const [chave, valor] of Object.entries(perfil?.pacote || {})) {
+        // Nome conferido **e** valor conferido: o arquivo vem de fora, e o de fora nao escolhe em
+        // que chave do armazenamento se escreve.
+        if (!CHAVES_PACOTE.test(chave) || !cantoValido(valor)) continue;
+        gravar(chave, valor);
+        n++;
+      }
+      if (n) dispatchEvent(new Event('resize'));
+      return n;
+    }
+
     /** O que o jogo guarda por conta: posicao inicial das janelas dele e a aparencia. */
     function aplicarNoJogo(perfil) {
       let n = 0;
       for (const [chave, valor] of Object.entries(perfil?.jogo || {})) {
+        // O mesmo filtro da fotografia, agora tambem na volta: o perfil pode ter vindo de um
+        // arquivo, e quem escolhe em que chave se escreve e' esta lista, nao o arquivo.
+        if (!CHAVES_JOGO.test(chave) || typeof valor !== 'string') continue;
         try {
           localStorage.setItem(chave, valor);
           n++;
@@ -251,6 +305,7 @@ PPX.modulo(
             <button type="button" data-copiar>Copiar</button>
             <button type="button" data-usar>Usar o colado</button>
           </div>
+          <div class="linhas" data-arquivo></div>
         </details>
         <p class="aviso" data-aviso></p>
       </div>`;
@@ -357,7 +412,9 @@ PPX.modulo(
     function desenhar() {
       const perfil = ler(CHAVE_PERFIL, null);
       const pecas = perfil
-        ? Object.keys(perfil.paineis || {}).length + Object.keys(perfil.huds || {}).length
+        ? Object.keys(perfil.paineis || {}).length +
+          Object.keys(perfil.huds || {}).length +
+          Object.keys(perfil.pacote || {}).length
         : 0;
       botaoArrumar.disabled = !perfil;
       campo('[data-esquecer]').disabled = !perfil;
@@ -380,10 +437,12 @@ PPX.modulo(
       gravar(CHAVE_PERFIL, perfil);
       desenhar();
       const abertas = Object.keys(perfil.paineis).length;
+      const nossas = Object.keys(perfil.pacote).length;
+      const mais = nossas ? ` e ${plural(nossas, 'janela')} do pacote` : '';
       dizer(
         abertas
-          ? `Salvo com ${plural(abertas, 'janela')} aberta${abertas === 1 ? '' : 's'}.`
-          : 'Salvo. Nenhuma janela estava aberta: só os HUDs entraram.',
+          ? `Salvo com ${plural(abertas, 'janela')} aberta${abertas === 1 ? '' : 's'}${mais}.`
+          : `Salvo. Nenhuma janela do jogo estava aberta: só os HUDs${mais}.`,
       );
     });
 
@@ -400,7 +459,7 @@ PPX.modulo(
     botaoArrumar.addEventListener('click', () => {
       const perfil = ler(CHAVE_PERFIL, null);
       if (!perfil) return;
-      const feitos = arrumar(perfil);
+      const feitos = arrumar(perfil) + arrumarPacote(perfil);
       if (ler(CHAVE_APARENCIA, false) === true) {
         const n = aplicarNoJogo(perfil);
         dizer(
@@ -434,14 +493,47 @@ PPX.modulo(
       } catch {
         perfil = null;
       }
-      if (!perfil || typeof perfil !== 'object' || (!perfil.paineis && !perfil.huds)) {
+      if (!ehLayout(perfil)) {
         dizer('Isso não é um layout: cole o texto inteiro, da primeira chave à última.');
         return;
       }
+      dizer(`Layout trocado e ${plural(trocarPor(perfil), 'peça')} no lugar.`);
+    });
+
+    /** O mínimo para isto ser um layout: alguma das três coleções que ele sabe arrumar. */
+    const ehLayout = (p) =>
+      Boolean(p) && typeof p === 'object' && Boolean(p.paineis || p.huds || p.pacote);
+
+    /** Troca o layout em vigor e arruma tudo: o caminho comum do texto colado e do arquivo. */
+    const trocarPor = (perfil) => {
       gravar(CHAVE_PERFIL, perfil);
       desenhar();
-      dizer(`Layout trocado e ${plural(arrumar(perfil), 'peça')} no lugar.`);
+      return arrumar(perfil) + arrumarPacote(perfil);
+    };
+
+    /**
+     * Exportar e importar em arquivo, pelo `PPX.config` — a mesma peca da venda e da compra.
+     *
+     * O texto colado continua ali ao lado e continua a servir entre duas janelas abertas. O arquivo
+     * e' para o resto: guardar a arrumacao boa antes de mexer, e leva-la a uma janela que ainda nao
+     * existe.
+     */
+    const botoesConfig = globalThis.PPX?.config?.montarBotoes({
+      id: 'layout-padrao',
+      nome: 'Layout padrão',
+      coletar: () => {
+        const perfil = ler(CHAVE_PERFIL, null);
+        if (!perfil) throw new Error('não há layout salvo — arrume a tela e clique em salvar');
+        return perfil;
+      },
+      aplicar: (dados) => {
+        if (!ehLayout(dados)) throw new Error('esse arquivo não tem layout nenhum dentro');
+        return `Layout importado e ${plural(trocarPor(dados), 'peça')} no lugar.`;
+      },
+      // O `config.js` manda a frase do erro em minúscula, para encaixar numa de quem chama.
+      avisar: (frase, ruim) => dizer(ruim ? `Não deu: ${frase}.` : frase),
     });
+    if (botoesConfig) campo('[data-arquivo]').append(botoesConfig.el);
 
     for (const [seletor, chave] of [
       ['[data-auto]', CHAVE_AUTO],
