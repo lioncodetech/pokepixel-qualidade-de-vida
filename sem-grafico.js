@@ -12,11 +12,49 @@ PPX.modulo({ id: 'sem-grafico', nome: 'Sem gráfico', atalhos: 'Alt+G desliga ·
       ? window.SceneManager._scene._spriteset
       : null;
 
+  /**
+   * A cacada nao e' uma cena do motor: e' DOM. Os lutadores sao `span.platform-hunt__sprite`
+   * com spritesheet em `background-position` e `animation: platform-hunt-walk .82s steps(2)
+   * infinite`, e o fundo e' um `div.platform-hunt__backdrop` com um parallax que nunca para.
+   * Esconder o `_spriteset` nao os alcanca — foi por isso que o Alt+G parecia nao funcionar
+   * dentro de uma cacada.
+   *
+   * O corte foi medido numa maquina pequena em 08/10/2026: com tudo animado a CPU ociosa ficava
+   * entre 9% e 18%; com este estilo, entre 28% e 71%.
+   *
+   * Tirar a animacao em vez de esconder o sprite e' deliberado: o `steps(2)` congela no quadro
+   * em que esta', entao o pokemon continua na tela como imagem parada. Quem joga precisa ver se
+   * morreu, o HP e a pokebola — e isso fica. O que sai e' o fundo, que e' a maior area de pixels
+   * da tela e a unica coisa que se mexia sozinha o tempo todo.
+   */
+  const ID_ESTILO = 'ppx-sem-grafico';
+  const CSS = [
+    '.platform-hunt__backdrop{display:none!important}',
+    '.platform-hunt__arena{background:#10141c!important}',
+    '.platform-hunt__sprite,.platform-hunt__move,.platform-hunt__arena *',
+    '{animation:none!important;animation-play-state:paused!important;transition:none!important}',
+  ].join('');
+
+  const corteDaCacada = (sim) => {
+    const posto = document.getElementById(ID_ESTILO);
+    if (!sim) {
+      if (posto) posto.remove();
+      return;
+    }
+    if (posto) return;
+    const estilo = document.createElement('style');
+    estilo.id = ID_ESTILO;
+    estilo.textContent = CSS;
+    (document.head || document.documentElement).appendChild(estilo);
+  };
+
   // Cada cena nova (cidade, cacada) cria o seu proprio spriteset, entao a escolha
-  // e reaplicada de tempos em tempos em vez de uma vez so.
+  // e reaplicada de tempos em tempos em vez de uma vez so. O estilo da cacada entra na mesma
+  // ronda: o jogo troca de tela sem recarregar, e o `head` nem sempre e' o mesmo do arranque.
   const aplicar = () => {
     const sp = mapa();
     if (sp && ativo && sp.visible) sp.visible = false;
+    corteDaCacada(ativo);
   };
   setInterval(aplicar, 500);
 
@@ -45,7 +83,7 @@ PPX.modulo({ id: 'sem-grafico', nome: 'Sem gráfico', atalhos: 'Alt+G desliga ·
       e.preventDefault();
       e.stopPropagation();
       ligar(tecla === 'g');
-      aviso(ativo ? 'Grafico do mapa desligado (Alt+G)' : 'Grafico do mapa ligado (Alt+H)');
+      aviso(ativo ? 'Grafico desligado (Alt+G)' : 'Grafico ligado (Alt+H)');
     },
     true,
   );
@@ -64,6 +102,7 @@ PPX.modulo({ id: 'sem-grafico', nome: 'Sem gráfico', atalhos: 'Alt+G desliga ·
     }
     const sp = mapa();
     if (sp) sp.visible = !ativo;
+    corteDaCacada(ativo);
     document.dispatchEvent(
       new CustomEvent('ppx-estado', {
         detail: JSON.stringify({ id: 'sem-grafico', visivel: ativo }),

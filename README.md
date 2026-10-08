@@ -9,7 +9,7 @@ janela em que você está.
 | ferramenta | o que faz | atalhos |
 | --- | --- | --- |
 | Ocultar popups | esconde os popups que aparecem ao passar o mouse | Alt+B esconde · Alt+N mostra |
-| Sem gráfico | desliga o desenho do mapa; o jogo continua rodando | Alt+G desliga · Alt+H liga |
+| Sem gráfico | desliga o desenho do mapa e congela a caçada; o jogo continua rodando | Alt+G desliga · Alt+H liga |
 | Senha | guarda usuário e senha e os cola no login | botões na tela de login |
 | Loja rápida | compra pokébolas, poções e revives sem abrir a loja | Alt+C esconde · Alt+V mostra |
 | Venda rápida | vende pokémon pelas raridades que você marcar | Alt+D esconde · Alt+F mostra |
@@ -1109,6 +1109,26 @@ Ela roda no mundo da própria página (`world: "MAIN"` no manifest), porque prec
 desenho do jogo. De lá ela não enxerga o menu — são dois `globalThis` separados —, e o que os dois
 lados partilham é o `localStorage`. Por isso ela lê a sua escolha na carga: **ligar e desligar essa
 vale a partir da próxima carga da página**, nunca na hora.
+
+### A caçada é cortada de outro jeito
+
+O mapa é desenho do motor, e some escondendo o `_spriteset`. A caçada **não é**: ela é feita de
+elementos comuns da página, animados por CSS — os lutadores são `span.platform-hunt__sprite` com a
+figura em `background-position`, e o fundo é um `div.platform-hunt__backdrop` com um parallax que
+nunca para. Esconder o `_spriteset` não os alcança, e era por isso que o Alt+G parecia não fazer
+nada dentro de uma caçada.
+
+Agora a ferramenta também põe um estilo na página, e ele é deliberadamente desigual:
+
+- **o fundo sai** (`display:none`). É a maior área de pixels da tela e a única coisa que se mexia
+  sozinha o tempo todo;
+- **os pokémon ficam, parados**. A animação do jogo é um `steps(2)`, então tirá-la congela a figura
+  no quadro em que está. Quem está farmando precisa ver se o pokémon morreu, o HP e a pokébola — e
+  isso continua na tela.
+
+Medido numa máquina pequena em 08/10/2026, com uma caçada em andamento: com tudo animado a CPU
+ociosa ficava entre 9% e 18%; com o corte, entre 28% e 71%. Numa máquina folgada a diferença não
+aparece — isto é para quem joga em hardware apertado.
 
 ## O que o pacote acessa
 
