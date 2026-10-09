@@ -1140,7 +1140,12 @@ A senha continua guardada em texto puro, como antes. Serve para este jogo e nada
 
 ## Onde funciona
 
-`pokepixel.nietore.com` e `poke.idleworld.online`.
+`pokepixel.nietore.com`, e só.
+
+Até a 1.10.0 o pacote também se declarava em `poke.idleworld.online`. Saiu na 1.11.0: aquilo é
+outro jogo — feito em Next.js, sem o motor nem a API de que estas ferramentas vivem —, e o que
+carregava lá era um menu que não fazia nada. Cada jogo passa a ter o seu pacote, declarando só o
+seu site. É isso que impede dois pacotes de se injetarem na mesma página e disputarem os atalhos.
 
 As cinco extensões avulsas continuam publicadas e funcionando para quem já as usa; elas é que não
 recebem mais novidades. Não instale as duas coisas na mesma janela: cada ferramenta apareceria duas

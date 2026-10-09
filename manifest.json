@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokePixel - qualidade de vida",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "As dez ferramentas de qualidade de vida do PokePixel num pacote so, com um menu para ligar e desligar cada uma. Alt+Q abre o menu.",
   "permissions": [
     "storage"
@@ -9,8 +9,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://pokepixel.nietore.com/*",
-        "https://poke.idleworld.online/*"
+        "https://pokepixel.nietore.com/*"
       ],
       "js": [
         "nucleo.js",
@@ -20,8 +19,7 @@
     },
     {
       "matches": [
-        "https://pokepixel.nietore.com/*",
-        "https://poke.idleworld.online/*"
+        "https://pokepixel.nietore.com/*"
       ],
       "js": [
         "agenda.js",
@@ -39,8 +37,7 @@
     },
     {
       "matches": [
-        "https://pokepixel.nietore.com/*",
-        "https://poke.idleworld.online/*"
+        "https://pokepixel.nietore.com/*"
       ],
       "js": [
         "nucleo-main.js",
