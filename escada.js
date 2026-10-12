@@ -638,11 +638,21 @@ PPX.modulo(
         return 'Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência.';
       const turnos = turnosDoGrupo();
       if (!turnos.length) return 'Escolha quem tem a pedra e os times que ela vai upar.';
+      const sabidos = globalThis.PPX?.times?.nomes?.();
       for (const [i, turno] of turnos.entries()) {
         const qual = turnos.length > 1 ? `Pedra ${i + 1}: e` : 'E';
         if (!turno.fixo) return `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
-        if (!semVazios(turno.times).length)
-          return `${qual}scolha os times de onde vêm os que rodam.`;
+        const meus = semVazios(turno.times);
+        if (!meus.length) return `${qual}scolha os times de onde vêm os que rodam.`;
+        // **Um time que nao existe nesta conta nao e' um time.** Acontece a quem leva a configuracao
+        // de uma janela para outra: os nomes vem juntos, os times ficam na conta de origem. Sem
+        // isto, a escada dava o grupo por configurado, viajava, e so' entao descobria que nao tinha
+        // de onde tirar ninguem. O painel ja' marcava "(nao guardado)" na lista; faltava recusar.
+        if (Array.isArray(sabidos) && sabidos.length) {
+          const orfao = meus.find((nome) => !sabidos.includes(nome));
+          if (orfao)
+            return `O time "${orfao}" não existe nesta conta — escolha outro, ou guarde-o nos Times.`;
+        }
       }
       if (!alvoDoGrupo())
         return cfg.modo === 'grupo'
@@ -1422,7 +1432,34 @@ PPX.modulo(
         return 'curado';
       }
 
-      // ---------------------------------------------------------------- 2. a viagem
+      // ------------------------------------------------- 2. da' para fazer o trabalho de la'?
+      //
+      // **A LEITURA DA COLECAO VEM ANTES DA VIAGEM, E ISSO E' A CORRECCAO DE UM DEFEITO.** Medido
+      // numa segunda conta do dono em 12/10/2026: a pedra escolhida ja' nao estava na colecao
+      // daquela conta e um dos times nao existia la', e mesmo assim a escada tirou-o da "Caça de
+      // Kirlia" e levou-o para a "Caça de Gardevoir" — para, chegando, descobrir que nao tinha
+      // grupo nenhum para montar. Arrastar alguem atraves do mapa para um trabalho que nao se vai
+      // conseguir fazer e' o pior dos dois erros possiveis: o outro e' so' ficar parado.
+      //
+      // A leitura nao mexe em nada (e' a API da colecao) e ja' era feita a cada batida, logo a
+      // seguir; aqui ela so' mudou de lugar.
+      const lido = await pedirBichos();
+      if (lido?.erro) {
+        adiar(CASTIGO);
+        aviso(`Não consegui ler a coleção: ${lido.erro}`);
+        return 'sem colecao';
+      }
+      colecao = new Map((lido.bichos || []).map((b) => [b.id, b]));
+      desenhar(false);
+
+      const alvo = alvoDoGrupo();
+      const m = montagemDoGrupo(colecao, alvo);
+      if (m.erro) {
+        aviso(m.erro);
+        return 'sem montagem';
+      }
+
+      // ---------------------------------------------------------------- 3. a viagem
       const lugar = lugarDoGrupo();
       if (!lugar.aqui) {
         if (!lugar.ir) {
@@ -1472,23 +1509,12 @@ PPX.modulo(
         return 'viajou';
       }
 
-      // ---------------------------------------------------------------- 3. a equipe
-      const lido = await pedirBichos();
-      if (lido?.erro) {
-        adiar(CASTIGO);
-        aviso(`Não consegui ler a coleção: ${lido.erro}`);
-        return 'sem colecao';
-      }
-      colecao = new Map((lido.bichos || []).map((b) => [b.id, b]));
-      desenhar(false);
-
-      const alvo = alvoDoGrupo();
-      const m = montagemDoGrupo(colecao, alvo);
-      if (m.erro) {
-        aviso(m.erro);
-        return 'sem montagem';
-      }
-
+      // ---------------------------------------------------------------- 4. a equipe
+      //
+      // A colecao e a montagem ja' foram lidas la' em cima, antes da viagem — e nao se releem: uma
+      // batida que chegue aqui nao viajou (quem viaja sai no `return 'viajou'`), entao a equipe e
+      // os niveis sao os mesmos de ha' um instante.
+      //
       // A rodada fecha **antes** de a equipe ser desfeita: subir o alvo primeiro poupa tirar cinco
       // Pokemon para os por de volta um instante depois.
       if (!m.faltam.length && cfg.modo === 'passo') {

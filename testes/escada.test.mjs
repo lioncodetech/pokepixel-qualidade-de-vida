@@ -1092,3 +1092,44 @@ test('um rotulo com campo no meio nao empurra as palavras para fora do painel', 
     /#lioncode-escada \.caixa input\[type="number"\] \{ width: 58px; flex: none; \}/,
   );
 });
+
+test('o grupo nao arrasta ninguem para uma cacada onde nao consegue trabalhar', () => {
+  // MEDIDO NUMA SEGUNDA CONTA DO DONO EM 12/10/2026: a pedra escolhida já não estava na coleção
+  // daquela conta e um dos times não existia lá, e mesmo assim a escada o tirou da "Caça de
+  // Kirlia" e o levou para a "Caça de Gardevoir" — para, chegando, descobrir que não tinha grupo
+  // nenhum para montar.
+  const bater = codigo.slice(codigo.indexOf('async function conferirGrupo'));
+  const corpo = bater.slice(0, bater.indexOf('\n    }\n'));
+  // A leitura da coleção e a montagem vêm ANTES da viagem. A leitura não mexe em nada e já era
+  // feita a cada batida, logo a seguir: aqui ela só mudou de lugar.
+  assert.ok(
+    corpo.indexOf('const m = montagemDoGrupo(colecao, alvo);') <
+      corpo.indexOf('const lugar = lugarDoGrupo();'),
+    'a montagem é conferida antes de a viagem ser decidida',
+  );
+  // `indexOf` devolve -1 para quem nao existe, e -1 e' menor do que tudo: sem esta primeira
+  // asserção, apagar a linha passava no teste.
+  assert.ok(corpo.includes("return 'sem montagem';"), 'a montagem impossível para a batida');
+  assert.ok(
+    corpo.indexOf("return 'sem montagem';") < corpo.indexOf("return 'viajou';"),
+    'uma montagem impossível para a batida antes de viajar',
+  );
+  // E lê-se UMA vez por batida: quem chega à equipe não viajou, então os níveis são os mesmos.
+  assert.equal(
+    corpo.split('await pedirBichos()').length - 1,
+    1,
+    'a coleção é lida uma vez por batida, e não duas',
+  );
+});
+
+test('um time que nao existe nesta conta nao e um time', () => {
+  // Acontece a quem leva a configuração de uma janela para outra: os nomes vêm juntos, os times
+  // ficam na conta de origem. O painel já marcava "(não guardado)" na lista; faltava recusar.
+  const falta = codigo.slice(codigo.indexOf('const faltaNoGrupo = ()'));
+  const corpo = falta.slice(0, falta.indexOf("return '';"));
+  assert.match(corpo, /const sabidos = globalThis\.PPX\?\.times\?\.nomes\?\.\(\);/);
+  assert.match(corpo, /const orfao = meus\.find\(\(nome\) => !sabidos\.includes\(nome\)\);/);
+  assert.match(corpo, /não existe nesta conta/);
+  // Sem a ferramenta Times a responder, não se inventa recusa: a lista vazia não prova nada.
+  assert.match(corpo, /if \(Array\.isArray\(sabidos\) && sabidos\.length\)/);
+});

@@ -1164,6 +1164,23 @@ para duas palavras, dois campos e mais duas palavras.
 São duas regras agora, com teste de guarda: todo campo de número dentro de um rótulo tem **largura
 fixa e não cresce**, e o rótulo pode **quebrar linha** em vez de empurrar as palavras para fora.
 
+### O grupo não arrasta ninguém para uma caçada onde não consegue trabalhar
+
+Medido numa segunda conta do dono em 12/10/2026: o Pokémon da pedra já não estava na coleção
+daquela conta e um dos times não existia lá — e mesmo assim a escada o tirou da "Caça de Kirlia" e
+o levou para a "Caça de Gardevoir", para só então descobrir que não tinha grupo nenhum para montar.
+
+A causa era a ordem. A viagem vinha antes da leitura da coleção, então a única coisa conferida antes
+de andar era se havia caçada na lista e turno configurado — e não se o trabalho era possível.
+Agora a coleção lê-se primeiro. Não custa nada (é a mesma leitura que já se fazia a seguir, só
+mudou de lugar, e ler a coleção não mexe em nada no jogo) e muda o pior resultado possível pelo
+melhor: **ficar parado e dizer o que falta**, em vez de atravessar o mapa para um trabalho que não
+vai acontecer.
+
+E um time que não existe nesta conta deixou de passar por time. É o que acontece a quem leva a
+configuração de uma janela para outra: os nomes viajam no arquivo, os times ficam na conta de
+origem. O painel já marcava *"(não guardado)"* na lista; faltava recusar correr com ele.
+
 ### O nível que importa é o do pokémon, não o do treinador
 
 São dois números diferentes no mesmo HUD, e confundi-los faria a escada disparar o degrau errado
