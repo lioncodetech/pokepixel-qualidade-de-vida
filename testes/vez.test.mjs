@@ -46,7 +46,11 @@ test('a vez mora na sessionStorage, e isso nao e detalhe', () => {
   const bloco = nucleo.slice(nucleo.indexOf('const lerVez ='), nucleo.indexOf('const fila = []'));
   assert.match(bloco, /sessionStorage\.getItem\(CHAVE_VEZ\)/);
   assert.match(bloco, /sessionStorage\.setItem\(CHAVE_VEZ/);
-  assert.doesNotMatch(bloco, /localStorage/, 'a vez no localStorage faria uma janela esperar pela outra');
+  assert.doesNotMatch(
+    bloco,
+    /localStorage/,
+    'a vez no localStorage faria uma janela esperar pela outra',
+  );
 });
 
 test('o ginasio nao solta a vez quando a pagina vai recarregar', () => {
@@ -56,7 +60,10 @@ test('o ginasio nao solta a vez quando a pagina vai recarregar', () => {
   assert.match(gym, /recarregando = true;\s*\n\s*return;/);
   assert.match(gym, /if \(!recarregando\) largarVez\(\);/);
   // E o núcleo não limpa a vez ao sair da página quando há tarefa do ginásio a atravessar.
-  assert.match(nucleo, /if \(vez && !localStorage\.getItem\('lioncode:gym:tarefa'\)\) gravarVez\(null\);/);
+  assert.match(
+    nucleo,
+    /if \(vez && !localStorage\.getItem\('lioncode:gym:tarefa'\)\) gravarVez\(null\);/,
+  );
 });
 
 test('a vez abandonada nao prende a fila para sempre', () => {
@@ -99,7 +106,7 @@ test('um nucleo sem fila nao impede as ferramentas de funcionar', () => {
 import { readdirSync } from 'node:fs';
 
 /** Ferramentas que agem no jogo por conta própria: estas TÊM de passar pela fila. */
-const NA_FILA = ['venda-rapida.js', 'loja-rapida.js', 'gym.js'];
+const NA_FILA = ['venda-rapida.js', 'loja-rapida.js', 'gym.js', 'escada.js'];
 
 /**
  * Ferramentas que não agem sozinhas, com o motivo de cada uma.
@@ -119,7 +126,10 @@ const FORA = {
   'layout-padrao.js': 'arruma as janelinhas, a pedido',
   'raridades.js': 'só lê a coleção pela API, não clica em nada',
   'raridades-main.js': 'só lê a coleção pela API, não clica em nada',
-  'times.js': 'peça: quem chama (o ginásio) já tem a vez — pedir de novo daria impasse',
+  'escada-main.js':
+    'peça: age (para a caçada, vai à cidade, cura), mas só quando a escada pede — e a escada pede a vez antes de a chamar',
+  'times.js':
+    'peça: quem chama (o ginásio, a escada no fim da fila e no modo de grupo) já tem a vez — pedir de novo daria impasse',
   'cacadas.js': 'peça: quem chama (o ginásio) já tem a vez — pedir de novo daria impasse',
 };
 

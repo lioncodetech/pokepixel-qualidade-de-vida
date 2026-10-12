@@ -1,0 +1,568 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca da Escada</title>
+<!--
+  Banca da escada de caçadas, fora do jogo.
+
+  Ela monta um HUD de equipe de mentira com as armadilhas que o jogo tem de verdade, todas medidas
+  no jogo logado em 11/10/2026:
+
+    1. o pokémon ativo é marcado com `is-leader`, e **vai para a frente** ao trocar;
+    2. depois de uma troca, as outras caixas passam **3 s** com `title="Aguarde 3s…"` e o jogo
+       **recusa o clique calado** — não troca, não avisa, e o clique não fica em fila;
+    3. a troca leva ~600 ms a aparecer no HUD, nunca é instantânea;
+    4. a caçada guardada monta a equipe inteira e pode pôr à frente quem já se formou;
+    5. o derrotado é marcado com `is-fainted` e `title="Pokémon derrotado"`, e o jogo recusa o
+       clique nele tão calado como recusa dentro da espera;
+    6. **a caçada mata quem é fraco para ela.** É isto que a ordem da escada existe para evitar, e
+       é por isso que a banca o faz: um aluno posto à frente numa caçada acima do nível dele morre
+       sozinho, em 2 s, como o Ralts Lv 1 morreu na caçada de Nidorina.
+
+  A ponte do mundo da página também está aqui de mentira: a banca responde ao
+  `lioncode:escada:pedido` como `escada-main.js` responderia, e só cura depois de parar a caçada —
+  que é o que foi medido no jogo.
+
+  O botão "subir o líder" é o que a banca tem de mais parecido com jogar: é a única coisa que faz a
+  escada decidir, porque o gatilho dela é o HUD mudar.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../escada.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #2d3a5a;
+    font-family: system-ui, sans-serif;
+    color: #d8dce6;
+  }
+  .nota {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    max-width: 30em;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    background: #0003;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #0004;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    max-width: 34em;
+    white-space: pre-wrap;
+  }
+  .hud {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    display: flex;
+    gap: 6px;
+  }
+  .pokeidle-team-card {
+    background: #1a2130;
+    border: 1px solid #2a3244;
+    border-radius: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    min-width: 92px;
+  }
+  .pokeidle-team-card.is-leader {
+    border-color: #7ddba0;
+  }
+  .pokeidle-team-card.is-fainted {
+    opacity: 0.45;
+    border-color: #a05050;
+  }
+  .pokeidle-team-card__name {
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .pokeidle-team-card__level {
+    font-size: 12px;
+    opacity: 0.75;
+  }
+  .comandos {
+    position: fixed;
+    left: 16px;
+    bottom: 110px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: 42em;
+  }
+  .comandos button {
+    background: #1f2a3d;
+    color: #e7edf6;
+    border: 1px solid #33405a;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font: 12px system-ui, sans-serif;
+    cursor: pointer;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca da <b>Escada de caçadas</b>. O HUD de baixo é a equipe: clicar numa caixa troca o ativo,
+    como no jogo — com <b>3 s de recusa calada</b> depois de cada troca, e ~600 ms até aparecer.
+  </p>
+  <p>
+    Ponha um degrau, escolha uma caçada e clique em <b>Iniciar</b>. Depois use
+    <code>subir o líder</code>: é isso que faz a escada decidir, porque o gatilho dela é o HUD
+    mudar, nunca um relógio.
+  </p>
+  <p>
+    <code>a caçada mata o fraco</code> é a armadilha que importa: com ela ligada, um aluno posto à
+    frente numa caçada acima do nível dele morre em 2 s. Com a ordem certa — viajar primeiro,
+    trocar depois — ele não chega a ser posto à frente no lugar errado.
+  </p>
+  <p>
+    Há três times guardados de mentira. Em <code>formados: ir à cidade e trocar de time</code> eles
+    formam uma fila: formado o primeiro, ela monta o segundo, depois o terceiro — e no fim da fila
+    <b>pergunta</b> o que fazer, numa listbox. Os times de mentira só montam de verdade na cidade:
+    quem trocar dentro de uma caçada recebe a equipe nova <b>morta</b>, que é o que o jogo faz.
+  </p>
+  <pre data-saida>—</pre>
+</div>
+
+<div class="comandos"></div>
+<div class="hud"></div>
+
+<script>
+  const saida = document.querySelector('[data-saida]');
+  const registo = [];
+  const anotar = (txt) => {
+    registo.push(txt);
+    saida.textContent = registo.slice(-14).join('\n');
+  };
+
+  // ------------------------------------------------------------------ o HUD de mentira
+
+  const ESPERA = 3000;
+  let prontoEm = 0;
+  const equipe = [
+    { id: 'aaa', nome: 'Tyranitar', especie: 'tyranitar', nivel: 1, lider: true, morto: false },
+    { id: 'bbb', nome: 'Jolteon', especie: 'jolteon', nivel: 40, lider: false, morto: false },
+    { id: 'ccc', nome: 'Slowpoke', especie: 'slowpoke', nivel: 80, lider: false, morto: false },
+  ];
+
+  /**
+   * Os times guardados, de mentira — tres, para a fila do fim da escada ter por onde andar.
+   *
+   * Os ids sao o que importa: `qual()` compara por id, como `times.js`, porque dois Pokemon da
+   * mesma especie sao duas criaturas diferentes.
+   */
+  const TIMES = {
+    'Time dos novos': [
+      { id: 'n1', nome: 'Dratini', nivel: 1 },
+      { id: 'n2', nome: 'Flaaffy', nivel: 1 },
+      { id: 'n3', nome: 'Houndoom', nivel: 1 },
+    ],
+    'Time do meio': [
+      { id: 'm1', nome: 'Ralts', nivel: 1 },
+      { id: 'm2', nome: 'Rhydon', nivel: 1 },
+    ],
+    'Time dos fortes': [
+      { id: 'f1', nome: 'Scizor', nivel: 60 },
+      { id: 'f2', nome: 'Gengar', nivel: 60 },
+    ],
+    // Os times de onde o modo de grupo tira quem roda. Eles vivem na MOCHILA.
+    'Turma A': [
+      { id: 'p1', nome: 'Caterpie' },
+      { id: 'p2', nome: 'Weedle' },
+      { id: 'p3', nome: 'Pidgey' },
+      { id: 'p7', nome: 'Caterpie' },
+    ],
+    'Turma B': [
+      { id: 'p4', nome: 'Rattata' },
+      { id: 'p5', nome: 'Spearow' },
+      { id: 'p6', nome: 'Zubat' },
+    ],
+  };
+
+  /**
+   * Quem existe e nao esta' na equipe.
+   *
+   * O modo de grupo precisa disto: ele escolhe entre Pokemon que estao **fora** da equipe, e o
+   * nivel deles o DOM nao da' — no jogo vem da API, aqui vem daqui. `especie` nao e' enfeite: o
+   * jogo recusa duas vezes a mesma especie na equipe, e a banca recusa tambem.
+   */
+  const MOCHILA = [
+    { id: 'p1', nome: 'Caterpie', especie: 'caterpie', nivel: 10 },
+    { id: 'p2', nome: 'Weedle', especie: 'weedle', nivel: 13 },
+    { id: 'p3', nome: 'Pidgey', especie: 'pidgey', nivel: 16 },
+    { id: 'p4', nome: 'Rattata', especie: 'rattata', nivel: 11 },
+    { id: 'p5', nome: 'Spearow', especie: 'spearow', nivel: 12 },
+    { id: 'p6', nome: 'Zubat', especie: 'zubat', nivel: 14 },
+    // De proposito: mesma especie do Caterpie. Tem de ser saltado, nao tentado.
+    { id: 'p7', nome: 'Caterpie', especie: 'caterpie', nivel: 9 },
+  ];
+
+  const hud = document.querySelector('.hud');
+
+  const pintarHud = () => {
+    hud.innerHTML = '';
+    for (const p of equipe) {
+      const card = document.createElement('div');
+      card.className =
+        'pokeidle-team-card' + (p.lider ? ' is-leader' : '') + (p.morto ? ' is-fainted' : '');
+      card.setAttribute('data-creature-id', p.id);
+      const espera = Math.ceil(Math.max(0, prontoEm - Date.now()) / 1000);
+      card.title = p.morto
+        ? 'Pokémon derrotado'
+        : p.lider
+          ? 'Pokémon ativo'
+          : espera > 0
+            ? `Aguarde ${espera}s para trocar de Pokémon ativo`
+            : 'Clique para tornar este Pokémon ativo';
+      const nome = document.createElement('div');
+      nome.className = 'pokeidle-team-card__name';
+      nome.textContent = p.nome;
+      const nv = document.createElement('div');
+      nv.className = 'pokeidle-team-card__level';
+      nv.textContent = `Nv.${p.nivel}`;
+      card.append(nome, nv);
+      card.addEventListener('click', () => trocarAtivo(p));
+      hud.append(card);
+    }
+  };
+
+  /** A troca do jogo: recusa calada no morto e dentro da espera, ~600 ms de atraso, ativo à frente. */
+  const trocarAtivo = (p) => {
+    if (p.lider) return;
+    if (p.morto) {
+      anotar(`jogo: clique em ${p.nome} RECUSADO (calado) — está derrotado`);
+      return;
+    }
+    if (Date.now() < prontoEm) {
+      anotar(`jogo: clique em ${p.nome} RECUSADO (calado) — ainda na espera`);
+      return;
+    }
+    anotar(`jogo: trocando para ${p.nome}…`);
+    setTimeout(() => {
+      for (const o of equipe) o.lider = o === p;
+      equipe.sort((a, b) => Number(b.lider) - Number(a.lider));
+      prontoEm = Date.now() + ESPERA;
+      pintarHud();
+      anotar(`jogo: ativo agora é ${p.nome}`);
+      matarSeFraco();
+      setTimeout(pintarHud, ESPERA + 50);
+    }, 600);
+  };
+
+  // --------------------------------------------------------------- a porta das Caçadas
+
+  const GUARDADAS = ['Caça de Pidgey', 'Caça de Ralts', 'Caça de Dratini', 'Cidade de Cerulean'];
+  /** O nível que cada caçada exige. Abaixo dele, o aluno morre — como morreu no jogo. */
+  const EXIGE = {
+    'Caça de Pidgey': 1,
+    'Caça de Ralts': 30,
+    'Caça de Dratini': 70,
+    'Cidade de Cerulean': 1,
+  };
+  let onde = 'Caça de Pidgey';
+  let falhar = false;
+  let matador = false;
+  /** A caçada monta a equipe inteira — e a ordem dela não sabe nada de formatura. */
+  let desarrumar = false;
+
+  /**
+   * A armadilha que custou a ordem: quem está à frente numa caçada acima do seu nível morre.
+   *
+   * É chamada depois de cada troca e depois de cada viagem, que são os dois instantes em que a
+   * dupla (quem está à frente, onde se está) muda.
+   */
+  const matarSeFraco = () => {
+    if (!matador || !onde) return;
+    const lider = equipe.find((p) => p.lider);
+    if (!lider || lider.morto) return;
+    if (lider.nivel >= (EXIGE[onde] || 1)) return;
+    setTimeout(() => {
+      if (!equipe.find((p) => p.id === lider.id)?.lider) return;
+      lider.morto = true;
+      const vivo = equipe.find((p) => !p.morto && p.id !== lider.id);
+      if (vivo) {
+        for (const o of equipe) o.lider = o === vivo;
+        equipe.sort((a, b) => Number(b.lider) - Number(a.lider));
+        prontoEm = 0;
+      }
+      pintarHud();
+      anotar(
+        `jogo: ${lider.nome} Lv ${lider.nivel} MORREU em "${onde}" (exige Lv ${EXIGE[onde]})` +
+          (vivo ? ` — ativo agora é ${vivo.nome}` : ''),
+      );
+    }, 2000);
+  };
+
+  let dono = '';
+  const esperaNaFila = [];
+  const ouvintesDaFila = new Set();
+  const filaMexeu = () => {
+    for (const fn of ouvintesDaFila)
+      try {
+        fn(dono ? { id: dono } : null, [...esperaNaFila]);
+      } catch {
+        /* quem ouve nao derruba quem fala */
+      }
+  };
+
+  window.PPX = {
+    modulo: (meta, fn) => fn(),
+    /**
+     * A fila, de mentira — e com o que o modo de grupo le' dela: quem esta' com a vez, quem esta'
+     * a' espera, e um aviso quando isso muda.
+     *
+     * Era um `dono: () => null` que nunca cedia a ninguem, e com ele era impossivel provar "cede a
+     * vez a qualquer outra ferramenta": nao havia outra ferramenta. Os botoes `outra ferramenta
+     * pega a vez` e `a outra solta a vez` sao essa outra.
+     */
+    vez: {
+      pedir: async (id) => {
+        if (dono && dono !== id) {
+          esperaNaFila.push(id);
+          anotar(`fila: ${id} ficou na fila (a vez é de ${dono})`);
+          filaMexeu();
+          return null;
+        }
+        dono = id;
+        anotar(`fila: ${id} pegou a vez`);
+        filaMexeu();
+        return () => {
+          if (dono !== id) return;
+          dono = '';
+          anotar(`fila: ${id} soltou a vez`);
+          filaMexeu();
+        };
+      },
+      dono: () => (dono ? { id: dono } : null),
+      esperando: () => [...esperaNaFila],
+      nome: (id) => (id === 'gym' ? 'o Ginásio do dia' : id),
+      aoMudar: (fn) => {
+        ouvintesDaFila.add(fn);
+        return () => ouvintesDaFila.delete(fn);
+      },
+    },
+    canto: { medir: () => null, aplicar: () => false },
+    controlar: () => {},
+    visivel: () => true,
+    anotar: () => {},
+    times: {
+      nomes: () => Object.keys(TIMES),
+      /**
+       * Qual dos times guardados esta' montado, como `times.js` responde: por id, sem a ordem e
+       * sem o lider. E' isto que permite a' fila da escada nao guardar contador nenhum.
+       */
+      qual: () => {
+        const agora = equipe.map((p) => p.id);
+        const casa = (m) => m.length === agora.length && m.every((p) => agora.includes(p.id));
+        return Object.entries(TIMES).find(([, m]) => casa(m))?.[0] || '';
+      },
+      membrosDe: (nome) => (TIMES[nome] || []).map((m) => m.id),
+      /**
+       * Monta uma equipe avulsa, como `PPX.times.montar` no jogo — e com as mesmas recusas.
+       *
+       * A banca e' tao dura quanto o jogo nas tres regras: a equipe trava em 6, especie nao repete
+       * e quem pedir a mesma especie duas vezes recebe a recusa em vez de uma equipe errada.
+       */
+      montar: async (membros, lider) => {
+        const quero = (membros || []).map((m) => m.id);
+        anotar(`times: pedido para montar o grupo: ${quero.join(', ')}`);
+        if (quero.length > 6) return { ok: false, erro: 'a equipe trava em 6' };
+        const todos = [...equipe, ...MOCHILA];
+        const especies = quero.map((id) => todos.find((b) => b.id === id)?.especie);
+        if (new Set(especies).size !== especies.length)
+          return { ok: false, erro: 'o jogo recusa duas vezes a mesma espécie' };
+        await new Promise((r) => setTimeout(r, 300));
+        // Quem sai volta para a mochila com o nivel que tem agora; quem entra sai dela.
+        for (const quem of [...equipe])
+          if (!quero.includes(quem.id)) {
+            equipe.splice(equipe.indexOf(quem), 1);
+            MOCHILA.push({ id: quem.id, nome: quem.nome, especie: quem.especie, nivel: quem.nivel });
+          }
+        for (const id of quero) {
+          if (equipe.some((q) => q.id === id)) continue;
+          const vindo = MOCHILA.find((b) => b.id === id);
+          if (!vindo) return { ok: false, erro: `${id} não está na mochila` };
+          MOCHILA.splice(MOCHILA.indexOf(vindo), 1);
+          equipe.push({ ...vindo, lider: false, morto: Boolean(onde) && false });
+        }
+        for (const quem of equipe) quem.lider = quem.id === lider;
+        equipe.sort((a, b) => Number(b.lider) - Number(a.lider));
+        prontoEm = 0;
+        pintarHud();
+        anotar(`times: grupo montado (${equipe.map((q) => q.nome).join(', ')})`);
+        return { ok: true };
+      },
+      usar: async (nome) => {
+        anotar(`times: pedido para montar "${nome}"`);
+        if (onde) {
+          // A banca e' tao dura quanto o jogo: trocar a equipe inteira dentro de uma caçada poe
+          // bichos de Lv 1 no combate de quem se formou. Quem trocar fora da cidade, mata-os.
+          anotar(`times: montou DENTRO da caçada "${onde}" — e os novos morreram`);
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        const membros = TIMES[nome];
+        if (!membros) return { ok: false, erro: `não há time guardado chamado "${nome}"` };
+        // Trocar de time troca a equipe inteira, e e' isso que faz o laço recomeçar.
+        equipe.length = 0;
+        for (const [i, m] of membros.entries())
+          equipe.push({
+            ...m,
+            // Sem especie, a colecao do modo de grupo veria todos como a mesma — e o jogo recusa.
+            especie: m.especie || String(m.nome || '').toLowerCase(),
+            lider: i === 0,
+            morto: Boolean(onde),
+          });
+        prontoEm = 0;
+        pintarHud();
+        anotar(`times: "${nome}" montado`);
+        return { ok: true };
+      },
+    },
+    cacadas: {
+      nomes: () => GUARDADAS,
+      atual: () => ({ nome: onde, regiao: '', modo: '' }),
+      ir: async (nome) => {
+        anotar(`caçadas: pedido para ir a "${nome}"`);
+        await new Promise((r) => setTimeout(r, 300));
+        if (falhar) {
+          anotar(`caçadas: FALHOU (de propósito)`);
+          return { ok: false, erro: 'a equipe está desmaiada' };
+        }
+        onde = nome;
+        if (desarrumar) {
+          // Põe o de nível mais alto à frente, que é justamente quem já se formou.
+          const alto = [...equipe].sort((a, b) => b.nivel - a.nivel)[0];
+          for (const o of equipe) o.lider = o === alto;
+          equipe.sort((a, b) => Number(b.lider) - Number(a.lider));
+          prontoEm = 0;
+          pintarHud();
+          anotar(`caçadas: a caçada pôs ${alto.nome} na frente`);
+        }
+        anotar(`caçadas: chegou em "${nome}"`);
+        matarSeFraco();
+        return { ok: true };
+      },
+    },
+  };
+
+  // ------------------------------------------------- a ponte do mundo da página, de mentira
+
+  /**
+   * Responde como `escada-main.js`, incluindo a ordem medida: **a cura só pega depois de parar a
+   * caçada**. Se um dia alguém curar sem parar, a banca deixa o morto morto, que é o que o jogo faz.
+   */
+  addEventListener('lioncode:escada:pedido', (evento) => {
+    const eco = evento?.detail?.eco;
+    const acao = evento?.detail?.acao;
+    anotar(`ponte: pedido "${acao}"`);
+    setTimeout(() => {
+      if (acao === 'bichos') {
+        // Como `getCreatures` no jogo: a conta toda, com nivel, sem abrir janela nenhuma.
+        const bichos = [
+          ...equipe.map((q) => ({
+            id: q.id,
+            nome: q.nome,
+            especie: q.especie,
+            nivel: q.nivel,
+            onde: 'team',
+          })),
+          ...MOCHILA.map((b) => ({ ...b, onde: 'inventory' })),
+        ];
+        dispatchEvent(new CustomEvent('lioncode:escada:resposta', { detail: { eco, ok: true, bichos } }));
+        return;
+      }
+      if (acao !== 'cidade') {
+        dispatchEvent(
+          new CustomEvent('lioncode:escada:resposta', {
+            detail: { eco, erro: `não sei fazer "${acao}"` },
+          }),
+        );
+        return;
+      }
+      onde = '';
+      anotar('ponte: caçada parada, na cidade');
+      for (const p of equipe) p.morto = false;
+      pintarHud();
+      anotar('ponte: equipe curada');
+      dispatchEvent(new CustomEvent('lioncode:escada:resposta', { detail: { eco, ok: true } }));
+    }, 500);
+  });
+
+  // ------------------------------------------------------------------- os comandos
+
+  const comandos = document.querySelector('.comandos');
+  const comando = (rotulo, fn) => {
+    const b = document.createElement('button');
+    b.textContent = rotulo;
+    b.addEventListener('click', fn);
+    comandos.append(b);
+    return b;
+  };
+
+  comando('subir o líder +1', () => {
+    const l = equipe.find((p) => p.lider);
+    l.nivel += 1;
+    pintarHud();
+  });
+  comando('subir o líder +10', () => {
+    const l = equipe.find((p) => p.lider);
+    l.nivel += 10;
+    pintarHud();
+  });
+  // A pedra da XP: no jogo ela divide o que o lider ganha com o grupo todo. Aqui, um clique sobe
+  // um nivel em **todos** — e e' esse o motor do modo de grupo, como o "subir o lider" e' o do outro.
+  comando('a pedra divide a XP (+1 em todos)', () => {
+    for (const quem of equipe) quem.nivel += 1;
+    pintarHud();
+    anotar(`pedra: +1 em todos (${equipe.map((q) => `${q.nome} ${q.nivel}`).join(', ')})`);
+  });
+
+  comando('outra ferramenta pega a vez', () => {
+    dono = 'gym';
+    anotar('fila: o Ginásio pegou a vez');
+    filaMexeu();
+  });
+
+  comando('a outra solta a vez', () => {
+    dono = '';
+    esperaNaFila.length = 0;
+    anotar('fila: o Ginásio soltou a vez');
+    filaMexeu();
+  });
+
+  comando('matar o líder', () => {
+    const l = equipe.find((p) => p.lider);
+    l.morto = true;
+    pintarHud();
+    anotar(`jogo: ${l.nome} foi derrotado`);
+  });
+  comando('a caçada mata o fraco: não', (b) => {
+    matador = !matador;
+    b.target.textContent = `a caçada mata o fraco: ${matador ? 'sim' : 'não'}`;
+  });
+  comando('viajar sempre falha: não', (b) => {
+    falhar = !falhar;
+    b.target.textContent = `viajar sempre falha: ${falhar ? 'sim' : 'não'}`;
+  });
+  comando('caçada desarruma a ordem: não', (b) => {
+    desarrumar = !desarrumar;
+    b.target.textContent = `caçada desarruma a ordem: ${desarrumar ? 'sim' : 'não'}`;
+  });
+  comando('limpar o que está guardado', () => {
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith('lioncode:escada')) localStorage.removeItem(k);
+    location.reload();
+  });
+  comando('onde estou?', () => anotar(`estou em "${onde || '(cidade)'}"`));
+
+  pintarHud();
+
+  const script = document.createElement('script');
+  script.src = `../escada.js?t=${Date.now()}`;
+  document.head.append(script);
+</script>

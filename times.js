@@ -91,7 +91,6 @@ const planoDeTroca = (equipeAtual, chefeAtual, desejados) => {
 // nao faz nada.
 if (typeof module !== 'undefined') module.exports = { planoDeTroca };
 
-
 PPX.modulo(
   {
     id: 'times',
@@ -374,7 +373,9 @@ PPX.modulo(
       let janela = janelaPorTitulo(/Invent/i);
       // Janela ja' aberta nao se reabre: o botao da barra alterna, e clicar nele aqui a fecharia.
       if (!visivel(janela)) {
-        const botao = document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="inventory"]');
+        const botao = document.querySelector(
+          '.pokeidle-top-toolbar__btn[data-menu-id="inventory"]',
+        );
         if (!botao) return false;
         botao.click();
         // A janela aparece em ~33 ms; o conteudo dela demora mais, e e' esperado logo abaixo.
@@ -449,9 +450,7 @@ PPX.modulo(
      */
     const fecharMenus = async () => {
       for (let volta = 0; volta < 4; volta += 1) {
-        const gatilho = document.querySelector(
-          '.pokeidle-top-toolbar__btn[aria-expanded="true"]',
-        );
+        const gatilho = document.querySelector('.pokeidle-top-toolbar__btn[aria-expanded="true"]');
         if (!gatilho) return true;
         gatilho.click();
         await espera(250);
@@ -579,7 +578,8 @@ PPX.modulo(
       await fechar(inventario);
       if (cancelado) return { trocados, parado: true };
 
-      if (restou.length) throw new Error(`não consegui tirar ${restou.map(nomeDe).join(', ')} da equipe`);
+      if (restou.length)
+        throw new Error(`não consegui tirar ${restou.map(nomeDe).join(', ')} da equipe`);
       if (naoEntrou.length)
         throw new Error(
           `não consegui colocar ${naoEntrou.map(nomeDe).join(', ')} — pode ser espécie repetida ou limite de nível`,
@@ -1053,7 +1053,8 @@ PPX.modulo(
       }
       // Com nome dado, e' uma regravacao de um time que ja' existe — o `↻` da lista. Sem nome, e'
       // o Salvar de sempre, que le' a caixa de texto.
-      const nome = nomeForcado || (campo('[data-nome]').value || '').trim() || `Time ${times().length + 1}`;
+      const nome =
+        nomeForcado || (campo('[data-nome]').value || '').trim() || `Time ${times().length + 1}`;
       dizer('Lendo a ordem de batalha…');
       let ordem = [];
       if (await abrirEquipe()) {
@@ -1155,7 +1156,6 @@ PPX.modulo(
       gravar(CHAVE_COMPACTO, compacto);
       aplicarModo();
     });
-
 
     campo('[data-salvar]').addEventListener('click', () => void salvarAtual());
     campo('[data-parar]').addEventListener('click', () => {
@@ -1347,12 +1347,59 @@ PPX.modulo(
        */
       globalThis.PPX.times = {
         nomes: () => times().map((t) => t.nome),
+        /**
+         * O nome do time guardado que esta' montado agora, ou `''` se nenhum casar.
+         *
+         * Existe para a fila de times da escada, e e' o que lhe permite **nao** guardar contador
+         * nenhum: quem sabe em que ponto da fila se esta' e' a equipe que esta' na tela. Um contador
+         * em `localStorage` desalinhava-se no primeiro F5, na primeira troca a' mao e na primeira
+         * vez que a lista fosse reordenada.
+         *
+         * Le' o HUD, como todo o resto desta ferramenta — nao o inventario, pelo motivo que
+         * `doHud` explica. Compara por **id**, nao por nome: dois Pokemon da mesma especie sao duas
+         * criaturas diferentes, e e' a criatura que esta' no time. A ordem nao conta e o lider nao
+         * conta: quem troca o lider (a escada troca-o a cada aluno) continua com o mesmo time.
+         */
+        qual: () => {
+          const agora = doHud().map((p) => p.id);
+          if (!agora.length) return '';
+          const casa = (time) =>
+            time.membros.length === agora.length && time.membros.every((m) => agora.includes(m.id));
+          return times().find(casa)?.nome || '';
+        },
         usar: async (nome) => {
           const time = times().find((t) => t.nome === nome);
           if (!time) return { ok: false, erro: `não há time guardado chamado "${nome}"` };
           // Mostrar o painel: a troca demora 20-30 s e o usuario tem direito de ver o que corre.
           mostrarPainel(true);
           return usarTime(time);
+        },
+        /**
+         * Monta uma equipe que ninguem guardou: a composicao vem de quem chama.
+         *
+         * Existe para o modo de grupo da Escada, que troca um ou dois Pokemon de cada vez e nunca
+         * um time inteiro. **Nao e' um atalho para equipar um Pokemon so'**, e e' de proposito: a
+         * troca passa pelo mesmo `aplicar` de sempre, que sabe as tres regras do jogo medidas aqui
+         * — o ativo nao pode ser removido, o time trava em 6, especie nao repete — e que replaneja
+         * contra o HUD a cada passo. Uma segunda rotina de equipar divergiria desta no primeiro mes.
+         *
+         * `ordem: []` de proposito: a ordem de batalha mora no painel de equipe, abrir mais uma
+         * janela custa caro e quem troca dois Pokemon nao esta' a pedir uma formacao.
+         *
+         * O painel nao e' mostrado: quem chama tem painel proprio e conta o que esta' a fazer.
+         */
+        /** Quem esta' num time guardado, por id e em ordem. Para quem monta grupos. */
+        membrosDe: (nome) => (times().find((t) => t.nome === nome)?.membros || []).map((m) => m.id),
+        montar: async (membros, lider, nome = 'o grupo') => {
+          const lista = (membros || []).filter((m) => m?.id);
+          if (!lista.length) return { ok: false, erro: 'não me disseram quem põr na equipe' };
+          if (lista.length > 6) return { ok: false, erro: 'a equipe trava em 6' };
+          return usarTime({
+            nome,
+            membros: lista,
+            lider: lider || lista[0].id,
+            ordem: [],
+          });
         },
       };
     }

@@ -22,25 +22,159 @@ test('a janela e conferida por largura, nunca por isConnected', () => {
   // A lição que travou o jogo do usuário: uma janela fechada continua no documento, e clicar no ✕
   // dela deixa o jogo convencido de que há janela aberta — ele recusa tudo até um F5.
   assert.doesNotMatch(codigo, /isConnected/);
-  assert.match(codigo, /const visivel = \(el\) => Boolean\(el\) && el\.getBoundingClientRect\(\)\.width > 0/);
+  assert.match(
+    codigo,
+    /const visivel = \(el\) => Boolean\(el\) && el\.getBoundingClientRect\(\)\.width > 0/,
+  );
 });
 
 test('a regiao e escolhida antes de procurar a linha', () => {
   // A janela reabre na última região usada. Procurar "Caça de Ralts" numa aba de Kanto não acha
   // nada, e a ferramenta diria que a caçada sumiu.
   const bloco = codigo.slice(codigo.indexOf('const irPara'));
-  const regiao = bloco.indexOf('hunt-list-world-tab');
-  const linha = bloco.indexOf('hunt-list-row');
+  const regiao = bloco.indexOf('abasDa(jan())');
+  const linha = bloco.indexOf('await ate(() => jan() && linhaDe(');
   assert.ok(regiao >= 0 && regiao < linha, 'escolhe a região antes de procurar a linha');
+});
+
+test('a janela tambem nao e guardada, e o modal da ausencia sai da frente', () => {
+  // Medido no jogo em 11/10/2026, numa ida real: montar o time guardado da caçada levou **148 s**,
+  // o jogo deu o jogador por ausente e, ao voltar, pôs "A caçada continuou sem você" por cima de
+  // tudo. A ida ficou parada ali, calada, até alguém clicar à mão. Quanto mais demorada a troca de
+  // time, mais provável o modal — ele é o caso normal da ida com time, não um azar.
+  assert.match(codigo, /'\.hunt-absence-close',/);
+  // E depois dele o jogo recria o painel: um elemento guardado vira nó órfão, toda leitura devolve
+  // o que era e todo clique cai no vazio — sem nada reclamar.
+  const bloco = codigo.slice(codigo.indexOf('const irPara'));
+  assert.match(bloco, /const jan = \(\) => janelaPorTitulo\(\/CA\[ÇC\]ADAS\/i\);/);
+  assert.doesNotMatch(bloco, /const janela = /);
+  assert.doesNotMatch(bloco, /janela\.querySelectorAll/);
+  // Fechar só no início não basta: o modal nasce no meio, então a varredura fecha a cada volta.
+  const varre = bloco.slice(bloco.indexOf('for (const nome of nomes)'));
+  assert.match(varre.slice(0, 600), /await fecharBanners\(\);/);
+  // E a janela que se fecha a meio é dita, em vez de virar "não achei".
+  assert.match(codigo, /a janela das caçadas fechou-se a meio da busca/);
+});
+
+test('abrir a janela nao acredita no DOM sobre ela estar aberta', () => {
+  // **Duas medições, e a segunda desmente a primeira.** O botão da barra alterna, e clicando três
+  // vezes seguidas o DOM acompanha: 1482px, 0px, 1482px — largura zero é fechada, e `visivel` já
+  // sabe disso. Só que na mesma sessão, em 11/10/2026, o jogo apagou o painel inteiro do documento
+  // por conta própria, e o clique seguinte **não abriu nada**: do lado dele a janela continuava
+  // "aberta". O estado de aberto/fechado do jogo sobrevive ao painel deixar de existir, então
+  // perguntar ao DOM se há janela aberta responde a outra pergunta.
+  //
+  // Por isso a abertura não decide por uma leitura: tenta, espera, e tenta outra vez. Um clique
+  // perdido a fechar o que já estava fechado não custa nada — o que custava era desistir dizendo
+  // que o jogo não abre a janela, com o jogador a ver que abre.
+  const bloco = codigo.slice(codigo.indexOf('const abrirJanela = async () =>'));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /for \(let tentativa = 0; tentativa < 2; tentativa \+= 1\)/);
+  assert.match(corpo, /data-menu-id="hunts"\]'\)\?\.click\(\);/);
+  assert.match(
+    corpo,
+    /if \(await ate\(\(\) => janelaPorTitulo\(\/CA\[ÇC\]ADAS\/i\), 5000\)\) return true;/,
+  );
+  // E uma janela que já está visível não leva clique nenhum: aí o clique fecharia o que se queria
+  // aberto, que foi o defeito anterior deste mesmo sítio.
+  assert.ok(
+    corpo.indexOf('if (janelaPorTitulo(/CA[ÇC]ADAS/i)) return true;') < corpo.indexOf('.click();'),
+    'a janela visível é respeitada antes de qualquer clique',
+  );
+  // E a ida usa esta porta, em vez de clicar por conta própria.
+  const ida = codigo.slice(codigo.indexOf('const irPara = async (alvo, avisar)'));
+  assert.match(ida.slice(0, 600), /if \(!\(await abrirJanela\(\)\)\)/);
+  assert.doesNotMatch(ida.slice(0, 600), /data-menu-id="hunts"/);
+});
+
+test('chegar e estar na cacada CERTA, e nao numa cacada qualquer', () => {
+  // Medido numa ida real em 11/10/2026, saindo de "Ilha Lendária de Entei" para "Caça de Azurill":
+  // a espera era por "há alguma caçada a correr", e quem já estava caçando responde que sim antes
+  // de o clique fazer efeito. A ferramenta devolveu "o jogo não me levou" — e poucos segundos
+  // depois o jogador estava em Azurill. A viagem correu bem o tempo todo; o que mentiu foi a
+  // conferência.
+  assert.match(
+    codigo,
+    /clicarEEsperar\(botao, \(\) => cacadaAtiva\(\)\?\.nome === alvo\.nome, 20000\)/,
+  );
+  // E "estou nalguma caçada" deixou de existir: uma pergunta que nunca é a certa não fica no
+  // ficheiro à espera de ser reusada.
+  assert.doesNotMatch(codigo, /naCacada/);
+  // Vinte segundos e não dez: entre o clique e a caçada nova há um "PREPARANDO MAPA DE CAÇA…".
+  // E a falha diz onde se ficou, que é o que separa um diagnóstico de um "cliquei e nada".
+  assert.match(codigo, /continuei em "\$\{cacadaAtiva\(\)\.nome\}"/);
+});
+
+test('nenhum botao de aba e guardado, porque o jogo os troca', () => {
+  // Medido em 11/10/2026: depois de mudar de aba, uma leitura nova da barra mostra a aba certa com
+  // `is-active`, e o nó que se tinha na mão continua sem a classe — ele foi substituído. A versão
+  // anterior esperava pela classe no nó guardado, nunca a via, e por isso dava **dois cliques por
+  // aba** e seguia sem conferir nada. Limpar o filtro não troca os botões; só a troca de aba troca.
+  assert.match(codigo, /const abaAberta = \(janela\) => \{/);
+  assert.match(codigo, /await clicarEEsperar\(aba, \(\) => abaAberta\(janela\) === nome, 4000\)/);
+  assert.match(codigo, /return abaAberta\(janela\) === nome;/);
+  // E quem varre guarda **nomes**, não nós.
+  const bloco = codigo.slice(codigo.indexOf('const irPara'));
+  assert.match(bloco, /const nomes = abasDa\(jan\(\)\)\.map\(nomeDaAba\);/);
+  assert.match(bloco, /for \(const nome of nomes\) \{/);
+  assert.doesNotMatch(bloco, /for \(const aba of /);
+  assert.doesNotMatch(bloco, /aba\.className/);
+});
+
+test('o filtro e limpo antes de a lista ser lida', () => {
+  // Medido no jogo em 11/10/2026: com "zubat" na busca e a faixa de nível em 5–9, a lista fica com
+  // **zero** linhas — indistinguível de "a lista ainda não pintou". O filtro é do jogador, fica
+  // guardado entre sessões, e chega sujo a quem automatiza.
+  assert.match(codigo, /janela\.querySelector\('\.hunt-list-clear'\)/);
+  const bloco = codigo.slice(codigo.indexOf('const irPara'));
+  const limpa = bloco.indexOf('await limparFiltro(jan())');
+  // Contra `const abas`, e não contra a busca da linha: há um segundo `limparFiltro` depois da
+  // troca de aba, e medir contra a busca deixava o primeiro ser removido sem nada reclamar — a
+  // mutação que o apagava passava por este teste.
+  const abas = bloco.indexOf('const nomes = abasDa(jan())');
+  assert.ok(limpa >= 0 && limpa < abas, 'limpa o filtro antes de sequer olhar para as abas');
+  // E outra vez depois de trocar de aba: a troca põe a faixa de nível da aba nova (medido: 1–100
+  // em Kanto, 100–2000 nas Ilhas Lendárias), e ler sem limpar lê outra coisa.
+  assert.match(bloco, /if \(await abrirAba\(jan\(\), pista\)\) await limparFiltro\(jan\(\)\);/);
+  // O botão ausente não pode derrubar a ida: ele é uma comodidade, não um passo obrigatório.
+  assert.match(codigo, /if \(!visivel\(botao\)\) return false;/);
+});
+
+test('a regiao guardada e uma pista, e nao achando varre as abas', () => {
+  // Medido na conta real: as quatro caçadas guardadas tinham `regiao` igual a "legendary",
+  // "hoenn" e **dois UUID**. Só "hoenn" casa com o texto de uma aba; "legendary" não é "Ilhas
+  // Lendárias" e um UUID não é nada. Sem a varredura a ferramenta ficava na aba em que a janela
+  // calhasse de abrir e jurava que a caçada tinha sumido.
+  const bloco = codigo.slice(codigo.indexOf('const irPara'));
+  assert.match(bloco, /casa\(alvo\.regiao\)/);
+  assert.match(
+    bloco,
+    /linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome\), 4000\)/,
+  );
+  // A aba já aberta não é visitada de novo, e a varredura para assim que acha.
+  assert.match(bloco, /const varridas = \[abaAberta\(jan\(\)\)\];/);
+  assert.match(bloco, /if \(varridas\.includes\(nome\)\) continue;/);
+  assert.match(bloco, /if \(linha\) break;/);
+  // E o erro diz onde se procurou, em vez de culpar a região guardada.
+  assert.match(
+    codigo,
+    /não achei "\$\{alvo\.nome\}" em nenhuma aba \(\$\{varridas\.join\(', '\)\}\)/,
+  );
+  assert.match(codigo, /limpei o filtro e varri as abas, e a lista continuou vazia/);
 });
 
 test('espera a lista ser pintada, e a falha diz o que viu', () => {
   // A janela entra no DOM antes do conteúdo dela. É a quinta vez que esta lição aparece no pacote:
   // as abas da loja (~285 ms), a grade do inventário, os ginásios do mapa, o resumo do combate.
-  const bloco = codigo.slice(codigo.indexOf('const linha = await ate('));
-  assert.match(bloco.slice(0, 400), /hunt-list-row/);
-  assert.match(codigo, /a janela abriu mas a lista não chegou a aparecer/);
-  assert.match(codigo, /não achei "\$\{alvo\.nome\}" entre as \$\{vistas\}/);
+  assert.match(
+    codigo,
+    /let linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome\), 8000\);/,
+  );
+  assert.match(codigo, /querySelectorAll\('\.hunt-list-row'\)/);
+  // E a falha separa os dois casos tristes, que pedem coisas diferentes de quem lê: a lista existe
+  // e a caçada não está nela, ou a lista nunca apareceu.
+  assert.match(codigo, /não achei "\$\{alvo\.nome\}" em nenhuma aba/);
+  assert.match(codigo, /limpei o filtro e varri as abas, e a lista continuou vazia/);
 });
 
 test('o nome guardado e a chave de busca, e por isso nao se renomeia', () => {
@@ -68,13 +202,20 @@ test('a barra de cima leva clique cru, e o resto clique de gente', () => {
 
 test('a ferramenta esta no catalogo, no manifest e com atalho proprio', () => {
   const nucleo = ler('nucleo.js');
-  assert.match(nucleo, /\{ id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt\+W esconde · Alt\+E mostra' \}/);
+  assert.match(
+    nucleo,
+    /\{ id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt\+W esconde · Alt\+E mostra' \}/,
+  );
   // Era Alt+R até a 1.8.1: o próprio LionMultInstance usa Alt+R para restaurar a grade de views, e
   // ele escuta a tecla por fora da página. Esconder uma caçada rearranjava a janela inteira junto.
   // O guarda contra as teclas do aplicativo está em `atalho-tudo.test.mjs`.
   for (const tecla of ['KeyW', 'KeyE'])
     for (const outro of ['times.js', 'gym.js', 'layout-padrao.js'])
-      assert.doesNotMatch(ler(outro), new RegExp(`code === '${tecla}'`), `${tecla} livre em ${outro}`);
+      assert.doesNotMatch(
+        ler(outro),
+        new RegExp(`code === '${tecla}'`),
+        `${tecla} livre em ${outro}`,
+      );
   const manifest = JSON.parse(ler('manifest.json'));
   const idle = manifest.content_scripts.find((c) => c.js.includes('gym.js'));
   assert.ok(idle.js.includes('cacadas.js'), 'cacadas.js entra junto com as outras');
@@ -141,5 +282,52 @@ test('minimizado mostra a cacada atual e folheia as guardadas', () => {
   const bloco = codigo.slice(codigo.indexOf('const desenhar = () => {'));
   assert.match(bloco.slice(0, 300), /pintarResumo\(\);/);
   // E as setas param durante uma ida, como todo o resto.
-  assert.match(codigo, /for \(const b of painel\.querySelectorAll\('\.resumo button'\)\) b\.disabled = sim;/);
+  assert.match(
+    codigo,
+    /for \(const b of painel\.querySelectorAll\('\.resumo button'\)\) b\.disabled = sim;/,
+  );
+});
+
+test('a lista de cacadas rola, e o painel nao cresce sem fim', () => {
+  // Com uma dezena de caçadas guardadas o painel passava do fundo da tela e o fim da lista ficava
+  // fora do alcance — e rolar ali não resolve, porque quem rola é a página do jogo.
+  const bloco = codigo.slice(codigo.indexOf('#lioncode-cacadas ul {'));
+  const regra = bloco.slice(0, bloco.indexOf('}'));
+  assert.match(regra, /max-height: 46vh; overflow: auto;/);
+  // Quem rola é a lista, e não o corpo: o botão de guardar e a linha de estado ficam à vista.
+  const corpo = codigo.slice(codigo.indexOf('#lioncode-cacadas .corpo {'));
+  assert.doesNotMatch(corpo.slice(0, corpo.indexOf('}')), /overflow/);
+});
+
+test('a aba certa aprende-se, porque a regiao guardada quase nunca e uma pista', () => {
+  // Medido na conta real em 12/10/2026: das nove caçadas guardadas, SEIS tinham por `regiao` um
+  // UUID e uma tinha "legendary" — nenhuma casa com o texto de uma aba. A varredura, que era a
+  // excepção, era o caminho de quase toda ida: com a janela aberta em Johto, achar a Togetic levou
+  // 45 segundos, e quem olha para o painel nesse tempo diz que ele travou.
+  const bloco = codigo.slice(codigo.indexOf('const irPara ='));
+  assert.match(bloco, /const pista = casa\(alvo\.aba\) \|\| casa\(alvo\.regiao\);/);
+  // Aprende-se ao achar, e não ao entrar: entrar pode falhar, e o endereço continua certo.
+  const achou = bloco.indexOf('aprenderAba(alvo.nome, abaAberta(jan()));');
+  assert.ok(achou >= 0, 'guarda a aba onde achou');
+  assert.ok(achou < bloco.indexOf('clicarEEsperar(botao'), 'guarda antes de clicar em Caçar');
+  // E só isso: o resto do atalho é escolha do jogador.
+  const guarda = codigo.slice(codigo.indexOf('const aprenderAba ='));
+  assert.match(guarda.slice(0, 500), /todas\[onde\] = \{ \.\.\.todas\[onde\], aba \};/);
+  // A varredura fica, como rede: uma caçada pode mudar de aba, e o jogo não avisa.
+  assert.match(bloco, /for \(const nome of nomes\) \{/);
+});
+
+test('a ida diz como acabou, mesmo chamada de fora', () => {
+  // Pelo botão quem fala no fim é o `levar`. Pela porta não falava ninguém, e o painel ficava com
+  // o "Entrando em …" do meio do caminho para sempre — visto no jogo, com a ida já terminada bem.
+  const porta = codigo.slice(codigo.indexOf('ir: async (nome) => {'));
+  const corpo = porta.slice(0, porta.indexOf('\n        },'));
+  assert.match(corpo, /if \(r\.ok\) celebrar\(/);
+  assert.match(corpo, /else dizer\(`Parei: \$\{r\.erro\}`, true\);/);
+  assert.match(corpo, /return r;/, 'e quem chamou continua a receber o resultado');
+  // E a procura não fica calada oito segundos à espera da lista.
+  assert.match(
+    codigo,
+    /avisar\(`Procurando "\$\{alvo\.nome\}" em \$\{abaAberta\(jan\(\)\) \|\| 'a lista'\}…`\);/,
+  );
 });

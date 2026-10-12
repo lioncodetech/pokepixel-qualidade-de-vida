@@ -137,7 +137,21 @@ PPX.modulo(
       return !document.querySelector('.pokeidle-top-toolbar__btn[aria-expanded="true"]');
     };
 
-    const FECHOS = ['.pokeidle-promo-banner__close', '.expedition-alert-banner__dismiss'];
+    /**
+     * O que tapa a tela e tem de sair da frente antes de qualquer coisa.
+     *
+     * `.hunt-absence-close` e' o "A caçada continuou sem você", e ele entrou nesta lista medido:
+     * montar o time guardado de uma caçada levou **148 s** na conta real, o jogo considerou o
+     * jogador ausente, e ao voltar po-s esse modal por cima de tudo. A ida ficou parada ali, sem
+     * nada a dizer, ate' alguem clicar a' mao — e quanto mais demorada a troca de time, mais
+     * provavel e' que este modal apareça. Ou seja: ele e' o caso **normal** da ida com time, nao
+     * um azar.
+     */
+    const FECHOS = [
+      '.pokeidle-promo-banner__close',
+      '.expedition-alert-banner__dismiss',
+      '.hunt-absence-close',
+    ];
 
     const fecharBanners = async () => {
       let quantos = 0;
@@ -167,58 +181,202 @@ PPX.modulo(
       return { nome, regiao: regiao || '', modo: modo || '' };
     };
 
-    const naCacada = () => Boolean(cacadaAtiva());
+    const abasDa = (janela) => [...janela.querySelectorAll('.hunt-list-world-tab')];
+
+    const nomeDaAba = (aba) => (aba.textContent || '').trim();
+
+    const linhaDe = (janela, nome) =>
+      [...janela.querySelectorAll('.hunt-list-row')].find((l) =>
+        (l.innerText || '').includes(nome),
+      );
+
+    /**
+     * Limpa o filtro da lista de cacadas.
+     *
+     * Medido no jogo em 11/10/2026: com "zubat" na busca e a faixa de nivel em 5–9, a lista fica
+     * com **zero** linhas. Ate' aqui isso era indistinguivel de "a lista ainda nao pintou", e a
+     * ferramenta desistia a dizer a coisa errada — o filtro e' do jogador, fica guardado, e chega
+     * sujo a quem automatiza.
+     *
+     * O botao "Limpar" apaga a busca e devolve a faixa de nivel ao padrao **daquela aba** (medido:
+     * 1–100 em Kanto, 100–2000 nas Ilhas Lendarias). Ele **nao** mexe na aba aberta — por isso
+     * corre antes de escolher a aba, e outra vez depois de cada troca.
+     */
+    const limparFiltro = async (janela) => {
+      const botao = janela.querySelector('.hunt-list-clear');
+      if (!visivel(botao)) return false;
+      clicar(botao);
+      await espera(Math.round(sorteio(350, 800)));
+      return true;
+    };
+
+    /** O nome da aba aberta agora, relido do DOM. Nunca de um no' guardado: ver `abrirAba`. */
+    const abaAberta = (janela) => {
+      const aberta = abasDa(janela).find((b) => b.className.includes('is-active'));
+      return aberta ? nomeDaAba(aberta) : '';
+    };
+
+    /**
+     * Abre a aba `nome` e confere, relendo o DOM, que ela ficou aberta.
+     *
+     * **O JOGO TROCA OS BOTOES DA BARRA AO MUDAR DE ABA.** Medido em 11/10/2026: depois de clicar,
+     * uma leitura nova da barra mostra a aba certa com `is-active`, mas o no' que se tinha na mao
+     * continua sem a classe — ele foi substituido. Quem guarda o botao e pergunta a ele conclui
+     * "nao mudou" nas quatro abas, sempre, mesmo tendo mudado nas quatro.
+     *
+     * Isto nao e' teorico e nao e' novo: a versao anterior esperava por
+     * `aba.className.includes('is-active')` no no' guardado, nunca via a classe aparecer, e por
+     * isso o `clicarEEsperar` ainda dava um segundo clique de reserva — dois cliques por aba, e um
+     * resultado que ninguem conferia. Limpar o filtro, esse, **nao** troca os botoes; so' a troca
+     * de aba troca.
+     */
+    const abrirAba = async (janela, nome) => {
+      if (abaAberta(janela) === nome) return true;
+      const aba = abasDa(janela).find((b) => nomeDaAba(b) === nome);
+      if (!aba) return false;
+      await clicarEEsperar(aba, () => abaAberta(janela) === nome, 4000);
+      await espera(Math.round(sorteio(400, 900)));
+      return abaAberta(janela) === nome;
+    };
 
     /**
      * Leva ate' uma cacada guardada.
      *
      * A janela reabre na **ultima regiao usada** — a mesma licao que a loja rapida e o inventario
-     * ja' tinham ensinado neste pacote —, entao a regiao e' escolhida de proposito antes de
-     * procurar a linha. Sem isso, procurar "Caca de Ralts" numa aba de Kanto nao acha nada e a
-     * ferramenta diria que a cacada sumiu.
+     * ja' tinham ensinado neste pacote —, entao a aba e' escolhida de proposito antes de procurar
+     * a linha. Sem isso, procurar "Caca de Ralts" numa aba de Kanto nao acha nada.
+     *
+     * **A REGIAO GUARDADA E' UMA PISTA, NAO UM ENDERECO.** Ela vem de `.platform-hunt__zone-meta`,
+     * que diz o que o jogo quiser: medido na conta real, as quatro cacadas guardadas tinham
+     * `regiao` igual a "legendary", "hoenn" e **dois UUID**. So' "hoenn" casa com o texto de uma
+     * aba ("Hoenn"); "legendary" nao e' "Ilhas Lendarias", e um UUID nao e' nada. Nesses casos a
+     * ferramenta ficava na aba em que a janela calhasse de abrir e jurava que a cacada sumiu.
+     *
+     * Por isso: tenta-se a aba da pista, e **nao achando, varrem-se as outras**. O que nao esta'
+     * no DOM nao e' o que nao existe — a lista desenha so' a aba aberta.
      */
+    /**
+     * Abre a janela das caçadas — **sem acreditar no DOM sobre ela estar aberta.**
+     *
+     * MEDIDO NO JOGO EM 11/10/2026, com o botao da barra clicado tres vezes seguidas:
+     *
+     *   clique 1 -> CAÇADAS[largura=1482]   abre
+     *   clique 2 -> CAÇADAS[largura=0]      fecha, e o painel FICA no documento
+     *   clique 3 -> CAÇADAS[largura=1482]   abre
+     *
+     * O botao alterna, e ate' aqui o DOM acompanha: largura zero e' fechada, e `visivel` ja' sabe
+     * disso. **O problema e' outro, e foi medido na mesma sessao:** depois de aberta, o jogo
+     * apagou o painel inteiro do documento por conta propria — e o clique seguinte **nao abriu
+     * nada**, porque do lado dele a janela continuava "aberta". O estado de aberto/fechado do jogo
+     * sobrevive ao painel deixar de existir, entao perguntar ao DOM se ha' janela aberta responde
+     * a outra pergunta. E' a mesma armadilha ja' documentada em `visivel` para o ✕, ao contrario.
+     *
+     * A saida nao e' adivinhar melhor: e' nao depender da adivinhacao. Clica-se, espera-se, e se
+     * nao apareceu clica-se outra vez. Um clique perdido a fechar o que ja' estava fechado nao
+     * custa nada; o que custava era desistir a dizer que o jogo nao abre a janela.
+     *
+     * A barra de cima leva `click()` cru: a sequencia completa de ponteiro abre e fecha o menu na
+     * mesma rajada.
+     */
+    const abrirJanela = async () => {
+      for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+        if (janelaPorTitulo(/CA[ÇC]ADAS/i)) return true;
+        document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="hunts"]')?.click();
+        if (await ate(() => janelaPorTitulo(/CA[ÇC]ADAS/i), 5000)) return true;
+      }
+      return Boolean(janelaPorTitulo(/CA[ÇC]ADAS/i));
+    };
+
     const irPara = async (alvo, avisar) => {
       if (!alvo?.nome) return { ok: false, erro: 'esse atalho não tem nome de caçada' };
 
       await fecharBanners();
       await fecharMenus();
       avisar('Abrindo as caçadas…');
-      // A barra de cima leva `click()` cru: a sequencia completa de ponteiro abre e fecha o menu
-      // na mesma rajada.
-      document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="hunts"]')?.click();
-      const janela = await ate(() => janelaPorTitulo(/CA[ÇC]ADAS/i), 8000);
-      if (!janela) return { ok: false, erro: 'não consegui abrir a janela das caçadas' };
+      if (!(await abrirJanela()))
+        return { ok: false, erro: 'não consegui abrir a janela das caçadas' };
       await espera(Math.round(sorteio(700, 1400)));
+      /**
+       * A janela, **relida a cada pergunta**.
+       *
+       * Guardar o elemento numa variavel parecia obvio e e' uma armadilha: o jogo recria o painel
+       * — medido depois do modal "A caçada continuou sem você" — e o que fica na mao e' um no'
+       * orfao. Dali em diante toda leitura devolve o que era, todo clique cai no vazio e nada
+       * reclama: a ida fica a varrer abas que nao existem mais ate' o fim, e diz que nao achou.
+       */
+      const jan = () => janelaPorTitulo(/CA[ÇC]ADAS/i);
 
-      if (alvo.regiao) {
-        const aba = [...janela.querySelectorAll('.hunt-list-world-tab')].find(
-          (b) => (b.textContent || '').trim().toLowerCase() === alvo.regiao.toLowerCase(),
-        );
-        if (aba && !aba.className.includes('is-active')) {
-          avisar(`Indo para ${alvo.regiao}…`);
-          await clicarEEsperar(aba, () => aba.className.includes('is-active'), 4000);
-          await espera(Math.round(sorteio(600, 1300)));
-        }
+      const janelaFoi = () => !jan();
+
+      // O filtro vem antes da aba, porque ele vale para todas elas e nao e' mexido pela troca.
+      await limparFiltro(jan());
+
+      // So' os NOMES das abas, nunca os botoes: eles sao substituidos a cada troca. Ver `abrirAba`.
+      const nomes = abasDa(jan()).map(nomeDaAba);
+      const casa = (quem) =>
+        quem ? nomes.find((n) => n.toLowerCase() === String(quem).toLowerCase()) : null;
+      /**
+       * **A ABA APRENDIDA VALE MAIS DO QUE A REGIAO GUARDADA.**
+       *
+       * Medido na conta real em 12/10/2026: das nove caçadas guardadas, **seis** tinham por regiao
+       * um UUID e uma tinha "legendary" — nenhuma delas casa com o texto de uma aba. Ou seja, a
+       * pista quase nunca e' pista, e quase toda ida caia na varredura: com a janela aberta na aba
+       * errada, uma ida para a Togetic levou **45 segundos** so' a achar a linha.
+       *
+       * Varrer continua a ser a rede de seguranca, mas agora paga-se uma vez: achada a caçada,
+       * guarda-se **a aba onde ela estava**, e a ida seguinte vai direta. E' o endereço que o jogo
+       * nao da' a aprender-se de uma ida para a outra.
+       */
+      const pista = casa(alvo.aba) || casa(alvo.regiao);
+      if (pista && abaAberta(jan()) !== pista) {
+        avisar(`Indo para ${pista}…`);
+        // Trocar de aba muda a faixa de nivel para a daquela aba; limpar outra vez poe a lista no
+        // estado em que ela se le'.
+        if (await abrirAba(jan(), pista)) await limparFiltro(jan());
       }
 
       // A lista pinta depois da janela: procurar uma unica vez, no instante em que ela existe, nao
       // acha nada. E' a mesma licao dos ginasios e das abas da loja.
-      const linha = await ate(
-        () =>
-          [...janela.querySelectorAll('.hunt-list-row')].find((l) =>
-            (l.innerText || '').includes(alvo.nome),
-          ),
-        8000,
-      );
+      // E diz-se onde se esta' a procurar: sao oito segundos calados, e quem olha para "Abrindo as
+      // caçadas…" durante oito segundos conclui que a ferramenta travou. Ela nao travou.
+      avisar(`Procurando "${alvo.nome}" em ${abaAberta(jan()) || 'a lista'}…`);
+      let linha = await ate(() => jan() && linhaDe(jan(), alvo.nome), 8000);
+
+      // Nao estava na aba aberta. Varrem-se as outras — e isto e' o caminho normal, nao a excecao:
+      // uma `regiao` guardada que nao casa com nenhuma aba (um UUID, "legendary") chega aqui
+      // sempre. Quatro segundos por aba: a lista ja' esta' na memoria do jogo, o que demora e' o
+      // desenho.
+      const varridas = [abaAberta(jan())];
+      for (const nome of nomes) {
+        if (linha) break;
+        if (varridas.includes(nome)) continue;
+        // Um modal pode nascer no meio da varredura — e nasce, justamente depois de uma troca de
+        // time demorada. Fechar so' no inicio deixava a ida parada sem nada a dizer.
+        await fecharBanners();
+        if (janelaFoi())
+          return { ok: false, erro: 'a janela das caçadas fechou-se a meio da busca' };
+        avisar(`Procurando "${alvo.nome}" em ${nome}…`);
+        if (!(await abrirAba(jan(), nome))) continue;
+        await limparFiltro(jan());
+        varridas.push(nome);
+        linha = await ate(() => jan() && linhaDe(jan(), alvo.nome), 4000);
+      }
+
       if (!linha) {
-        const vistas = [...janela.querySelectorAll('.hunt-list-row')].length;
+        if (janelaFoi())
+          return { ok: false, erro: 'a janela das caçadas fechou-se antes de eu achar a caçada' };
+        const vistas = jan().querySelectorAll('.hunt-list-row').length;
         return {
           ok: false,
           erro: vistas
-            ? `não achei "${alvo.nome}" entre as ${vistas} caçadas de ${alvo.regiao || 'lá'}`
-            : 'a janela abriu mas a lista não chegou a aparecer',
+            ? `não achei "${alvo.nome}" em nenhuma aba (${varridas.join(', ')})`
+            : 'limpei o filtro e varri as abas, e a lista continuou vazia',
         };
       }
+
+      // Achada: a aba onde ela estava e' o endereço que faltava. Guarda-se agora, e nao no fim,
+      // porque a entrada na caçada pode falhar e o endereço continua certo.
+      aprenderAba(alvo.nome, abaAberta(jan()));
 
       const botao = [...linha.querySelectorAll('button')].find((b) =>
         /^Caçar$/i.test((b.textContent || '').trim()),
@@ -226,8 +384,21 @@ PPX.modulo(
       if (!botao) return { ok: false, erro: `a linha de "${alvo.nome}" não tem o botão Caçar` };
 
       avisar(`Entrando em "${alvo.nome}"…`);
-      if (!(await clicarEEsperar(botao, () => naCacada(), 10000)))
-        return { ok: false, erro: 'cliquei em Caçar e a caçada não começou' };
+      // **A CHEGADA E' A CAÇADA CERTA, NAO "UMA CAÇADA QUALQUER".** Ate' aqui esperava-se por
+      // "ha' alguma caçada a correr" — e quem ja' estava a caçar responde que sim antes de o
+      // clique sequer fazer efeito. Medido no jogo em 11/10/2026: a espera devolveu "cheguei" no
+      // primeiro instante, a ferramenta deu a ida por falhada ("o jogo não me levou") e, poucos
+      // segundos depois, o jogador estava em "Caça de Azurill". A viagem correu bem o tempo todo.
+      //
+      // Vinte segundos, e nao dez: entre o clique e a caçada nova ha' um "PREPARANDO MAPA DE
+      // CAÇA…" que leva o seu tempo, e desistir no meio dele seria mentir ao contrario.
+      if (!(await clicarEEsperar(botao, () => cacadaAtiva()?.nome === alvo.nome, 20000)))
+        return {
+          ok: false,
+          erro: `cliquei em Caçar e ${
+            cacadaAtiva() ? `continuei em "${cacadaAtiva().nome}"` : 'nenhuma caçada começou'
+          }`,
+        };
       return { ok: true };
     };
 
@@ -283,7 +454,11 @@ PPX.modulo(
       #lioncode-cacadas button.salvar:hover { background: #26344c; }
       #lioncode-cacadas button:disabled { opacity: .5; cursor: default; }
       #lioncode-cacadas ul { list-style: none; margin: 0; padding: 0;
-        display: flex; flex-direction: column; gap: 5px; }
+        display: flex; flex-direction: column; gap: 5px;
+        /* Quem guarda uma dezena de cacadas tinha o painel a passar da tela, e o fim da lista
+           ficava fora do alcance: nem rolagem, porque quem rola e' a pagina do jogo. Rola a
+           lista, e o botao de guardar e o estado ficam sempre a' vista. */
+        max-height: 46vh; overflow: auto; }
       #lioncode-cacadas li {
         display: flex; flex-direction: column; gap: 4px;
         background: #0d1219; border: 1px solid #202835; border-radius: 8px; padding: 5px 7px;
@@ -382,6 +557,24 @@ PPX.modulo(
     const guardadas = () => {
       const bruto = ler(CHAVE_LISTA, []);
       return Array.isArray(bruto) ? bruto.filter((c) => c && c.nome) : [];
+    };
+
+    /**
+     * Guarda a aba em que a caçada foi mesmo encontrada.
+     *
+     * E' a unica coisa que a ferramenta escreve sozinha no atalho, e escreve-a porque o jogo nao
+     * a da': a `regiao` que ele mostra e', na conta real, um UUID em seis dos nove atalhos. A aba
+     * descobre-se varrendo uma vez, e dai' em diante e' endereço. Ver a pista em `irPara`.
+     *
+     * Nao mexe em mais nada do atalho — nome, time e modo sao escolha do jogador.
+     */
+    const aprenderAba = (nome, aba) => {
+      if (!aba) return;
+      const todas = guardadas();
+      const onde = todas.findIndex((c) => c.nome === nome);
+      if (onde < 0 || todas[onde].aba === aba) return;
+      todas[onde] = { ...todas[onde], aba };
+      gravar(CHAVE_LISTA, todas);
     };
 
     let indo = false;
@@ -585,9 +778,7 @@ PPX.modulo(
       else todas.push({ ...agora, time: '' });
       gravar(CHAVE_LISTA, todas);
       desenhar();
-      celebrar(
-        onde >= 0 ? `"${agora.nome}" atualizada.` : `"${agora.nome}" guardada.`,
-      );
+      celebrar(onde >= 0 ? `"${agora.nome}" atualizada.` : `"${agora.nome}" guardada.`);
     };
 
     /**
@@ -751,6 +942,20 @@ PPX.modulo(
       globalThis.PPX.cacadas = {
         nomes: () => guardadas().map((c) => c.nome),
         atual: () => cacadaAtiva(),
+
+        /**
+         * Que time esta caçada monta ao chegar — `''` quando ela nao monta nenhum.
+         *
+         * NAO E' UM SEGUNDO DONO DO TIME: quem monta continua a ser esta ferramenta, aqui, e
+         * ninguem de fora escolhe time nenhum por ela. Isto so' **conta** o que esta' guardado, e
+         * existe por causa de uma coisa medida no jogo em 12/10/2026: a Escada trocou o time no fim
+         * da escada, reiniciou, viajou para o primeiro degrau — e a viagem remontou o time guardado
+         * na caçada, apagando o que ela acabara de montar. A escada ficou a dizer "o aluno não está
+         * na equipe desta caçada", que era verdade e nao dizia porque'.
+         *
+         * Com isto ela diz o porque' e o que fazer. Continua sem poder mudar nada disto.
+         */
+        timeDe: (nome) => guardadas().find((c) => c.nome === nome)?.time || '',
         ir: async (nome) => {
           const alvo = guardadas().find((c) => c.nome === nome);
           if (!alvo) return { ok: false, erro: `não há atalho guardado para "${nome}"` };
@@ -763,7 +968,13 @@ PPX.modulo(
             const time = await montarTime(alvo.time, (t) => dizer(t));
             if (!time.ok)
               return { ok: false, erro: `não montei o time "${alvo.time}": ${time.erro}` };
-            return await irPara(alvo, (t) => dizer(t));
+            // **E diz-se como acabou.** Pelo botao, quem fala no fim e' o `levar`; por aqui nao
+            // falava ninguem, e o painel ficava com o "Entrando em …" do meio do caminho para
+            // sempre. Visto no jogo em 12/10/2026: a ida acabou bem, e o painel parecia travado.
+            const r = await irPara(alvo, (t) => dizer(t));
+            if (r.ok) celebrar(`Caçando em "${alvo.nome}".`);
+            else dizer(`Parei: ${r.erro}`, true);
+            return r;
           } finally {
             travar(false);
             desenhar();

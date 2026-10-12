@@ -240,6 +240,7 @@
     { id: 'times', nome: 'Times', atalhos: 'Alt+T esconde · Alt+Y mostra' },
     { id: 'gym', nome: 'Ginásio do dia', atalhos: 'Alt+G esconde · Alt+H mostra' },
     { id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt+W esconde · Alt+E mostra' },
+    { id: 'escada', nome: 'Escada de caçadas', atalhos: 'Alt+U esconde · Alt+I mostra' },
     { id: 'raridades', nome: 'Raridades', atalhos: 'Alt+A esconde · Alt+S mostra' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));

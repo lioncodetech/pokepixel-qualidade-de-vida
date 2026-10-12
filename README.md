@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-As dez ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As onze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -18,6 +18,7 @@ janela em que você está.
 | Ginásio do dia | sai da caçada, troca o time, desafia o ginásio de hoje e volta | Alt+G esconde · Alt+H mostra |
 | Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+W esconde · Alt+E mostra |
 | Raridades | lista todos os seus Pokémon com o número da raridade, e filtra por faixa | Alt+A esconde · Alt+S mostra |
+| Escada de caçadas | troca de caçada sozinha quando o aluno sobe de nível, e leva o derrotado à enfermeira | Alt+U esconde · Alt+I mostra |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
@@ -808,6 +809,22 @@ reaparece. Ela é uma comodidade, não um relógio: quem acabou de entrar numa c
 no jogo. E repinta-se **só a marca**, nunca a lista — reconstruir as linhas fecharia um select de
 time aberto na cara de quem estivesse a escolher.
 
+### A aba certa aprende-se, porque o jogo não diz qual é
+
+A janela das caçadas reabre na última região usada, e a lista só desenha a aba aberta — procurar
+uma caçada de Kanto com a janela em Johto não acha nada. A região que o jogo guarda no atalho
+parecia resolver, e não resolve: medido na conta real em 12/10/2026, **seis dos nove atalhos tinham
+por região um UUID** e um tinha "legendary". Nenhum deles casa com o texto de uma aba.
+
+Então varria-se tudo, e a varredura — que estava escrita como excepção — era o caminho normal: com
+a janela em Johto, achar a "Togetic" levou **45 segundos**, o painel ficou a dizer "Abrindo as
+caçadas…" o tempo todo, e de fora isso é uma ferramenta travada.
+
+Agora paga-se uma vez: achada a caçada, guarda-se **a aba onde ela estava**, e a ida seguinte vai
+direta. A varredura fica como rede — uma caçada pode mudar de lugar, e o jogo também não avisa
+disso. É a única coisa que a ferramenta escreve sozinha no atalho; nome, time e modo continuam a
+ser escolha de quem joga.
+
 ### Um time por caçada
 
 Cada atalho pode levar um time junto. O select fica na própria linha, e a troca acontece
@@ -874,6 +891,430 @@ Na banca, com as três ligadas ao mesmo tempo, o percurso foi:
 
 A ferramenta também abre a porta `PPX.cacadas` (`nomes`, `atual`, `ir`), igual à do Times — quem
 chama recebe o resultado em vez de adivinhar lendo a tela.
+
+### A janela que o jogo acha que está aberta
+
+Medido em 11/10/2026, clicando três vezes seguidas no botão **Caçadas** da barra de cima:
+
+```
+clique 1 → CAÇADAS[largura=1482]   abre
+clique 2 → CAÇADAS[largura=0]      fecha, e o painel FICA no documento
+clique 3 → CAÇADAS[largura=1482]   abre
+```
+
+Até aqui o DOM acompanha — largura zero é janela fechada, e é por isso que *visível* aqui significa
+*tem largura*, nunca `isConnected`. Mas na mesma sessão aconteceu o que desmente isso: depois de
+aberta, **o jogo apagou o painel inteiro do documento sozinho**, e o clique seguinte não abriu nada
+— do lado dele a janela continuava "aberta".
+
+O estado de aberto/fechado do jogo **sobrevive ao painel deixar de existir**. Perguntar ao DOM se há
+janela aberta responde a outra pergunta, e foi isso que produziu *"não consegui abrir a janela das
+caçadas"* com o jogador vendo que ela abre num clique.
+
+A saída não é adivinhar melhor: é não depender da adivinhação. Clica-se, espera-se, e se não
+apareceu clica-se outra vez. Um clique perdido fechando o que já estava fechado não custa nada — o
+que custava era desistir. Uma janela que **já está visível** continua intocada, porque aí o clique
+fecharia justamente o que se queria aberto.
+
+### Três coisas que impediam a ida, e o que se faz com cada uma
+
+Medidas na conta real em 11/10/2026, todas com o mesmo sintoma — *"cliquei e não fui"*:
+
+**1. O filtro fica sujo, e lista vazia parecia lista lenta.** Com `zubat` na busca e a faixa de
+nível em 5–9, a lista fica com **zero** linhas. Até aqui isso era indistinguível de "a lista ainda
+não pintou", e a ferramenta desistia dizendo a coisa errada. O filtro é do jogador e fica guardado
+entre sessões, então chega sujo a quem automatiza. Agora o botão **Limpar** da própria janela é
+clicado antes de qualquer leitura — ele apaga a busca e devolve a faixa de nível ao padrão daquela
+aba (medido: 1–100 em Kanto, 100–2000 nas Ilhas Lendárias) e **não** mexe na aba aberta.
+
+**2. A região guardada é uma pista, não um endereço.** Ela vem de `.platform-hunt__zone-meta`, que
+diz o que o jogo quiser. Das quatro caçadas guardadas na conta real, as regiões eram `legendary`,
+`hoenn` e **dois UUID**. Só `hoenn` casa com o texto de uma aba; `legendary` não é "Ilhas
+Lendárias", e um UUID não é nada. Nesses casos a ferramenta ficava na aba em que a janela calhasse
+de abrir e jurava que a caçada tinha sumido. Agora ela tenta a aba da pista e, não achando,
+**varre as outras** — o que não está no DOM não é o que não existe: a lista desenha só a aba
+aberta.
+
+**3. O jogo troca os botões da barra de abas ao mudar de aba.** Depois de clicar, uma leitura nova
+da barra mostra a aba certa com `is-active` — e o nó que se tinha na mão continua sem a classe,
+porque foi substituído. A versão anterior esperava pela classe **no nó guardado**, nunca a via, e
+por isso o clique de reserva disparava: **dois cliques por aba**, e um resultado que ninguém
+conferia. Agora nenhum botão de aba é guardado: trabalha-se com os nomes e relê-se a barra a cada
+pergunta.
+
+**Mais duas, que só apareceram numa ida de verdade.** Montar o time guardado de uma caçada levou
+**148 s** na conta real. Nesse tempo o jogo deu o jogador por ausente e, ao voltar, pôs o modal
+**"A caçada continuou sem você"** por cima de tudo: a ida ficou parada ali, calada, até alguém
+clicar à mão. O botão dele (`.hunt-absence-close`) entrou na lista de coisas a fechar — e a
+varredura passou a fechar o que aparecer **a cada volta**, não só no início, porque este modal
+nasce no meio. Quanto mais demorada a troca de time, mais provável ele é: não é azar, é o caso
+normal da ida com time.
+
+E depois do modal o jogo **recria o painel**. Guardar o elemento da janela numa variável, que era o
+que se fazia, deixava um nó órfão: toda leitura devolvia o estado antigo, todo clique caía no
+vazio, e nada reclamava — a ida varria abas que já não existiam e terminava dizendo "não achei".
+Agora a janela é relida a cada pergunta, e uma janela que se fecha a meio é dita como tal em vez de
+virar um "não achei".
+
+**E mais duas, de uma ida completa.** A chegada era conferida por *"há alguma caçada a correr"* —
+e quem já estava caçando responde que sim antes de o clique fazer efeito. Medido: a viagem de
+"Caça de Azurill" para "Ilha Lendária de Entei" **chegou**, e a ferramenta deu-a por falhada ("o
+jogo não me levou"). Agora espera-se pela caçada **certa**, e por 20 s em vez de 10 — entre o
+clique e a caçada nova há um "PREPARANDO MAPA DE CAÇA…" que leva o seu tempo.
+
+O botão da barra de cima **alterna**: com a janela já aberta — e ela fica aberta depois de uma ida
+que não chegou a clicar em Caçar — o clique fechava-a, e a ida seguinte dizia "não consegui abrir
+a janela das caçadas" com a janela a ter estado aberta o tempo todo. Agora só se clica se ela não
+estiver aberta.
+
+A prova contra o jogo, partindo de propósito do pior caso — aba Kanto, busca `zubat` (1 linha) e
+região guardada `legendary`:
+
+```
+pista: nenhuma aba casa com "legendary"
+Johto: linhas=92 achou=false
+Ilhas Lendárias: linhas=19 achou=true
+varridas: Kanto, Johto, Ilhas Lendárias
+ACHOU em "Ilhas Lendárias", botão Caçar presente: true
+```
+
+## Escada de caçadas: trocar de caçada sozinha ao subir de nível
+
+Um **degrau** é uma frase: *"a partir do nível N, caçar aqui"*. Você põe quantos quiser, escolhendo
+entre as caçadas que já guardou nas **Caçadas** — e é ela quem viaja, com o time guardado daquela
+caçada. A escada só decide **quando**.
+
+O botão **Iniciar** liga o automático. Parada, ela não faz nada sozinha, mas o **▸** de cada degrau
+continua levando você até lá num clique.
+
+### O nível que importa é o do pokémon, não o do treinador
+
+São dois números diferentes no mesmo HUD, e confundi-los faria a escada disparar o degrau errado
+desde o primeiro minuto:
+
+- `.pokeidle-trainer-hud__level` diz *"Nível 260"* — é o **treinador**;
+- `.pokeidle-team-card__level` diz *"Nv.229"* — é **cada pokémon** da equipe.
+
+Quem sobe de degrau é o pokémon ativo, e quem é o ativo não se adivinha pela posição na fila: o
+jogo marca a caixa dele com `is-leader`. Ele até vai para a frente ao trocar, mas uma coisa que o
+jogo afirma vale mais do que a mesma coisa deduzida.
+
+### A espera de 3 segundos, e por que ela não é um erro
+
+Medido em 11/10/2026: depois de trocar o pokémon ativo, o jogo põe **3 segundos** de espera nas
+outras caixas e **recusa o clique calado** dentro dela — não troca, não avisa, e o clique *não fica
+em fila*. Passada a espera, continua tudo como estava.
+
+A ferramenta lê essa espera no `title` da própria caixa (*"Aguarde 3s para trocar de Pokémon
+ativo"*) e simplesmente espera. Tratar isso como falha custaria dois minutos de castigo por três
+segundos de espera.
+
+E depois do clique ela **confere o HUD**, pelo `data-creature-id`, em vez de confiar no clique: a
+troca levou 602 ms a aparecer, então não se cronometra — espreita-se de 150 em 150 ms até 3 s.
+
+### Formatura: trocar de aluno quando ele chega ao teto
+
+O campo **formar em Lv** é opcional. Com ele preenchido, quem passa do teto sai da fila e o próximo
+da equipe que ainda não se formou vai para a frente.
+
+Duas regras que não são óbvias:
+
+- **a escada nunca desce com o mesmo aluno.** Um degrau abaixo do que já foi cumprido com aquele
+  pokémon não é progresso — é um nível mal lido ou um degrau editado, e o castigo seria arrastar um
+  Lv 19 para a caçada dos Lv 1;
+- **trocar de aluno recomeça a contagem.** O degrau cumprido era do anterior, e quase sempre um
+  degrau alto: guardá-lo mandaria o bicho de Lv 1 caçar onde o de Lv 229 caçava.
+
+### Primeiro a viagem, só depois a troca — e o que custou descobrir isso
+
+Ela fazia ao contrário, e o defeito foi medido no jogo logado em **11/10/2026**, com o rastro
+inteiro guardado:
+
+```
+21:22:39  Scyther chegou ao teto. Pondo Ralts Lv 1 na frente.   → o líder já é Ralts
+21:22:39  Lv 1: indo para "Magikarp".                            ← a viagem só começa agora
+21:22:44  líder: Jolteon Nv.152                                  ← o Ralts morreu em 5 s
+21:26:11  Cliquei em Ralts no HUD e quem continua à frente é Jolteon.
+```
+
+O Ralts Lv 1 foi posto à frente **dentro** da caçada de Nidorina, que era a caçada do pokémon que
+acabara de se formar. Morreu em cinco segundos. O jogo promoveu outro da equipe, e a escada ficou em
+laço a tentar pôr um morto à frente — ninguém subiu de nível nunca mais.
+
+**A raiz não era a ordem: era o degrau ser escolhido pelo nível de quem está à frente.** Assim, a
+escada era obrigada a trocar primeiro para só depois saber para onde ir. Com o degrau escolhido pelo
+nível do **aluno**, sabe-se o destino antes de trocar — e a ordem certa cai por si:
+
+1. **a enfermeira**, se o aluno estiver derrotado;
+2. **a viagem**, com quem está à frente agora, que é o aluno anterior, forte;
+3. **a troca**, já na caçada certa.
+
+Uma consequência que parece restrição e é proteção: **ela não troca de aluno fora da caçada do
+degrau**. Se você saiu de lá à mão, pôr o aluno fraco à frente onde você está é exatamente a morte
+que esta ordem veio evitar — então ela diz isso e espera.
+
+E a caixa lida antes da viagem não serve depois dela: a caçada guardada monta a equipe inteira e o
+jogo redesenha o HUD, deixando o elemento antigo órfão. A escada lê a equipe outra vez, pelo
+`data-creature-id`, antes de clicar.
+
+### A enfermeira: o derrotado vai à cidade e volta
+
+O jogo marca o derrotado com `is-fainted` e `title="Pokémon derrotado"`, e **recusa o clique nele tão
+calado** como recusa dentro da espera de 3 s. Um morto não sobe de nível e não vai para a frente —
+sem este passo a escada fica em laço, que foi o que ela fez.
+
+A cura são três ações **em ordem**, e a ordem foi medida: chamando `healTeam()` sozinho, com a caçada
+a correr, o servidor curou — devolveu HP cheio em todos — **e o HUD continuou dizendo "Pokémon
+derrotado"**. A caçada guarda o próprio estado de combate. Então:
+
+**parar a caçada → ir para a cidade → curar**, que é o caminho que você faria a pé até a enfermeira.
+
+Ela nunca usa `reviveHunt`, que também ressuscita e **gasta um item seu**. A enfermeira é de graça;
+gastar o seu inventário para poupar um passo seria decidir por você uma coisa que é sua.
+
+Duas coisas que a banca pegou e que o código sozinho não mostrava:
+
+- **depois de curar, ela volta.** A cura tira da caçada, então o degrau cumprido deixa de valer — a
+  regra que respeita você ("saiu de lá, fique à vontade") não sabe distinguir você saindo da própria
+  escada saindo para curar. Quem saiu foi ela, então é ela que volta;
+- **o gatilho dela não bastava.** A peneira do observador era só o nível do líder, e a morte não muda
+  nível nenhum — pior, um morto não ganha experiência, então o nível **nunca** mudaria. A assinatura
+  agora leva quem está na equipe, em que nível, quem está à frente e quem está morto. Pontos de vida
+  continuam de fora, que é o que a mantém barata.
+
+### Toda espera marca a própria volta
+
+Esta é a armadilha mais cara desta ferramenta, e apareceu três vezes em lugares diferentes antes de
+ser entendida como uma só.
+
+O gatilho da escada é o **HUD mudar** — não um relógio, de propósito, porque com a aba em segundo
+plano um `setInterval` cai para uma volta por minuto. Isso basta enquanto quem mexe no HUD é o jogo.
+Mas quando ela própria age, e o resultado é *esperar*, não sobra ninguém para acordá-la:
+
+- **o jogo pediu 3 segundos entre trocas.** Medido no jogo logado: ela guardou a espera, devolveu o
+  controle ao observador, e congelou **dois minutos e meio** em *"Tento de novo em 3s"* — parada na
+  mesma caçada, com o mesmo líder, nada no HUD muda: nível igual, ninguém morre, ninguém troca;
+- **depois de curar**, na cidade parada, idem;
+- **depois do castigo** de uma viagem falhada, idem.
+
+Guardar uma espera sem marcar a volta é prometer voltar e não voltar. Toda espera passa por um lugar
+só, que agenda **uma** batida para quando ela acabar. Continua não sendo um relógio: é terminar o
+próprio movimento, uma vez, por conta de uma ação que foi dela.
+
+E a frase da espera é neutra — *"Esperando 3s para tentar de novo"* — porque por ela passam tanto o
+castigo de uma viagem que falhou quanto um pedido de espera do jogo. Chamar o segundo de "tentativa
+que não deu" seria mentir; o motivo verdadeiro já foi dito no momento em que aconteceu.
+
+### Dois modos de upar, e só um corre
+
+A listbox no topo do painel escolhe **como** ela upa:
+
+| Modo | O que faz |
+| --- | --- |
+| escada de caçadas | um aluno de cada vez à frente, viajando os degraus (o resto desta secção) |
+| grupo até o nível X | um Pokémon fixo com a pedra da XP e os outros a rodar, até um nível |
+| grupo subindo de N em N | o mesmo, mas o alvo sobe sozinho a cada rodada fechada |
+
+É uma escolha e não três interruptores de propósito: os três mexem na **mesma** equipe e na **mesma**
+caçada, e dois a correr tirariam da equipe o que o outro acabou de pôr.
+
+### O modo de grupo: um fixo, cinco a rodar
+
+A pedra da XP divide o que o Pokémon ativo ganha com o resto da equipe. Então o jeito de upar muitos
+Pokémon é ter **um fixo** — quem tem a pedra, e que nunca sai — e trocar os outros cinco à medida que
+cada um chega onde você quer.
+
+Você escolhe: a **caçada** onde se fica, o **fixo**, os **times** de onde vêm os que rodam, e o nível
+em que eles saem do grupo. Quem chega ao alvo sai; quem ainda falta entra no lugar. Quando não falta
+mais ninguém, ficam todos fora e ela **continua a farmar** com o fixo — o que você pediu: "ficam fora
+do grupo até eu olhar e mudar".
+
+No modo `subindo de N em N`, o alvo de cada rodada é **mínimo + N × rodada**. Com o seu exemplo —
+três Pokémon em Lv 10, 13 e 16, mínimo 20 e 5 níveis — as rodadas são **25, 30, 35**: o mínimo é o
+chão de onde se parte, não o primeiro alvo. Fechada a rodada (todos no alvo), ela sobe o alvo e
+recomeça do primeiro.
+
+#### Três regras que vêm do jogo, não desta ferramenta
+
+- **A equipe trava em 6**, então é o fixo mais cinco.
+- **Espécie não repete na equipe**: o jogo recusa calado. Um rodante da espécie de alguém que já está
+  no grupo é **saltado** em vez de tentado, e o painel diz quantos saltou. Ele volta à vez quando o
+  outro da mesma espécie sair.
+- **O Pokémon ativo não pode ser removido**, por isso o fixo vai como líder: pôr a liderança em quem
+  roda daria uma troca travada a cada volta.
+
+#### Quem fica no grupo é uma composição, não uma fila de entradas e saídas
+
+A cada batida calcula-se do zero quem deveria estar no grupo — o fixo mais os que ainda não chegaram
+ao alvo — e a troca é a **diferença** entre isso e o HUD. Pensar em "quem entra no lugar de quem"
+exigiria guardar de quem era cada vaga, e um F5 no meio deixaria essa conta a mentir.
+
+Pelo mesmo motivo **não há lista de "já upados"**: o nível do Pokémon já diz. Uma lista ao lado seria
+uma segunda verdade sobre a mesma coisa, pronta a divergir. O único estado que este modo guarda é
+quantas rodadas de `N em N` já fecharam, e é porque isso o jogo não tem.
+
+Quem mexe na equipe é a ferramenta **Times**, pela porta `montar`: ela conhece as três regras acima,
+replaneja contra o HUD a cada passo e já custou um Pokémon de time para ficar assim. Uma segunda
+rotina de equipar, pela API da página, divergiria dela no primeiro mês.
+
+O nível de quem **não** está na equipe vem da API do jogo (`getCreatures`), pela ponte — 223 Pokémon
+na conta real, sem abrir janela nenhuma. Abrir janelas é a operação que mais falha no jogo.
+
+#### Pausar não é parar, e este modo é sempre o último da fila
+
+**Parar** esquece o que ia fazer. **Pausar** guarda o lugar: a rodada, a fila e o degrau cumprido
+ficam, a caçada continua a correr, e ela é que não mexe em nada. São dois botões porque são duas
+coisas, e quem pausa a noite inteira não quer perder a rodada por clicar no errado.
+
+E o modo de grupo **cede a vez a qualquer outra ferramenta**: se alguém está com a vez — ou só à
+espera dela — ele para e diz por quem espera. Não entra na fila, porque entrar na fila é disputar: o
+Ginásio do dia ficaria atrás de uma troca de equipe de 30 segundos que ninguém tinha pressa de fazer.
+
+Quem cede tem de ser acordado, e isso custou um defeito em cada ferramenta desta família: o gatilho
+normal é o HUD mudar, e quem está a ceder não mexe no HUD — a ferramenta à frente pode nem mexer. Por
+isso ele ouve `PPX.vez.aoMudar` e volta quando a fila esvazia.
+
+### O fim da escada: quatro saídas, e todas são sua escolha
+
+Quando a equipe inteira passa do teto, não há mais aluno. O que acontece aí é você quem decide:
+
+| Escolha | O que ela faz |
+| --- | --- |
+| ficar onde estiver | nada — e diz que é isso que está escolhido |
+| ir para uma caçada | viaja para a caçada escolhida e para ali |
+| trocar de time | volta para a cidade, monta lá o time seguinte da fila e recomeça a escada com quem chegou |
+| voltar para a cidade | para a caçada, volta para a cidade e cura a equipe |
+
+Trocar de time esquece o aluno e o degrau cumprido de propósito: a equipe é outra, e guardá-los
+mandaria um bicho novo de Lv 1 para a caçada do Lv 200 que saiu.
+
+#### A fila de times: formado o 1, passa ao 2, depois ao 3
+
+Pedido em **12/10/2026**. O fim "trocar de time" não recebe um time, recebe uma **fila**: a escada
+sobe o time 1 até o teto, troca para o 2 e sobe esse, troca para o 3 e sobe esse. Quando o último se
+forma, ela **pergunta o que fazer** (ver abaixo) — voltar ao primeiro por conta própria seria
+desfazer o trabalho todo e montar time atrás de time para sempre, a 20-30 segundos cada.
+
+Um time da fila que já esteja todo acima do teto não para nada: ela monta-o, vê que não há aluno e
+passa ao seguinte, gastando os 20-30 segundos da montagem.
+
+A fila é uma lista no painel, com a forma dos degraus (`+ time`, `×`), e a linha do time que vem a
+seguir fica marcada.
+
+**A fila não guarda contador de onde está, e essa é a decisão que importa.** Quem diz em que ponto
+da fila se está é a equipe que está na tela: os **Times** sabem dizer qual dos times guardados está
+montado, comparando por id — nem a ordem nem o líder contam, porque a escada troca o líder a cada
+aluno. Um índice em `localStorage` teria três formas de mentir — o F5, uma troca de time à mão, uma
+reordenação da lista — e cada uma delas mandaria montar o time errado por cima do trabalho feito.
+
+Sem essa porta ela **não adivinha**: diz que não sabe em que ponto da fila está e não monta. Montar
+"o primeiro" por desencargo seria o laço de ontem com mais passos — monta o 1, ele já está formado,
+chega-se ao fim, monta o 1 de novo.
+
+E depois de montar, ela **confere**: se a equipe na tela não for o time pedido, para e diz. Os Times
+já relataram sucesso com um time que não montaram, e aqui isso custaria mais do que um aviso errado
+— a fila anda pelo time montado, então um time meio montado faria a escada perder o lugar na fila.
+
+#### Acabada a fila, ela pergunta — e espera
+
+Pedido em **12/10/2026**, e é o **único estado desta ferramenta em que ela espera por você**. Acabada
+a fila, aparece uma listbox no painel com as quatro respostas que ela sabe cumprir:
+
+| Resposta | O que ela faz |
+| --- | --- |
+| fico aqui, caçando | nada — a equipe formada continua onde está |
+| volto para a cidade e curo | para a caçada, volta para a cidade, passa pela enfermeira |
+| recomeço a fila de times | monta o primeiro time da fila, e a escada segue daí sozinha |
+| paro a escada | desliga-se; o ▸ de cada degrau continua a funcionar |
+
+Por que não é uma quinta opção do "formados:"? Porque as outras quatro escolhem-se **antes**, de
+noite, para ela cumprir sozinha. Esta faz-se **depois**, com a equipe toda formada na tela — e nessa
+hora o que você quer depende do que aconteceu.
+
+Três detalhes que custaram uma medição cada:
+
+- **Quem age é a resposta, não a batida.** Uma acção guardada para "a próxima batida" seria refeita
+  em cada batida, e voltar para a cidade três vezes não é voltar uma vez.
+- **A pergunta é nova a cada volta.** Guardar a resposta de ontem seria responder por você.
+- **O painel minimizado abre-se, uma vez.** Minimizado, o corpo do painel está escondido e a
+  listbox com ele: ficaria a dizer "escolha aí embaixo" sem haver embaixo. Abre uma vez por
+  pergunta; minimize outra vez à vontade, que ela não insiste.
+
+#### Um "já cumpri" de ontem não trava a fila
+
+`formados` existe para ela não arrastar a equipe de volta ao fim que já cumpriu. Na fila de times
+isso **travava tudo**, e de duas maneiras, as duas medidas na banca em 12/10/2026: um "já cumpri" de
+uma volta anterior deixava a fila a repetir "falta montar o 1º de 3" sem nunca montar; e montar um
+time do meio da fila marcava o fim como cumprido, então um time que já chegasse todo ao teto parava
+a escada em vez de a fazer passar ao seguinte.
+
+Na fila, quem diz se há trabalho por fazer é a própria fila, pelo time que está montado. Quem para é
+o fim dela, e mais nada.
+
+#### A troca de time passa pela cidade, e só lá troca
+
+Pedido em **12/10/2026**, e é a mesma correção da ordem invertida da batida, um degrau acima. O time
+que entra é de bichos novos — Lv 1, nos dois times que ele montou para medir isto. Trocar a equipe
+inteira **dentro** da caçada é pôr três recém-nascidos no lugar de quem acabou de se formar, no
+mesmo combate, contra o bicho que o formado estava a aguentar. Nenhuma espera resolve isso.
+
+Então a ordem é: **para a caçada → cidade → monta o time → volta ao degrau do time novo.** A ida
+ainda passa pela enfermeira, que é a mesma ponte da cura, e a escada marca a própria volta — parada
+na cidade, com o HUD já mexido por ela mesma, mais nada a acordaria.
+
+A vez da fila é pedida uma vez para o movimento inteiro, não uma por ação: a montagem demora 20-30
+segundos, e os **Times** são uma peça que conta com quem chama já ter a vez. As três saídas que
+agem no jogo passam pela fila; a quarta não age.
+
+#### "Trocar de time" exige caçadas sem time guardado
+
+As duas regras se atropelam, e o atropelo dava laço. Medido no seu jogo em **12/10/2026**:
+
+```
+fim da escada → monta o time "novo" (com o Dratini Lv 1)   ✓
+a escada reinicia e viaja para o degrau de Lv 1
+a viagem monta o time guardado NA CAÇADA, que era "Hunt"   ← apaga o "novo"
+ninguém tem nível para subir → a escada chega ao fim de novo → monta "novo" outra vez
+```
+
+Para sempre, a 20-30 segundos de montagem e uma viagem por volta.
+
+A regra atropelada já estava escrita e continua valendo: **`PPX.cacadas.ir` monta sempre o time
+guardado na própria caçada**. A saída não é a escada passar a mandar no time também — seriam duas
+donas da mesma coisa, divergindo no primeiro dia. A saída é recusar **antes** de agir, porque dá
+para saber antes:
+
+> O time "novo" não ia durar: a caçada "Magikarp" do degrau de Lv 1 monta o time "Hunt" ao chegar e
+> apagaria o meu. Tire o time dessa caçada nas Caçadas.
+
+Então, para usar **trocar de time**, as caçadas dos degraus têm de estar guardadas **sem time** —
+é o seletor de time de cada linha no painel das Caçadas, na opção vazia. Aí a viagem não mexe na
+equipe, e o time que a escada montou no fim sobrevive ao recomeço.
+
+### Ela diz o que está esperando
+
+Automação parada e calada é indistinguível de automação quebrada. Cada impasse tem uma frase com o
+sujeito, o que falta e como sair dele — *"Tyranitar está no Lv 229, abaixo do primeiro degrau (Lv
+250). Ponha um degrau em Lv 1 para começar já."*
+
+A caixa **deixar trocar de caçada** separa duas perguntas que parecem uma: a escada pode estar
+correndo — formando o aluno, dizendo em que degrau ele deveria estar — sem ter licença para
+arrastar você para outro mapa.
+
+### O que ela não faz
+
+No pacote do Poke Idle World cada degrau escolhe um time. Aqui não: `PPX.cacadas.ir` monta sempre o
+time guardado **na própria caçada**. Duas formas de escolher o time para a mesma viagem seriam duas
+verdades divergindo no primeiro dia — quem quer time diferente por degrau guarda a caçada duas
+vezes.
+
+**Nada do que ela lê vem do mundo da página.** `PokeIdle.TeamLeaderCooldown.remainingMs()` seria o
+caminho óbvio para a espera, e custaria uma ponte. O `title` da caixa traz a mesma informação deste
+lado, e o mesmo vale para o morto.
+
+Há **uma** ponte (`escada-main.js`, em `world: MAIN`), e é só para a enfermeira: curar não é uma
+leitura, são três ações do jogo em ordem, e nenhuma delas tem botão que a ferramenta consiga achar e
+clicar com honestidade. Ela só **age**, e só nisso.
 
 ## Agenda: toda semana, todo mês, ou um dia por mês
 
