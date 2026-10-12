@@ -227,7 +227,12 @@
     pintarCacada();
   }
 
-  const script = document.createElement('script');
-  script.src = `../cacadas.js?t=${Date.now()}`;
-  document.head.append(script);
+  // O `config.js` entra antes: e' ele que poe o Exportar/Importar no painel, e sem ele a banca
+  // nao exercita a parte que mais pode partir — a importação de um arquivo de outra conta.
+  for (const nome of ['config', 'cacadas']) {
+    const script = document.createElement('script');
+    script.src = `../${nome}.js?t=${Date.now()}`;
+    script.async = false;
+    document.head.append(script);
+  }
 </script>

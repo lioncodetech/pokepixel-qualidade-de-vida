@@ -586,6 +586,7 @@ PPX.modulo(
           <button type="button" data-atualizar title="Reler a lista de caçadas do jogo">↻</button>
         </div>
         <ul data-lista></ul>
+        <div data-config></div>
         <p class="estado" data-estado></p>
       </div>`;
 
@@ -1295,6 +1296,57 @@ PPX.modulo(
     };
 
     campo('[data-salvar]').addEventListener('click', guardarAtual);
+
+    /**
+     * Levar os atalhos para outra janela, num arquivo.
+     *
+     * Pedido do dono em 12/10/2026, e e' o caso de uso de sempre: cada janela do LionMultInstance
+     * tem o seu `localStorage`, e guardar nove atalhos a mao numa conta nova e' nove viagens pelo
+     * mapa — era exactamente para isso que a lista do jogo tinha sido lida.
+     *
+     * **O catalogo nao viaja.** Ele e' o retrato que a extensao tirou do jogo, nao escolha de
+     * ninguem, e cada janela relê o seu em 24 horas (ou no ↻). E' a mesma regra que a Arena e a
+     * venda seguem: entra o que a pessoa escolheu, fica o que a extensao descobriu.
+     *
+     * **A expedição tambem nao.** Ela e' uma entrada fixa, que `guardadas()` poe de volta sozinha
+     * em qualquer conta; exporta-la seria mandar uma copia que envelhece.
+     *
+     * O que viaja de cada atalho e' o que `paraGuardar` deixa viver: nome, nivel, aba, regiao,
+     * modo, tipo e time. O **nome do time** pode nao existir na conta que recebe — e nao se apaga
+     * por isso: a lista ja' marca "(não guardado)" ao lado, e apagar em silencio seria pior do que
+     * mostrar o que falta.
+     */
+    const botoesConfig = globalThis.PPX?.config?.montarBotoes({
+      id: 'cacadas',
+      nome: 'Caçadas',
+      coletar: () => ({ atalhos: guardadas().filter((c) => !c.fixa).map(paraGuardar) }),
+      aplicar: (dados) => {
+        if (indo) throw new Error('não dá para importar no meio de uma ida — espere ela acabar');
+        const vindos = Array.isArray(dados?.atalhos) ? dados.atalhos : null;
+        if (!vindos) throw new Error('esse arquivo não tem lista de caçadas');
+        // Cem e' muito mais do que os nove da conta real e muito menos do que um arquivo montado
+        // para encher o armazenamento. Um nome vazio nao e' um atalho, e um nome repetido so'
+        // existiria para confundir quem olha a lista.
+        const vistos = new Set();
+        const limpos = [];
+        for (const c of vindos.slice(0, 100)) {
+          const nome = String(c?.nome ?? '').trim().slice(0, 80);
+          if (!nome || vistos.has(nome) || c?.tipo === 'expedicao') continue;
+          vistos.add(nome);
+          limpos.push(paraGuardar({ ...c, nome }));
+        }
+        if (!limpos.length) throw new Error('não achei nenhuma caçada guardada nesse arquivo');
+        gravarLista(limpos);
+        desenhar();
+        // Quem anuncia e' o `config.js`, com o que esta funcao devolver: dizer aqui **e** la' daria
+        // duas frases para a mesma importação, e a segunda apagaria a primeira.
+        return limpos.length === 1
+          ? 'Importei 1 caçada guardada.'
+          : `Importei ${limpos.length} caçadas guardadas.`;
+      },
+      avisar: dizer,
+    });
+    if (botoesConfig) campo('[data-config]').append(botoesConfig.el);
 
     // ------------------------------------------------------------ posicao e menu
 

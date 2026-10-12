@@ -1688,7 +1688,7 @@ meio da recarga.
 
 ## Levar a configuração para outra conta
 
-A venda e a compra ganharam **Exportar** e **Importar** no rodapé. O mesmo jogo corre em várias
+A venda, a compra, a Arena e as **Caçadas** têm **Exportar** e **Importar** no rodapé. O mesmo jogo corre em várias
 janelas do LionMultInstance, uma por conta, e cada janela tem o seu próprio armazenamento: deixar a
 venda do jeito certo numa conta e repetir a mão em todas as outras — raridades, teto, lote, horários,
 dias — é trabalho que ninguém quer fazer duas vezes, e é trabalho em que se erra. Exporta de uma,
@@ -1710,6 +1710,21 @@ mostrar números que não são dela. A próxima atualização da mochila os refa
 E fica o carimbo da última rodada. Ele é estado do relógio, não configuração: importá-lo faria a
 janela de hoje passar por já usada, e a rodada de hoje simplesmente não aconteceria — sem erro
 nenhum na tela.
+
+### Nas Caçadas, o que viaja são os atalhos
+
+Viaja a lista que você guardou: nome, nível, aba, região, modo, tipo e o time de cada atalho. Era
+exatamente para isto que a lista inteira do jogo passou a ser lida — guardar nove atalhos à mão numa
+conta nova são nove viagens pelo mapa.
+
+Fica o **catálogo**: ele é o retrato que a extensão tirou do jogo, não escolha de ninguém, e cada
+janela relê o seu sozinha a cada 24 horas (ou no `↻`). Fica também a **Expedição**, que é uma
+entrada fixa e aparece sozinha em qualquer conta — exportá-la seria mandar uma cópia que envelhece.
+
+Na entrada, um atalho sem nome não é atalho, um nome repetido não vira dois e o arquivo para nas
+cem primeiras caçadas. O **nome do time** que não existir na conta que recebe **não é apagado**: a
+lista já o marca com *(não guardado)* ao lado, e apagar em silêncio seria pior do que mostrar o que
+falta.
 
 ### As duas recusas
 

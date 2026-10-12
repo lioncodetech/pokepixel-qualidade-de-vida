@@ -606,3 +606,26 @@ test('a primeira leitura falha, e a lista insiste sozinha', () => {
   // E o sucesso zera a conta, para o proximo arranque ter as tres tentativas outra vez.
   assert.match(codigo, /insistencias = 0;/);
 });
+
+test('os atalhos viajam num arquivo, e o catalogo fica', () => {
+  // Pedido do dono em 12/10/2026: cada janela do LionMultInstance tem o seu `localStorage`, e
+  // guardar nove atalhos à mão numa conta nova é nove viagens pelo mapa.
+  const botoes = codigo.slice(codigo.indexOf('const botoesConfig = globalThis.PPX?.config'));
+  const corpo = botoes.slice(0, botoes.indexOf('\n    });'));
+  assert.match(corpo, /id: 'cacadas'/);
+  // O que a extensão descobriu sozinha não se exporta como se fosse escolha do dono: o catálogo
+  // é um retrato do jogo, relido a cada 24 h, e a expedição é fixa — `guardadas()` repõe-na.
+  assert.ok(!/CHAVE_CATALOGO|catalogo\(\)/.test(corpo), 'o catálogo não entra no arquivo');
+  assert.match(corpo, /guardadas\(\)\.filter\(\(c\) => !c\.fixa\)\.map\(paraGuardar\)/);
+  // E o que entra passa por `paraGuardar`, campo a campo: um JSON montado à mão não vira chave
+  // arbitrária no armazenamento do jogo.
+  assert.match(corpo, /limpos\.push\(paraGuardar\(\{ \.\.\.c, nome \}\)\)/);
+  assert.match(corpo, /c\?\.tipo === 'expedicao'/, 'a expedição importada é descartada');
+  assert.match(corpo, /vistos\.has\(nome\)/, 'nome repetido não vira dois atalhos');
+  assert.match(corpo, /vindos\.slice\(0, 100\)/, 'um arquivo não enche o armazenamento');
+  // Importar no meio de uma ida trocaria o chão debaixo dela.
+  assert.match(corpo, /if \(indo\) throw new Error\(/);
+  // Quem anuncia é o config.js, com o que `aplicar` devolve: dizer aqui também daria duas frases.
+  assert.ok(!/dizer\(/.test(corpo.slice(corpo.indexOf('gravarLista(limpos)'))), 'não anuncia duas vezes');
+  assert.match(codigo, /<div data-config><\/div>/, 'há lugar para os botões no painel');
+});
