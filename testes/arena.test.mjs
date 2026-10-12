@@ -268,3 +268,33 @@ test('os comandos nao se escondem junto com o corpo', () => {
   assert.equal(marcacao.split('data-agora').length - 1, 1, 'há um só "Atacar agora"');
   assert.match(codigo, /#lioncode-arena\.minimizado \.botoes \{/);
 });
+
+test('a janela tem quatro abas, e so uma delas tem rivais', () => {
+  // Medido no jogo em 13/10/2026: `nav.pvp-defense-nav` com "opponents", "defense", "history" e
+  // "ranking". Fora da "opponents" não existe um único `.pvp-defense-opponent` no DOM — e o jogo
+  // deixa a janela no "Histórico" assim que uma batalha acaba.
+  const ir = codigo.slice(codigo.indexOf('const irParaAtacar = async ()'));
+  const corpo = ir.slice(0, ir.indexOf('\n    };'));
+  // A aba escolhe-se pelo endereço, e não pelo texto: "Atacar" é também o botão que gasta a
+  // tentativa na tela de preparação.
+  assert.match(corpo, /\[data-defense-view="opponents"\]/);
+  assert.ok(!/textContent/.test(corpo), 'a aba não se escolhe pelo texto do botão');
+  // Sem barra de abas (preparação, batalha) não há o que trocar: responde-se o que o chamador quer.
+  assert.match(corpo, /if \(!aba\) return naLista\(\);/);
+  assert.match(corpo, /if \(!aba\.classList\.contains\('is-active'\)\) aba\.click\(\);/);
+
+  // Aberta noutra aba é aberta: um segundo clique no menu de cima fecharia a janela que já estava lá.
+  const abrir = codigo.slice(codigo.indexOf('const abrirJanela = async ()'));
+  const corpoAbrir = abrir.slice(0, abrir.indexOf('\n    };'));
+  assert.match(corpoAbrir, /if \(janela\(\)\) return irParaAtacar\(\);/);
+  assert.match(corpoAbrir, /const abriu = await ate\(janela, ESPERA_JANELA\);/);
+  assert.match(corpoAbrir, /return Boolean\(abriu\) && \(await irParaAtacar\(\)\);/);
+
+  // E volta-se à aba de atacar logo depois do resultado, não só no ataque seguinte.
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  const corpoAtacar = atacar.slice(0, atacar.indexOf('\n    };'));
+  assert.ok(
+    corpoAtacar.indexOf('.pvp-result__button') < corpoAtacar.indexOf('await irParaAtacar()'),
+    'primeiro fecha-se o resultado, depois volta-se à aba',
+  );
+});

@@ -259,6 +259,15 @@
   });
 
   let janela = null;
+  // A aba aberta da janela. Medido no jogo em 13/10/2026: sao quatro, e fora da "opponents" nao
+  // existe um unico `.pvp-defense-opponent` no DOM. E' a armadilha que esta banca passou a ter.
+  let aba = 'opponents';
+  const ABAS = [
+    ['opponents', 'Atacar'],
+    ['defense', 'Defesa e formações'],
+    ['history', 'Histórico'],
+    ['ranking', 'Ranking'],
+  ];
 
   const fecharJanela = () => {
     janela?.remove();
@@ -274,8 +283,38 @@
     desenharLista();
   };
 
+  /** A barra de abas, igual em todas as telas da janela. */
+  const barraDeAbas = () =>
+    `<nav class="pvp-defense-nav">${ABAS.map(
+      ([v, texto]) =>
+        `<button type="button" role="tab" data-defense-view="${v}"` +
+        `${v === aba ? ' class="is-active" aria-selected="true"' : ''}>${texto}</button>`,
+    ).join('')}</nav>`;
+
+  const ligarAbas = () => {
+    for (const b of janela.querySelectorAll('.pvp-defense-nav button'))
+      b.addEventListener('click', () => {
+        aba = b.dataset.defenseView;
+        anotar(`jogo: abri a aba "${b.textContent}"`);
+        desenharLista();
+      });
+  };
+
   const desenharLista = () => {
     if (!janela) return;
+    // Fora da aba "Atacar" nao ha' rival nenhum no DOM — e' isto que o jogo faz.
+    if (aba !== 'opponents') {
+      janela.innerHTML = `
+        <div class="pokeidle-panel__titlebar"><div class="pokeidle-panel__close">✕</div></div>
+        <header><div><h3>${
+          aba === 'history' ? 'Quem atacou sua defesa' : 'Outra aba da arena'
+        }</h3></div></header>
+        ${barraDeAbas()}
+        <p class="vazio">(nada aqui para a ferramenta)</p>`;
+      janela.querySelector('.pokeidle-panel__close').addEventListener('pointerdown', fecharJanela);
+      ligarAbas();
+      return;
+    }
     janela.innerHTML = `
       <div class="pokeidle-panel__titlebar"><div class="pokeidle-panel__close">✕</div></div>
       <header>
@@ -288,9 +327,11 @@
           }</button>
         </div>
       </header>
+      ${barraDeAbas()}
       <div class="lista"></div>`;
     janela.querySelector('.pokeidle-panel__close').addEventListener('pointerdown', fecharJanela);
     janela.querySelector('.pvp-defense-refresh').addEventListener('click', atualizar);
+    ligarAbas();
     const lista = janela.querySelector('.lista');
     for (const o of estado.oponentes) {
       const cartao = document.createElement('div');
@@ -402,6 +443,11 @@
     fim.querySelector('button').addEventListener('click', () => fim.remove());
     document.body.append(fim);
     anotar(`jogo: ${ganhou ? 'vitória' : 'derrota'} (pontos agora: ${estado.pontos})`);
+    // **A armadilha.** Acabada a batalha, o jogo deixa a janela no "Histórico". Quem nao voltar
+    // para a aba "Atacar" nao acha mais rival nenhum.
+    aba = 'history';
+    desenharLista();
+    anotar('jogo: a janela ficou na aba "Histórico"');
   };
 
   // ------------------------------------------------------------------ o PPX de mentira

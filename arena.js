@@ -6,6 +6,9 @@
 //   abrir            .pokeidle-top-toolbar__btn[data-menu-id="events"]
 //                 -> .pokeidle-top-toolbar__dropdown-btn[data-menu-id="arena-defense"]
 //                 -> .defense-window, cabeçalho "Escolha uma defesa para atacar"
+//   as abas          nav.pvp-defense-nav com quatro botoes [data-defense-view]:
+//                    "opponents" (Atacar), "defense", "history" (Histórico), "ranking"
+//                    a aberta tem .is-active; fora da "opponents" NAO HA' .pvp-defense-opponent
 //   atualizar        button.pokeidle-btn.pvp-defense-refresh  ("Atualizar grátis · 3/3")
 //   um rival         .pvp-defense-opponent  com [data-defense-avatar="<trainer_id>"] dentro
 //                    ja' atacado hoje: .is-used, e o botao fica "Atacado" e `disabled`
@@ -237,6 +240,28 @@ PPX.modulo(
     };
 
     /**
+     * Poe a janela na aba **Atacar**, que e' a unica onde ha' rivais.
+     *
+     * **ISTO E' A CORRECCAO DE UM DEFEITO, medido no jogo em 13/10/2026.** A janela tem quatro
+     * abas, e o jogo deixa-a no "Histórico" depois de uma batalha. Fora da aba "Atacar" a lista de
+     * rivais nao existe no DOM — zero `.pvp-defense-opponent` —, entao a ferramenta chegava ao
+     * ataque seguinte sem achar o cartao de ninguem, e ate' o `abrirJanela` dava a janela por
+     * fechada com ela aberta na frente.
+     *
+     * A aba escolhe-se pelo endereço dela (`data-defense-view`) e nao pelo texto do botao: "Atacar"
+     * e' tambem o que diz o botao que gasta a tentativa na tela de preparação.
+     *
+     * Noutras telas — preparação, batalha — nao ha' barra de abas, e entao nao ha' nada a fazer:
+     * devolve-se se os rivais estao a' vista, que e' a pergunta que o chamador faz.
+     */
+    const irParaAtacar = async () => {
+      const aba = janela()?.querySelector('.pvp-defense-nav [data-defense-view="opponents"]');
+      if (!aba) return naLista();
+      if (!aba.classList.contains('is-active')) aba.click();
+      return Boolean(await ate(naLista, ESPERA_JANELA));
+    };
+
+    /**
      * Abre a janela da arena, se ela nao estiver aberta.
      *
      * Dois cliques, como o dono faria: o grupo "Eventos" da barra de cima e, dentro dele, a "Arena
@@ -244,7 +269,9 @@ PPX.modulo(
      * de dois cliques seguidos a torcer.
      */
     const abrirJanela = async () => {
-      if (naLista()) return true;
+      // Aberta noutra aba conta como aberta: o que falta e' trocar de aba, nao mexer no menu de
+      // cima — um segundo clique ali fecharia a janela que ja' estava la'.
+      if (janela()) return irParaAtacar();
       const grupo = document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="events"]');
       if (!grupo) return false;
       grupo.click();
@@ -257,9 +284,10 @@ PPX.modulo(
       );
       if (!item) return false;
       item.click();
-      const abriu = await ate(naLista, ESPERA_JANELA);
+      // Espera-se a janela, e nao a lista: ela pode abrir no "Histórico" de onde ficou.
+      const abriu = await ate(janela, ESPERA_JANELA);
       fecharMenu();
-      return Boolean(abriu);
+      return Boolean(abriu) && (await irParaAtacar());
     };
 
     const fecharJanela = () => {
@@ -400,6 +428,10 @@ PPX.modulo(
       const voltar = fim.querySelector('.pvp-result__button');
       if (voltar) voltar.click();
       await ate(() => !document.querySelector('.pvp-result'), 10000);
+      // **O jogo larga-a no "Histórico".** Medido em 13/10/2026: fechada a batalha, a aba aberta e'
+      // a do historico, e o ataque seguinte procuraria os rivais numa tela que nao os tem. Volta-se
+      // ja', e nao so' no proximo ataque, para o painel nao ficar a dever uma tela ao dono.
+      await irParaAtacar();
 
       return {
         ganhou,

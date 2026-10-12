@@ -1890,6 +1890,17 @@ gastaria a tentativa na mesma, e você pediu aquele time por algum motivo.
 escuta o `pointerdown`. Nos botões o `click()` basta, e é o que se usa; só ali vai a sequência
 inteira que um rato faz.
 
+**A janela tem quatro abas, e só uma delas tem rivais.** `Atacar`, `Defesa e formações`,
+`Histórico` e `Ranking` — e fora da primeira não existe um único cartão de rival no DOM. O jogo
+larga a janela no **Histórico** assim que uma batalha acaba, então a ferramenta voltava ao ataque
+seguinte a procurar cartões numa tela que não os tem; e, com a janela já aberta ali, o `abrirJanela`
+dava-a por fechada e mexia no menu de cima, que a fecharia de verdade.
+
+Agora ela garante a aba `Atacar` **logo depois de cada resultado** e **antes de cada ataque**, e a
+aba escolhe-se pelo endereço (`data-defense-view="opponents"`), não pelo texto do botão: "Atacar" é
+também o que diz o botão que gasta a tentativa na tela de preparação. Nas telas sem barra de abas —
+preparação e batalha — não há o que trocar, e medir isso foi o que mostrou que ali não há `nav`.
+
 **A tela de preparação reconhece-se pelo que tem, e não pelo que diz.** A primeira versão
 confirmava a abertura procurando *"Ataque contra <nome>"* no `h3` do cabeçalho — e falhava sempre,
 com a tela aberta à frente dela: no jogo aquele título é um `h2`, e o `h3` daquele cabeçalho é o
