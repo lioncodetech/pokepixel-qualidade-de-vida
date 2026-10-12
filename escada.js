@@ -88,6 +88,29 @@ PPX.modulo(
      * a pergunta no ar merece o aviso outra vez.
      */
     let jaAbri = false;
+    let pedindoBichos = false;
+
+    /**
+     * Le' a coleção quando o painel precisa dela e ela ainda nao foi lida.
+     *
+     * A batida le'-a sozinha, mas **so' quando esta' ligada** — e configurar os turnos faz-se com
+     * a escada parada, que e' justamente quando os nomes dos Pokemon dos times nao estariam la'.
+     * Custa uma chamada a' API do jogo, sem abrir janela nenhuma.
+     */
+    const garantirColecao = () => {
+      if (colecao.size || pedindoBichos || cfg.modo === 'escada') return;
+      pedindoBichos = true;
+      void pedirBichos()
+        .then((lido) => {
+          if (lido?.bichos?.length) {
+            colecao = new Map(lido.bichos.map((b) => [b.id, b]));
+            desenhar(false);
+          }
+        })
+        .finally(() => {
+          pedindoBichos = false;
+        });
+    };
     let proximoEco = 0;
 
     const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -142,12 +165,33 @@ PPX.modulo(
       pausada: false,
       /** O modo de grupo. Ver `conferirGrupo`. */
       grupo: {
-        /** A caçada onde se fica. Uma, e sem time guardado nela — a viagem apagaria o grupo. */
-        cacada: '',
-        /** O Pokemon que nunca sai: e' quem tem a pedra, e e' tambem o lider. */
-        fixo: '',
-        /** De onde vem quem roda, em ordem. Times guardados, como no fim da escada. */
-        times: [],
+        /**
+         * Onde o grupo fica, **em ordem de preferencia**.
+         *
+         * Nao e' um rodizio: fica-se na primeira da lista onde se consiga estar. A expedição
+         * entra aqui no topo — enquanto ela durar, e' ali que se fica; acabada, cai-se para a
+         * caçada seguinte, que esta ferramenta ja' consegue abrir sozinha.
+         *
+         * Nenhuma delas pode ter time guardado: a viagem apagaria o grupo.
+         */
+        cacadas: [],
+        /**
+         * Os turnos, em ordem: `{ fixo, times }`.
+         *
+         * Cada pedra da XP so' divide com Pokemon da sua regiao — hoje ha' a de Kanto e a de
+         * Johto —, e **so' o Pokemon ativo divide** (medido pelo dono em 12/10/2026). Logo, duas
+         * pedras na equipe ao mesmo tempo seriam um slot gasto a' toa: elas tem de se revezar.
+         *
+         * Um turno e' uma pedra com os seus times. Corre o primeiro que ainda tenha alguem abaixo
+         * do alvo; acabados todos, a rodada fecha e tudo recomeça do primeiro.
+         *
+         * A regiao nao e' conferida aqui, e de proposito: quem diz qual Pokemon pertence a qual
+         * pedra e' o dono, ao por os times certos no turno certo. Adivinhar a regiao pelo
+         * `species_id` seria apostar que o jogo numera como a Pokedex nacional, e isso nao foi
+         * medido. Enganar-se custa XP perdida, nao estraga nada: quem nao e' da regiao apenas nao
+         * recebe.
+         */
+        turnos: [],
         /** O nivel em que um rodante sai do grupo, no modo `'grupo'`. */
         alvo: null,
         /** O chao da primeira rodada, no modo `'passo'`. */
@@ -208,6 +252,22 @@ PPX.modulo(
     if (!cfg.modo) cfg.modo = 'escada';
     cfg.grupo = { ...PADRAO.grupo, ...(cfg.grupo || {}) };
     if (!Array.isArray(cfg.grupo.times)) cfg.grupo.times = [];
+    // A caçada unica do modo de grupo virou uma lista em ordem. Mesma licao da fila de times: o
+    // PADRAO ja' da' uma lista vazia, entao quem decide e' a lista estar vazia **e** haver uma
+    // caçada velha.
+    if (!Array.isArray(cfg.grupo.cacadas)) cfg.grupo.cacadas = [];
+    if (!cfg.grupo.cacadas.length && cfg.grupo.cacada) cfg.grupo.cacadas = [cfg.grupo.cacada];
+    delete cfg.grupo.cacada;
+    // O fixo e os times soltos viram o primeiro turno. `.filter(Boolean)` e nao `semVazios`: a
+    // migracao corre antes de o modulo ter funcoes.
+    if (!Array.isArray(cfg.grupo.turnos)) cfg.grupo.turnos = [];
+    if (
+      !cfg.grupo.turnos.length &&
+      (cfg.grupo.fixo || (cfg.grupo.times || []).filter(Boolean).length)
+    )
+      cfg.grupo.turnos = [{ fixo: cfg.grupo.fixo || '', times: cfg.grupo.times || [] }];
+    delete cfg.grupo.fixo;
+    delete cfg.grupo.times;
     if (!cfg.times.length && cfg.time) cfg.times = [cfg.time];
     delete cfg.time;
     const gravar = () => gravarChave(CHAVE, cfg);
@@ -303,6 +363,28 @@ PPX.modulo(
      * o `ir` e' dela. Por isso "nao sei onde estou" e "nao posso viajar" sao, aqui, o mesmo estado.
      */
     const local = () => globalThis.PPX?.cacadas?.atual?.()?.nome || '';
+
+    const cacadasDoGrupo = () => semVazios(cfg.grupo.cacadas);
+
+    /**
+     * Onde o grupo esta' e, se nao estiver em lugar nenhum da lista, para onde deve ir.
+     *
+     * **A ordem e' preferencia para quando se esta' fora, e nao uma ordem a cumprir.** Estar na
+     * terceira da lista basta: subir dai' para a primeira a cada batida seria trocar de caçada
+     * por nada, e cada troca custa a viagem e o risco de um modal pelo meio.
+     *
+     * E ha' lugares em que **ela nao consegue entrar** — a expedição e' um: nao esta' na lista da
+     * janela das caçadas, entra-se por um menu, e so' existe enquanto dura. Por isso ela nao e'
+     * um destino; e' um lugar que, estando-se la', se respeita. Acabada a expedição, o jogo
+     * devolve o jogador a' caçada anterior e a lista segue para a primeira que da' para abrir.
+     */
+    const lugarDoGrupo = () => {
+      const porta = globalThis.PPX?.cacadas;
+      const lista = cacadasDoGrupo();
+      const aqui = lista.find((nome) => porta?.estouEm?.(nome));
+      if (aqui) return { aqui, ir: null };
+      return { aqui: null, ir: lista.find((nome) => porta?.daParaIr?.(nome) !== false) || null };
+    };
 
     /**
      * O primeiro degrau cuja caçada monta um time ao chegar, ou `null`.
@@ -468,12 +550,18 @@ PPX.modulo(
 
     /** O que falta escolher para o modo de grupo poder correr, ou `''`. */
     const faltaNoGrupo = () => {
-      const g = cfg.grupo;
       if (!globalThis.PPX?.times?.montar)
         return 'A ferramenta Times está desligada — é ela que mexe na equipe.';
-      if (!g.cacada) return 'Escolha a caçada onde o grupo fica.';
-      if (!g.fixo) return 'Escolha o Pokémon fixo: é quem tem a pedra, e ele nunca sai do grupo.';
-      if (!semVazios(g.times).length) return 'Escolha os times de onde vêm os que rodam.';
+      if (!cacadasDoGrupo().length)
+        return 'Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência.';
+      const turnos = turnosDoGrupo();
+      if (!turnos.length) return 'Escolha quem tem a pedra e os times que ela vai upar.';
+      for (const [i, turno] of turnos.entries()) {
+        const qual = turnos.length > 1 ? `Pedra ${i + 1}: e` : 'E';
+        if (!turno.fixo) return `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
+        if (!semVazios(turno.times).length)
+          return `${qual}scolha os times de onde vêm os que rodam.`;
+      }
       if (!alvoDoGrupo())
         return cfg.modo === 'grupo'
           ? 'Diga o nível em que eles saem do grupo.'
@@ -517,25 +605,57 @@ PPX.modulo(
      * 3. **Quem chegou ao alvo nao volta**, porque o nivel dele passou do alvo — nao por haver uma
      *    lista de formados.
      */
-    const montagemDoGrupo = (todos, alvo) => {
-      const g = cfg.grupo;
-      const membrosDe = globalThis.PPX?.times?.membrosDe;
-      if (typeof membrosDe !== 'function')
-        return { erro: 'os Times não sabem dizer quem está em cada time — recarregue a extensão' };
-      const fixo = todos.get(g.fixo);
-      if (!fixo)
-        return { erro: 'o Pokémon fixo não está mais na coleção — escolha outro na lista do fixo' };
+    const turnosDoGrupo = () => (cfg.grupo.turnos || []).filter(Boolean);
 
-      const vistos = new Set([fixo.id]);
+    /** Quem um turno upa: os membros dos times dele, menos o proprio fixo e sem repetidos. */
+    const piscinaDoTurno = (turno, todos) => {
+      const membrosDe = globalThis.PPX?.times?.membrosDe;
+      if (typeof membrosDe !== 'function') return [];
+      const vistos = new Set([turno.fixo]);
       const piscina = [];
-      for (const nome of semVazios(g.times))
+      for (const nome of semVazios(turno.times || []))
         for (const id of membrosDe(nome)) {
           if (vistos.has(id)) continue;
           vistos.add(id);
           const bicho = todos.get(id);
           if (bicho) piscina.push(bicho);
         }
+      return piscina;
+    };
 
+    /**
+     * O turno a correr: o primeiro que ainda tem alguem abaixo do alvo.
+     *
+     * **Nao se guarda qual e'.** O nivel dos Pokemon ja' diz, como em todo o resto deste modo —
+     * guardar "vai no turno 2" seria uma segunda verdade, pronta a mentir depois de um F5 ou de
+     * uma troca feita a' mao. `null` quer dizer que nao falta ninguem em turno nenhum.
+     */
+    const turnoDeAgora = (todos, alvo) =>
+      turnosDoGrupo().find((turno) => piscinaDoTurno(turno, todos).some((b) => b.nivel < alvo)) ||
+      null;
+
+    const montagemDoGrupo = (todos, alvo) => {
+      const membrosDe = globalThis.PPX?.times?.membrosDe;
+      if (typeof membrosDe !== 'function')
+        return { erro: 'os Times não sabem dizer quem está em cada time — recarregue a extensão' };
+      const turnos = turnosDoGrupo();
+      const correndo = turnoDeAgora(todos, alvo);
+      // Acabados todos, fica o primeiro: alguem tem de continuar a caçar, e a escolha tem de ser
+      // sempre a mesma ou a equipe ficava a dançar entre as pedras sem ninguem a upar.
+      const turno = correndo || turnos[0];
+      if (!turno) return { erro: 'nenhuma pedra configurada' };
+      const numero = turnos.indexOf(turno) + 1;
+
+      const fixo = todos.get(turno.fixo);
+      if (!fixo)
+        return {
+          erro:
+            turnos.length > 1
+              ? `o Pokémon da pedra ${numero} não está mais na coleção — escolha outro`
+              : 'o Pokémon fixo não está mais na coleção — escolha outro na lista do fixo',
+        };
+
+      const piscina = piscinaDoTurno(turno, todos);
       const faltam = piscina.filter((b) => b.nivel < alvo);
       const especies = new Set([fixo.especie]);
       const escolhidos = [fixo];
@@ -549,7 +669,17 @@ PPX.modulo(
         especies.add(bicho.especie);
         escolhidos.push(bicho);
       }
-      return { fixo, piscina, faltam, escolhidos, saltados };
+      return {
+        fixo,
+        piscina,
+        faltam,
+        escolhidos,
+        saltados,
+        turno,
+        numero,
+        quantos: turnos.length,
+        acabou: !correndo,
+      };
     };
 
     /**
@@ -566,13 +696,19 @@ PPX.modulo(
       const faltam = Math.ceil((esperaAte - Date.now()) / 1000);
       if (faltam > 0) return `Esperando ${faltam}s para tentar de novo.`;
       const alvo = alvoDoGrupo();
-      const g = cfg.grupo;
       if (!colecao.size) return `Alvo Lv ${alvo}. Ainda não li a coleção.`;
       const m = montagemDoGrupo(colecao, alvo);
       if (m.erro) return m.erro;
-      const onde = local() === g.cacada ? `em "${g.cacada}"` : `fora de "${g.cacada}"`;
+      const lugar = lugarDoGrupo();
+      const onde = lugar.aqui ? `em "${lugar.aqui}"` : `fora da lista`;
+      // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
+      // entre "ela parou" e "ela esta' na segunda".
+      const pedra = m.quantos > 1 ? `Pedra ${m.numero}/${m.quantos} (${m.fixo.nome}). ` : '';
       if (!m.faltam.length) {
-        const todos = `Todos os ${m.piscina.length} chegaram ao Lv ${alvo}`;
+        const quantos = m.acabou
+          ? turnosDoGrupo().reduce((n, t) => n + piscinaDoTurno(t, colecao).length, 0)
+          : m.piscina.length;
+        const todos = `Todos os ${quantos} chegaram ao Lv ${alvo}`;
         return cfg.modo === 'passo'
           ? `${todos}. Rodada nova a caminho.`
           : `${todos}. Ficam fora do grupo e eu continuo a farmar ${onde}.`;
@@ -587,7 +723,7 @@ PPX.modulo(
         ? ` Saltei ${m.saltados.length} por repetir espécie do grupo.`
         : '';
       return (
-        `Alvo Lv ${alvo}, ${onde} com ${m.fixo.nome} fixo. ` +
+        `${pedra}Alvo Lv ${alvo}, ${onde} com ${m.fixo.nome} fixo. ` +
         `${grupo ? `Upando: ${grupo}.` : 'Grupo vazio.'}${resto}${pulados}`
       );
     };
@@ -1177,16 +1313,6 @@ PPX.modulo(
         return 'esperando';
       }
 
-      // A caçada que monta time ao chegar apagaria o grupo a cada viagem. Da' para saber antes.
-      const guardado = globalThis.PPX?.cacadas?.timeDe?.(g.cacada);
-      if (guardado) {
-        aviso(
-          `A caçada "${g.cacada}" monta o time "${guardado}" ao chegar e apagaria o grupo. ` +
-            `Tire o time dessa caçada nas Caçadas.`,
-        );
-        return 'tropeco';
-      }
-
       if (!equipe().length) return '';
 
       // ---------------------------------------------------------------- 1. a enfermeira
@@ -1211,9 +1337,27 @@ PPX.modulo(
       }
 
       // ---------------------------------------------------------------- 2. a viagem
-      if (local() !== g.cacada) {
+      const lugar = lugarDoGrupo();
+      if (!lugar.aqui) {
+        if (!lugar.ir) {
+          aviso(
+            'Estou fora da lista e não consigo entrar sozinha em nenhuma delas. ' +
+              'Ponha na lista uma caçada guardada, ou entre você.',
+          );
+          return 'sem porta';
+        }
+        // A caçada que monta time ao chegar apagaria o grupo. Da' para saber antes de andar — e
+        // confere-se **a que vai ser aberta**, nao a lista toda: as outras podem nunca ser usadas.
+        const guardado = globalThis.PPX?.cacadas?.timeDe?.(lugar.ir);
+        if (guardado) {
+          aviso(
+            `A caçada "${lugar.ir}" monta o time "${guardado}" ao chegar e apagaria o grupo. ` +
+              `Tire o time dessa caçada nas Caçadas.`,
+          );
+          return 'tropeco';
+        }
         if (cfg.trocar !== true) {
-          aviso(`Falta ir para "${g.cacada}", mas não tenho licença para trocar de caçada.`);
+          aviso(`Falta ir para "${lugar.ir}", mas não tenho licença para trocar de caçada.`);
           return 'sem licenca';
         }
         correndo = true;
@@ -1225,11 +1369,11 @@ PPX.modulo(
             return 'sem vez';
           }
           try {
-            aviso(`Indo para "${g.cacada}".`);
-            const r = await viajar(g.cacada);
+            aviso(`Indo para "${lugar.ir}".`);
+            const r = await viajar(lugar.ir);
             if (!r.ok) {
               adiar(CASTIGO);
-              aviso(`Não consegui ir para "${g.cacada}": ${r.erro || 'o jogo não me levou'}`);
+              aviso(`Não consegui ir para "${lugar.ir}": ${r.erro || 'o jogo não me levou'}`);
               return 'falhou';
             }
           } finally {
@@ -1250,7 +1394,7 @@ PPX.modulo(
         return 'sem colecao';
       }
       colecao = new Map((lido.bichos || []).map((b) => [b.id, b]));
-      desenharFixo();
+      desenhar(false);
 
       const alvo = alvoDoGrupo();
       const m = montagemDoGrupo(colecao, alvo);
@@ -1594,11 +1738,12 @@ PPX.modulo(
         </div>
         </div>
         <div class="fim" data-grupo>
-          <select data-onde title="A caçada onde o grupo fica"></select>
-          <select data-fixo title="O Pokémon que tem a pedra — ele nunca sai do grupo"></select>
-          <p class="vazio">os times de onde vêm os que rodam:</p>
-          <ul data-piscina></ul>
-          <button type="button" class="mais" data-mais-piscina>+ time</button>
+          <p class="vazio">onde o grupo fica, em ordem:</p>
+          <ul data-ondes></ul>
+          <button type="button" class="mais" data-mais-onde>+ caçada</button>
+          <p class="vazio">quem tem a pedra, e os times que ela upa:</p>
+          <ul data-turnos></ul>
+          <button type="button" class="mais" data-mais-turno>+ pedra</button>
           <label class="caixa" data-so-grupo>
             sai do grupo no Lv <input type="number" min="1" data-alvo placeholder="—">
           </label>
@@ -1655,6 +1800,15 @@ PPX.modulo(
       #lioncode-escada li [data-apagar] { background: none; border-color: transparent;
         color: #8b97a8; padding: 3px 4px; }
       #lioncode-escada li.agora { border-color: #35613f; }
+      /* Um turno e' uma pedra com os seus times: a pedra em cima, os times recuados por baixo. */
+      #lioncode-escada li.turno { flex-direction: column; align-items: stretch; gap: 5px; }
+      #lioncode-escada li.turno .cima { display: flex; align-items: center; gap: 5px; }
+      #lioncode-escada li.turno .cima select { flex: 1; min-width: 0; }
+      #lioncode-escada li.turno ul { padding-left: 9px; border-left: 2px solid #202835; }
+      #lioncode-escada li.turno li { background: #11161f; padding: 3px 5px; }
+      #lioncode-escada li.turno .mais { padding: 2px 7px; font-size: 11px; align-self: flex-start;
+        margin-left: 9px; }
+      #lioncode-escada li.turno .conta { color: #8b97a8; font-size: 11px; margin: 0 0 0 9px; }
       #lioncode-escada .fim { display: flex; flex-direction: column; gap: 5px;
         border-top: 1px solid #202835; padding-top: 7px; }
       #lioncode-escada .fim select { width: 100%; }
@@ -1819,47 +1973,78 @@ PPX.modulo(
      * porque e' com ele que se caça. Um fixo guardado que saiu da equipe continua a aparecer, para
      * nao desaparecer calado.
      */
-    const desenharFixo = () => {
-      const sel = campo('[data-fixo]');
-      const agora = equipe();
-      const escolhido = cfg.grupo.fixo;
+    /**
+     * Quem pode ser a pedra de um turno: a equipe de agora **mais** quem esta' nos times dele.
+     *
+     * So' a equipe nao chega desde que ha' turnos: a pedra do segundo turno costuma estar na
+     * mochila enquanto o primeiro corre, e era justamente ai' que ela tinha de ser escolhida. E a
+     * coleção inteira tambem nao serve — 223 linhas nao sao uma escolha, sao uma busca.
+     */
+    const candidatosAPedra = (turno) => {
+      const membrosDe = globalThis.PPX?.times?.membrosDe;
+      const lista = [];
+      const vistos = new Set();
+      for (const p of equipe()) {
+        vistos.add(p.id);
+        lista.push({ id: p.id, nome: p.nome, nivel: p.nivel });
+      }
+      if (typeof membrosDe === 'function')
+        for (const nome of semVazios(turno.times || []))
+          for (const id of membrosDe(nome)) {
+            if (vistos.has(id)) continue;
+            vistos.add(id);
+            const sabido = colecao.get(id);
+            if (sabido) lista.push({ id, nome: sabido.nome, nivel: sabido.nivel });
+          }
+      return lista;
+    };
+
+    const desenharFixo = (sel, turno) => {
+      const podem = candidatosAPedra(turno);
+      const escolhido = turno.fixo;
       sel.innerHTML = '';
       const nada = document.createElement('option');
       nada.value = '';
-      nada.textContent = agora.length ? 'escolha o fixo (o da pedra)' : 'equipe ainda não lida';
+      nada.textContent = podem.length ? 'quem tem a pedra' : 'equipe ainda não lida';
       sel.append(nada);
-      for (const p of agora) {
+      for (const p of podem) {
         const o = document.createElement('option');
         o.value = p.id;
         o.textContent = `${p.nome} Lv ${p.nivel ?? '?'}`;
         sel.append(o);
       }
-      if (escolhido && !agora.some((p) => p.id === escolhido)) {
+      if (escolhido && !podem.some((p) => p.id === escolhido)) {
         const o = document.createElement('option');
         o.value = escolhido;
         const sabido = colecao.get(escolhido);
-        o.textContent = sabido ? `${sabido.nome} (fora da equipe)` : 'o fixo saiu da equipe';
+        o.textContent = sabido ? `${sabido.nome} (fora da equipe)` : 'a pedra saiu da equipe';
         sel.append(o);
       }
       sel.value = escolhido || '';
     };
 
     /** Os times de onde vem quem roda. Mesma forma da fila do fim da escada, e pelo mesmo motivo. */
-    const desenharPiscina = () => {
-      const lugar = campo('[data-piscina]');
+    /**
+     * A lista de onde o grupo fica, em ordem de preferencia.
+     *
+     * E' uma lista e nao um campo so' porque ha' lugares que acabam — a expedição dura o que
+     * dura, e quando ela fecha o grupo tem de ter para onde ir sem ninguem a mandar nele.
+     */
+    const desenharOndes = () => {
+      const lugar = campo('[data-ondes]');
       lugar.innerHTML = '';
-      if (!cfg.grupo.times.length) {
+      if (!cfg.grupo.cacadas.length) {
         const vazio = document.createElement('p');
         vazio.className = 'vazio';
-        vazio.textContent = 'Nenhum time. Quem roda vem dos times que você puser aqui.';
+        vazio.textContent = 'Nenhuma. A primeira da lista onde eu puder estar é onde o grupo fica.';
         lugar.append(vazio);
       }
-      for (const [i, nome] of cfg.grupo.times.entries()) {
+      for (const [i, nome] of cfg.grupo.cacadas.entries()) {
         const item = document.createElement('li');
         const qual = document.createElement('select');
-        encherTimes(qual, nome);
+        encherCacadas(qual, nome, 'escolha a caçada');
         qual.addEventListener('change', () => {
-          cfg.grupo.times[i] = qual.value;
+          cfg.grupo.cacadas[i] = qual.value;
           gravar();
           desenhar();
           void conferir();
@@ -1867,14 +2052,103 @@ PPX.modulo(
         const apagar = document.createElement('button');
         apagar.type = 'button';
         apagar.dataset.apagar = '1';
-        apagar.textContent = '×';
-        apagar.title = 'Tirar este time';
+        apagar.textContent = '\u00d7';
+        apagar.title = 'Tirar esta caçada';
         apagar.addEventListener('click', () => {
-          cfg.grupo.times.splice(i, 1);
+          cfg.grupo.cacadas.splice(i, 1);
           gravar();
           desenhar();
         });
         item.append(qual, apagar);
+        lugar.append(item);
+      }
+    };
+
+    /**
+     * A lista de turnos: cada pedra com os seus times, recuados por baixo dela.
+     *
+     * Um turno e' uma unidade — a pedra e os Pokemon com quem ela divide — e por isso desenha-se
+     * junto. Duas listas lado a lado (pedras aqui, times ali) deixariam ao dono a tarefa de
+     * lembrar qual linha e' de qual.
+     */
+    const desenharTurnos = () => {
+      const lugar = campo('[data-turnos]');
+      lugar.innerHTML = '';
+      const turnos = turnosDoGrupo();
+      if (!turnos.length) {
+        const vazio = document.createElement('p');
+        vazio.className = 'vazio';
+        vazio.textContent = 'Nenhuma pedra. Clique em "+ pedra" para começar.';
+        lugar.append(vazio);
+      }
+      for (const [i, turno] of turnos.entries()) {
+        const item = document.createElement('li');
+        item.className = 'turno';
+
+        const cima = document.createElement('div');
+        cima.className = 'cima';
+        const quem = document.createElement('select');
+        quem.title = 'O Pokémon que tem a pedra — ele nunca sai do grupo';
+        desenharFixo(quem, turno);
+        quem.addEventListener('change', () => {
+          turno.fixo = quem.value;
+          gravar();
+          desenhar();
+          void conferir();
+        });
+        const forada = document.createElement('button');
+        forada.type = 'button';
+        forada.dataset.apagar = '1';
+        forada.textContent = '\u00d7';
+        forada.title = 'Tirar esta pedra do rodízio';
+        forada.addEventListener('click', () => {
+          cfg.grupo.turnos.splice(i, 1);
+          gravar();
+          desenhar();
+        });
+        cima.append(quem, forada);
+
+        const times = document.createElement('ul');
+        if (!semVazios(turno.times).length) {
+          const conta = document.createElement('p');
+          conta.className = 'conta';
+          conta.textContent = 'sem times: esta pedra não tem quem upar';
+          item.append(cima, conta);
+        } else item.append(cima);
+        for (const [j, nome] of (turno.times || []).entries()) {
+          const linha = document.createElement('li');
+          const qual = document.createElement('select');
+          encherTimes(qual, nome);
+          qual.addEventListener('change', () => {
+            turno.times[j] = qual.value;
+            gravar();
+            desenhar();
+            void conferir();
+          });
+          const apagar = document.createElement('button');
+          apagar.type = 'button';
+          apagar.dataset.apagar = '1';
+          apagar.textContent = '\u00d7';
+          apagar.title = 'Tirar este time';
+          apagar.addEventListener('click', () => {
+            turno.times.splice(j, 1);
+            gravar();
+            desenhar();
+          });
+          linha.append(qual, apagar);
+          times.append(linha);
+        }
+        const mais = document.createElement('button');
+        mais.type = 'button';
+        mais.className = 'mais';
+        mais.textContent = '+ time';
+        mais.addEventListener('click', () => {
+          turno.times = turno.times || [];
+          turno.times.push('');
+          gravar();
+          desenhar();
+        });
+        item.append(times, mais);
         lugar.append(item);
       }
     };
@@ -1902,9 +2176,9 @@ PPX.modulo(
       campo('[data-escada]').style.display = noGrupo ? 'none' : '';
       campo('[data-grupo]').style.display = noGrupo ? '' : 'none';
       if (noGrupo) {
-        encherCacadas(campo('[data-onde]'), cfg.grupo.cacada, 'escolha a caçada');
-        desenharFixo();
-        desenharPiscina();
+        desenharOndes();
+        garantirColecao();
+        desenharTurnos();
         campo('[data-alvo]').value = cfg.grupo.alvo ?? '';
         campo('[data-minimo]').value = cfg.grupo.minimo ?? '';
         campo('[data-passo]').value = cfg.grupo.passo ?? '';
@@ -2072,22 +2346,15 @@ PPX.modulo(
       void conferir();
     });
 
-    campo('[data-onde]').addEventListener('change', (e) => {
-      cfg.grupo.cacada = e.target.value;
+    campo('[data-mais-onde]').addEventListener('click', () => {
+      cfg.grupo.cacadas.push('');
       gravar();
       desenhar();
-      void conferir();
     });
 
-    campo('[data-fixo]').addEventListener('change', (e) => {
-      cfg.grupo.fixo = e.target.value;
-      gravar();
-      desenhar();
-      void conferir();
-    });
-
-    campo('[data-mais-piscina]').addEventListener('click', () => {
-      cfg.grupo.times.push('');
+    campo('[data-mais-turno]').addEventListener('click', () => {
+      cfg.grupo.turnos = turnosDoGrupo();
+      cfg.grupo.turnos.push({ fixo: '', times: [''] });
       gravar();
       desenhar();
     });

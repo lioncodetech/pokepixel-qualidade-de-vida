@@ -147,10 +147,18 @@ PPX.modulo(
      * provavel e' que este modal apareça. Ou seja: ele e' o caso **normal** da ida com time, nao
      * um azar.
      */
+    /*
+     * `.expedition-result-window .npc-shop__close` e' o "Expedição concluída", visto no jogo em
+     * 12/10/2026 no fim de uma expedição: um painel com overlay, que tapa a tela inteira e fica
+     * ate' alguem clicar em "Continuar". O proprio jogo diz no rodape dele "ao continuar, você
+     * volta para a sua caçada anterior" — ou seja, clicar nao decide nada, e' o caminho; nao
+     * clicar e' que deixa tudo parado atras de um vidro.
+     */
     const FECHOS = [
       '.pokeidle-promo-banner__close',
       '.expedition-alert-banner__dismiss',
       '.hunt-absence-close',
+      '.expedition-result-window .npc-shop__close',
     ];
 
     const fecharBanners = async () => {
@@ -175,11 +183,83 @@ PPX.modulo(
      */
     const cacadaAtiva = () => {
       const nome = document.querySelector('.platform-hunt__zone-name')?.textContent?.trim();
-      if (!nome) return null;
-      const meta = document.querySelector('.platform-hunt__zone-meta')?.textContent?.trim() || '';
-      const [regiao, modo] = meta.split('·').map((p) => p.trim());
-      return { nome, regiao: regiao || '', modo: modo || '' };
+      if (nome) {
+        const meta = document.querySelector('.platform-hunt__zone-meta')?.textContent?.trim() || '';
+        const [regiao, modo] = meta.split('·').map((p) => p.trim());
+        return { nome, regiao: regiao || '', modo: modo || '', tipo: 'cacada' };
+      }
+      /**
+       * **A EXPEDIÇÃO NAO E' UMA CAÇADA, E MESMO ASSIM E' UM LUGAR ONDE SE ESTA'.**
+       *
+       * Medida no jogo em 12/10/2026, a correr: nao tem `.platform-hunt__zone-name`, nao esta' na
+       * lista da janela das caçadas, e entra-se nela por um menu da barra de cima. Quem lia so' a
+       * zona concluia "voce' nao esta' em caçada nenhuma" — e a Escada, a partir dai', tentava
+       * levar o jogador para fora da expedição a cada batida.
+       *
+       * Entao ela entra aqui, com `tipo` a dizer o que e'. Guardar e reconhecer, sim; viajar para
+       * la', nunca — ver `irPara`.
+       */
+      const correndo = document.querySelector('.expedition-run-hud');
+      if (!visivel(correndo)) return null;
+      const mapa = document.querySelector('.pokeidle-trainer-hud__map')?.textContent?.trim();
+      return { nome: mapa || 'Expedição', regiao: '', modo: '', tipo: 'expedicao' };
     };
+
+    const HORA = 3600000;
+    /** As horas de inicio, em Brasilia. Medidas pelo dono, e conferidas duas vezes contra o jogo. */
+    const EXPEDICAO_ABRE = [6, 10, 14, 18, 22];
+    const EXPEDICAO_DURA = 2;
+
+    /**
+     * Quando abre (ou ate' quando dura) a janela da expedição.
+     *
+     * **A JANELA E' FIXA, E O JOGO DIZ QUE E' ALEATORIA.** O lobby escreve "a próxima janela abre
+     * em um horário aleatório"; medido em 12/10/2026, a expedição acabou `08:00` de Brasilia e o
+     * lobby anunciou a seguinte para as `10:00` — as duas pontas certas da tabela. Acreditar no
+     * texto do jogo seria nao poder dizer nada.
+     *
+     * A conta e' sobre o **UTC**, nunca sobre o relogio da maquina: Brasilia e' UTC-3 o ano
+     * inteiro (o Brasil acabou com o horario de verao em 2019), e quem joga da Europa muda de
+     * hora em outubro. Uma tabela escrita em hora local partia-se sozinha nesse domingo. O que se
+     * mostra, esse, vai no relogio de quem olha — a pergunta e' "a que horas, para mim".
+     */
+    const janelaDaExpedicao = (agora = Date.now()) => {
+      const DIA = 24 * HORA;
+      // O dia de Brasilia que contem `agora`, como meia-noite em tempo real.
+      const meiaNoite = Math.floor((agora - 3 * HORA) / DIA) * DIA + 3 * HORA;
+      for (let dia = -1; dia <= 1; dia += 1)
+        for (const hora of EXPEDICAO_ABRE) {
+          const abre = meiaNoite + dia * DIA + hora * HORA;
+          const fecha = abre + EXPEDICAO_DURA * HORA;
+          if (agora < fecha) return { aberta: agora >= abre, quando: agora >= abre ? fecha : abre };
+        }
+      return null;
+    };
+
+    const horaDe = (ms) =>
+      new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const daquiA = (ms) => {
+      const min = Math.max(0, Math.round((ms - Date.now()) / 60000));
+      return min >= 60
+        ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`
+        : `${min}min`;
+    };
+
+    /** O que se le' na linha da expedição: ela nao tem regiao nem modo, tem horario. */
+    const legendaDaExpedicao = () => {
+      const j = janelaDaExpedicao();
+      if (!j) return 'expedição · quem entra é você';
+      return j.aberta
+        ? `expedição ABERTA até ${horaDe(j.quando)} · entra você`
+        : `expedição · abre ${horaDe(j.quando)} (em ${daquiA(j.quando)})`;
+    };
+
+    /** A expedição de hoje pode ter outro nome; o que nao muda e' o tipo. */
+    const mesmoLugar = (a, b) =>
+      Boolean(a) &&
+      Boolean(b) &&
+      (a.tipo === 'expedicao' ? b.tipo === 'expedicao' : a.nome === b.nome);
 
     const abasDa = (janela) => [...janela.querySelectorAll('.hunt-list-world-tab')];
 
@@ -289,6 +369,11 @@ PPX.modulo(
 
     const irPara = async (alvo, avisar) => {
       if (!alvo?.nome) return { ok: false, erro: 'esse atalho não tem nome de caçada' };
+      // Para a expedição nao se viaja: ela nao esta' na lista da janela, entra-se por um menu da
+      // barra de cima e ela so' existe enquanto dura. Guardar serve para a reconhecer, nao para
+      // la' chegar.
+      if (alvo.tipo === 'expedicao')
+        return { ok: false, erro: 'na expedição entra você — eu só sei reconhecê-la' };
 
       await fecharBanners();
       await fecharMenus();
@@ -554,10 +639,33 @@ PPX.modulo(
       ecoar();
     };
 
+    /**
+     * A expedição esta' sempre na lista, e nao se guarda.
+     *
+     * Guardar atalhos e' para o que o jogador escolhe: ele entra numa caçada e diz "quero voltar
+     * aqui". A expedição nao e' escolha dele — e' uma coisa do jogo, com horario proprio e sempre
+     * a mesma. Exigir que ela fosse guardada **de dentro** era pior do que inutil: so' se pode
+     * estar dentro dela duas horas a cada quatro, e e' justamente **fora** dela que se quer
+     * dize-la a' Escada ("quando abrir, e' ali que eu vou estar").
+     *
+     * Por isso ela entra aqui, sem passar pelo armazem — e `gravarLista` trata de nunca a
+     * escrever. Uma entrada fixa guardada viraria uma copia que envelhece sozinha.
+     */
+    const EXPEDICAO = { nome: 'Expedição', tipo: 'expedicao', time: '', fixa: true };
+
     const guardadas = () => {
       const bruto = ler(CHAVE_LISTA, []);
-      return Array.isArray(bruto) ? bruto.filter((c) => c && c.nome) : [];
+      const lista = Array.isArray(bruto) ? bruto.filter((c) => c && c.nome) : [];
+      if (!lista.some((c) => c.tipo === 'expedicao')) lista.push({ ...EXPEDICAO });
+      return lista;
     };
+
+    /** Guarda a lista **sem** o que nao e' do jogador. Ver `EXPEDICAO`. */
+    const gravarLista = (todas) =>
+      gravar(
+        CHAVE_LISTA,
+        todas.filter((c) => !c.fixa),
+      );
 
     /**
      * Guarda a aba em que a caçada foi mesmo encontrada.
@@ -574,7 +682,7 @@ PPX.modulo(
       const onde = todas.findIndex((c) => c.nome === nome);
       if (onde < 0 || todas[onde].aba === aba) return;
       todas[onde] = { ...todas[onde], aba };
-      gravar(CHAVE_LISTA, todas);
+      gravarLista(todas);
     };
 
     let indo = false;
@@ -591,11 +699,25 @@ PPX.modulo(
       pintarResumo();
       const agora = cacadaAtiva();
       for (const onde of lista.querySelectorAll('li small')) {
-        const aqui = onde.dataset.cacada === agora?.nome;
+        if (onde.dataset.tipo === 'expedicao') onde.dataset.onde = legendaDaExpedicao();
+        const aqui = mesmoLugar(agora, { nome: onde.dataset.cacada, tipo: onde.dataset.tipo });
         onde.textContent = aqui ? 'você está aqui' : onde.dataset.onde;
         onde.classList.toggle('agora', aqui);
       }
     };
+
+    /**
+     * A contagem da expedição anda de minuto a minuto, e so' ela.
+     *
+     * O relogio geral e' de dez minutos de proposito (reconstruir as linhas fecharia um select de
+     * time aberto na cara de quem escolhe), e "abre em 1h25" parado dez minutos e' um numero
+     * errado na tela. Entao este tique nao redesenha nada: reescreve o texto daquela linha.
+     */
+    setInterval(() => {
+      for (const onde of lista.querySelectorAll('li small[data-tipo="expedicao"]'))
+        if (!onde.classList.contains('agora')) onde.textContent = legendaDaExpedicao();
+      pintarResumo();
+    }, 60 * 1000);
 
     /**
      * O que a etiqueta minimizada mostra.
@@ -631,17 +753,19 @@ PPX.modulo(
       let onde = todas.findIndex((c) => c.nome === (folheado ?? agora?.nome));
       if (onde < 0) onde = 0;
       const alvo = todas[onde];
-      const aqui = Boolean(agora) && agora.nome === alvo.nome;
+      const aqui = mesmoLugar(agora, alvo);
       titulo.textContent = alvo.nome;
       titulo.title = alvo.nome;
       sub.textContent = aqui
         ? 'você está aqui'
-        : alvo.time
-          ? `com o time "${alvo.time}"`
-          : [alvo.regiao, alvo.modo].filter(Boolean).join(' · ');
+        : alvo.tipo === 'expedicao'
+          ? legendaDaExpedicao()
+          : alvo.time
+            ? `com o time "${alvo.time}"`
+            : [alvo.regiao, alvo.modo].filter(Boolean).join(' · ');
       sub.classList.toggle('agora', aqui);
       // Ja' estando la', `Ir` so' teria sentido para montar o time — e para isso ha' a lista.
-      ir.hidden = aqui && !alvo.time;
+      ir.hidden = (aqui && !alvo.time) || alvo.tipo === 'expedicao';
       ir.disabled = indo;
       for (const seta of setas) seta.disabled = indo || todas.length < 2;
     };
@@ -690,9 +814,13 @@ PPX.modulo(
         nome.textContent = alvo.nome;
         nome.title = alvo.nome;
         const onde = document.createElement('small');
-        const partes = [alvo.regiao, alvo.modo].filter(Boolean);
-        const aqui = agora?.nome === alvo.nome;
+        const partes =
+          alvo.tipo === 'expedicao'
+            ? [legendaDaExpedicao()]
+            : [alvo.regiao, alvo.modo].filter(Boolean);
+        const aqui = mesmoLugar(agora, alvo);
         onde.dataset.cacada = alvo.nome;
+        if (alvo.tipo) onde.dataset.tipo = alvo.tipo;
         onde.dataset.onde = partes.join(' · ') || 'sem região';
         onde.textContent = aqui ? 'você está aqui' : onde.dataset.onde;
         onde.classList.toggle('agora', aqui);
@@ -701,19 +829,21 @@ PPX.modulo(
         const ir = document.createElement('button');
         ir.type = 'button';
         ir.textContent = 'Ir';
-        ir.title = `Ir para "${alvo.nome}"`;
+        // Um botao que nao pode funcionar nao fica a fingir que pode: a expedição guarda-se para
+        // ser reconhecida, e quem entra nela e' o jogador.
+        ir.disabled = alvo.tipo === 'expedicao';
+        ir.title = ir.disabled ? 'Na expedição entra você' : `Ir para "${alvo.nome}"`;
         ir.addEventListener('click', () => void levar(alvo));
 
         const apagar = document.createElement('button');
         apagar.type = 'button';
         apagar.dataset.apagar = '';
         apagar.textContent = '×';
+        // O que e' do jogo nao se esquece: a expedição estaria de volta na batida seguinte.
+        apagar.hidden = Boolean(alvo.fixa);
         apagar.title = `Esquecer "${alvo.nome}"`;
         apagar.addEventListener('click', () => {
-          gravar(
-            CHAVE_LISTA,
-            guardadas().filter((c) => c.nome !== alvo.nome),
-          );
+          gravarLista(guardadas().filter((c) => c.nome !== alvo.nome));
           desenhar();
           dizer(`"${alvo.nome}" esquecida.`);
         });
@@ -746,8 +876,7 @@ PPX.modulo(
         times.value = alvo.time || '';
         times.classList.toggle('sem-time', !times.value);
         times.addEventListener('change', () => {
-          gravar(
-            CHAVE_LISTA,
+          gravarLista(
             guardadas().map((c) => (c.nome === alvo.nome ? { ...c, time: times.value } : c)),
           );
           times.classList.toggle('sem-time', !times.value);
@@ -767,7 +896,14 @@ PPX.modulo(
     const guardarAtual = () => {
       const agora = cacadaAtiva();
       if (!agora) {
-        dizer('Você não está numa caçada — entre numa e eu guardo o atalho.', true);
+        dizer(
+          'Você não está numa caçada nem na expedição — entre numa e eu guardo o atalho.',
+          true,
+        );
+        return;
+      }
+      if (agora.tipo === 'expedicao') {
+        celebrar('A expedição já está sempre na lista — não precisa de ser guardada.');
         return;
       }
       const todas = guardadas();
@@ -776,7 +912,7 @@ PPX.modulo(
       // corrigir o endereco, nao desfazer a configuracao.
       if (onde >= 0) todas[onde] = { ...agora, time: todas[onde].time || '' };
       else todas.push({ ...agora, time: '' });
-      gravar(CHAVE_LISTA, todas);
+      gravarLista(todas);
       desenhar();
       celebrar(onde >= 0 ? `"${agora.nome}" atualizada.` : `"${agora.nome}" guardada.`);
     };
@@ -956,6 +1092,21 @@ PPX.modulo(
          * Com isto ela diz o porque' e o que fazer. Continua sem poder mudar nada disto.
          */
         timeDe: (nome) => guardadas().find((c) => c.nome === nome)?.time || '',
+
+        /**
+         * Se da' para esta ferramenta levar o jogador ate' la'.
+         *
+         * Hoje so' a expedição diz que nao. Quem automatiza precisa de saber isto **antes** de
+         * tentar, para poder escolher outro lugar da lista em vez de bater na porta e falhar.
+         */
+        daParaIr: (nome) => guardadas().find((c) => c.nome === nome)?.tipo !== 'expedicao',
+
+        /** Se o jogador esta' naquele lugar agora — a expedição casa por tipo, nao por nome. */
+        estouEm: (nome) =>
+          mesmoLugar(
+            cacadaAtiva(),
+            guardadas().find((c) => c.nome === nome),
+          ),
         ir: async (nome) => {
           const alvo = guardadas().find((c) => c.nome === nome);
           if (!alvo) return { ok: false, erro: `não há atalho guardado para "${nome}"` };

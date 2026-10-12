@@ -825,6 +825,56 @@ direta. A varredura fica como rede — uma caçada pode mudar de lugar, e o jogo
 disso. É a única coisa que a ferramenta escreve sozinha no atalho; nome, time e modo continuam a
 ser escolha de quem joga.
 
+### A expedição é um lugar, e não uma caçada
+
+A Expedição Diária Cooperativa não aparece na janela das caçadas, não tem zona, entra-se nela por
+um menu da barra de cima e **começar exige resolver um CAPTCHA**. Ou seja: é dele que ela depende,
+não da ferramenta — e isso não se automatiza nem se tenta.
+
+O que estava mal era outra coisa: lendo só a zona de caçada, estar na expedição era indistinguível
+de "você não está em caçada nenhuma", e a Escada passava a tentar levá-lo para fora dela a cada
+batida. Agora ela reconhece a expedição (pelo HUD da corrida), guarda-a como atalho para a
+reconhecer, e o botão "Ir" dessa linha fica apagado — um botão que não pode funcionar não fica a
+fingir que pode.
+
+A tela **"Expedição concluída"** entrou na lista do que sai da frente antes de qualquer acção. É um
+painel com overlay que tapa tudo até alguém clicar em "Continuar", e o próprio jogo escreve lá: *ao
+continuar, você volta para a sua caçada anterior*. Clicar não decide nada; não clicar é que deixava
+tudo parado atrás de um vidro.
+
+#### A expedição não se guarda: ela está sempre na lista
+
+Guardar atalhos é para o que o jogador escolhe — ele entra numa caçada e diz "quero voltar aqui". A
+expedição não é escolha dele: é uma coisa do jogo, sempre a mesma. Exigir que fosse guardada **de
+dentro** era pior do que inútil, porque só se está dentro dela duas horas a cada quatro, e é
+justamente **fora** dela que se quer dizê-la à Escada ("quando abrir, é ali que eu vou estar").
+
+Por isso ela aparece sempre na lista, sem passar pelo armazém, e o ✕ dela não existe: o que é do
+jogo não se esquece, estaria de volta na batida seguinte.
+
+#### A janela é fixa, e o jogo diz que é aleatória
+
+O lobby escreve "a próxima janela abre em um horário aleatório". É falso. As janelas são de duas em
+duas horas, em hora de Brasília: **06:00, 10:00, 14:00, 18:00 e 22:00**, cada uma com duas horas.
+Medido em 12/10/2026: a expedição acabou às 08:00 de Brasília e o lobby anunciou a seguinte para as
+10:00 — as duas pontas da tabela.
+
+O painel diz quando abre a próxima e quanto falta, no relógio de quem está a olhar. A conta é feita
+sobre o **UTC**, nunca sobre o relógio da máquina: Brasília é UTC-3 o ano inteiro (o Brasil acabou
+com o horário de verão em 2019) e quem joga da Europa muda de hora em outubro — uma tabela escrita
+em hora local partia-se sozinha nesse domingo.
+
+#### O grupo tem uma lista de lugares, em ordem
+
+Por causa disto o modo de grupo deixou de ter *a* caçada e passou a ter uma **lista em ordem de
+preferência**: ele fica na primeira onde conseguir estar. Estar na terceira basta — subir dali para
+a primeira a cada batida seria trocar de caçada por nada, e cada troca custa a viagem e o risco de
+um modal pelo meio. Só se viaja para onde a ferramenta consegue entrar, e por isso a expedição
+nunca é destino.
+
+O resultado é o que ele pediu: a expedição quando ele estiver no PC, e a caçada de sempre quando
+não estiver.
+
 ### Um time por caçada
 
 Cada atalho pode levar um time junto. O select fica na própria linha, e a troca acontece
@@ -1142,6 +1192,31 @@ recomeça do primeiro.
   outro da mesma espécie sair.
 - **O Pokémon ativo não pode ser removido**, por isso o fixo vai como líder: pôr a liderança em quem
   roda daria uma troca travada a cada volta.
+
+#### Uma pedra de cada vez: o rodízio
+
+Cada pedra da XP só divide com Pokémon da sua região — hoje há a de Kanto e a de Johto — e **só o
+Pokémon ativo divide**, medido pelo dono em 12/10/2026. Essas duas coisas juntas decidem o desenho:
+duas pedras na equipe ao mesmo tempo seriam um slot gasto à toa, porque só uma delas estaria a
+trabalhar. Elas têm de se revezar.
+
+Por isso o modo de grupo tem **turnos**, em ordem: cada turno é uma pedra com os seus times. Corre o
+primeiro que ainda tenha alguém abaixo do alvo; acabado esse, entra o seguinte; acabados todos, a
+rodada fecha e tudo recomeça do primeiro com o alvo novo. O alvo é o mesmo para todas as pedras.
+
+**Qual turno está a correr não se guarda.** O nível dos Pokémon já diz — guardar "vai no turno 2"
+seria uma segunda verdade, pronta a mentir depois de um F5 ou de uma troca feita à mão. É a mesma
+regra que já valia para "quem já upou".
+
+A **região não é conferida**, e de propósito: quem diz qual Pokémon pertence a qual pedra é o dono,
+ao pôr os times certos no turno certo. Adivinhar a região pelo `species_id` seria apostar que o jogo
+numera como a Pokédex nacional, e isso não foi medido. E enganar-se custa XP perdida, não estraga
+nada: quem não é da região apenas não recebe.
+
+A pedra de um turno escolhe-se entre **a equipe de agora e os Pokémon dos times desse turno**. Só a
+equipe não chegava: a pedra do segundo turno costuma estar na mochila enquanto o primeiro corre, e
+era justamente aí que ela tinha de ser escolhida. A coleção inteira também não serve — 223 linhas
+não são uma escolha, são uma busca.
 
 #### Quem fica no grupo é uma composição, não uma fila de entradas e saídas
 

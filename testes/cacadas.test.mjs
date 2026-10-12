@@ -331,3 +331,85 @@ test('a ida diz como acabou, mesmo chamada de fora', () => {
     /avisar\(`Procurando "\$\{alvo\.nome\}" em \$\{abaAberta\(jan\(\)\) \|\| 'a lista'\}…`\);/,
   );
 });
+
+test('a expedicao e um lugar, e nao uma cacada', () => {
+  // Medida no jogo em 12/10/2026, a correr: não tem `.platform-hunt__zone-name`, não está na lista
+  // da janela das caçadas e entra-se nela por um menu da barra de cima. Quem lia só a zona concluía
+  // "você não está em caçada nenhuma" — e a Escada, daí em diante, tentava tirar o jogador de lá a
+  // cada batida.
+  assert.match(codigo, /const correndo = document\.querySelector\('\.expedition-run-hud'\);/);
+  assert.match(
+    codigo,
+    /return \{ nome: mapa \|\| 'Expedição', regiao: '', modo: '', tipo: 'expedicao' \};/,
+  );
+  // Reconhecer, sim; viajar para lá, nunca — começar exige um CAPTCHA, e a janela só existe
+  // enquanto dura.
+  const ida = codigo.slice(codigo.indexOf('const irPara ='));
+  assert.match(ida.slice(0, 600), /if \(alvo\.tipo === 'expedicao'\)/);
+  assert.match(codigo, /daParaIr: \(nome\) =>/);
+  // E o botão não fica a fingir que funciona.
+  assert.match(codigo, /ir\.disabled = alvo\.tipo === 'expedicao';/);
+  // "Estou aqui" casa por TIPO, e não por nome: a expedição de amanhã pode chamar-se outra coisa.
+  assert.match(codigo, /a\.tipo === 'expedicao' \? b\.tipo === 'expedicao' : a\.nome === b\.nome/);
+});
+
+test('a tela de fim da expedicao sai da frente sozinha', () => {
+  // Vista no jogo em 12/10/2026: um painel com overlay que tapa a tela inteira até alguém clicar em
+  // "Continuar". O próprio jogo escreve no rodapé dela "ao continuar, você volta para a sua caçada
+  // anterior" — clicar não decide nada, não clicar é que deixa tudo parado atrás de um vidro.
+  assert.match(codigo, /'\.expedition-result-window \.npc-shop__close',/);
+  const fechos = codigo.slice(codigo.indexOf('const FECHOS = ['));
+  assert.ok(
+    fechos.indexOf('expedition-result-window') < fechos.indexOf(']'),
+    'está na lista do que se fecha antes de agir',
+  );
+});
+
+test('a janela da expedicao e fixa, e a conta e feita sobre o UTC', () => {
+  // O lobby escreve "a próxima janela abre em um horário aleatório". É falso: medido em 12/10/2026,
+  // a expedição acabou 08:00 de Brasília e o lobby anunciou a seguinte para as 10:00 — as duas
+  // pontas da tabela do dono.
+  assert.match(codigo, /const EXPEDICAO_ABRE = \[6, 10, 14, 18, 22\];/);
+  // Brasília é UTC-3 o ano inteiro (o Brasil acabou com o horário de verão em 2019) e quem joga da
+  // Europa muda de hora em outubro: uma tabela escrita em hora local partia-se sozinha nesse dia.
+  const conta = codigo.slice(codigo.indexOf('const janelaDaExpedicao ='));
+  const corpo = conta.slice(0, conta.indexOf('\n    };'));
+  assert.match(corpo, /Math\.floor\(\(agora - 3 \* HORA\) \/ DIA\) \* DIA \+ 3 \* HORA/);
+  assert.doesNotMatch(corpo, /getHours|getDate\(\)/, 'nada do relógio da máquina entra na conta');
+  // Mas o que se MOSTRA vai no relógio de quem olha: a pergunta é "a que horas, para mim".
+  assert.match(codigo, /toLocaleTimeString\(\[\], \{ hour: '2-digit', minute: '2-digit' \}\)/);
+  // E a contagem anda de minuto a minuto sem redesenhar a lista: o relógio geral é de dez minutos
+  // de propósito, e "abre em 1h25" parado dez minutos é um número errado na tela.
+  assert.match(
+    codigo,
+    /setInterval\(\(\) => \{[\s\S]{0,400}legendaDaExpedicao\(\);[\s\S]{0,120}\}, 60 \* 1000\);/,
+  );
+});
+
+test('a expedicao nao se guarda: ela esta sempre la', () => {
+  // Guardar atalhos é para o que o jogador escolhe. A expedição é coisa do jogo, sempre a mesma, e
+  // exigir que fosse guardada DE DENTRO era pior do que inútil: só se está dentro dela duas horas a
+  // cada quatro, e é justamente fora dela que se quer dizê-la à Escada.
+  assert.match(
+    codigo,
+    /const EXPEDICAO = \{ nome: 'Expedição', tipo: 'expedicao', time: '', fixa: true \};/,
+  );
+  const lista = codigo.slice(codigo.indexOf('const guardadas = ()'));
+  assert.match(
+    lista.slice(0, 400),
+    /if \(!lista\.some\(\(c\) => c\.tipo === 'expedicao'\)\) lista\.push/,
+  );
+  // E nunca é escrita no armazém: uma entrada fixa guardada viraria uma cópia que envelhece.
+  const guarda = codigo.slice(codigo.indexOf('const gravarLista ='));
+  assert.match(guarda.slice(0, 200), /todas\.filter\(\(c\) => !c\.fixa\)/);
+  assert.ok(
+    !/gravar\(\s*CHAVE_LISTA,\s*(?!todas\.filter)/.test(
+      codigo.replace(/const gravarLista[\s\S]*?;\n/, ''),
+    ),
+    'ninguém escreve a lista por fora do gravarLista',
+  );
+  // O que é do jogo não se esquece: estaria de volta na batida seguinte.
+  assert.match(codigo, /apagar\.hidden = Boolean\(alvo\.fixa\);/);
+  // E guardar estando lá dentro diz isso, em vez de criar uma segunda entrada.
+  assert.match(codigo, /A expedição já está sempre na lista/);
+});

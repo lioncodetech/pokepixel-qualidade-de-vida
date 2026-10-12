@@ -582,9 +582,13 @@ test('nao agir e uma decisao, e e dita', () => {
     // trocas, e chamar "tentativa que não deu" a um pedido de espera do jogo seria mentir.
     /Esperando \$\{faltam\}s para tentar de novo/,
     // Os impasses do modo de grupo, que nasceram em 12/10/2026 com a pedra da XP.
-    /Escolha a caçada onde o grupo fica/,
-    /Escolha o Pokémon fixo/,
-    /Escolha os times de onde vêm os que rodam/,
+    /Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência/,
+    // E o impasse novo: fora da lista, e sem nenhuma lá onde ela consiga entrar sozinha.
+    /não consigo entrar sozinha em nenhuma delas/,
+    /scolha o Pokémon que tem a pedra/,
+    /scolha os times de onde vêm os que rodam/,
+    // E, com mais de uma pedra no rodízio, o impasse diz de qual delas se trata.
+    /Escolha quem tem a pedra e os times que ela vai upar/,
     /neste modo eu sou a última da fila/,
     /apagaria o grupo/,
     /o Pokémon fixo não está mais na coleção/,
@@ -784,7 +788,7 @@ test('pausar guarda o lugar, parar esquece', () => {
 test('a cacada do grupo tambem nao pode guardar time', () => {
   // Mesma colisão do fim da escada, e aqui é pior: a viagem apagaria o grupo a cada volta.
   const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
-  const recusa = batida.indexOf('const guardado = globalThis.PPX?.cacadas?.timeDe?.(g.cacada);');
+  const recusa = batida.indexOf('const guardado = globalThis.PPX?.cacadas?.timeDe?.(lugar.ir);');
   assert.ok(recusa >= 0, 'confere o time guardado na caçada do grupo');
   assert.ok(recusa < batida.indexOf('await viajar('), 'recusa ANTES de viajar');
   assert.match(codigo, /apagaria o grupo/);
@@ -797,7 +801,7 @@ test('a batida do grupo tem a mesma ordem da outra: enfermeira, viagem, equipe',
   const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
   const corpo = batida.slice(0, batida.indexOf("return 'acertado';"));
   const cura = corpo.indexOf('await curar(morto, aviso)');
-  const viagem = corpo.indexOf('await viajar(g.cacada)');
+  const viagem = corpo.indexOf('await viajar(lugar.ir)');
   const equipe = corpo.indexOf('times.montar(');
   assert.ok(cura >= 0 && viagem >= 0 && equipe >= 0, 'os três passos existem');
   assert.ok(cura < viagem, 'a enfermeira vem antes da viagem');
@@ -847,4 +851,74 @@ test('ela guarda a propria escolha, e o menu a comanda', () => {
   // errado. Quem volta à vista recoloca.
   const bloco = codigo.slice(codigo.indexOf('const mostrarPainel'));
   assert.match(bloco.slice(0, 300), /if \(sim\) recolocar\(\);/);
+});
+
+test('o lugar do grupo e uma lista em ordem, e estar numa delas basta', () => {
+  // Pedido em 12/10/2026: a expedição diária é oportunista — abre em janelas fixas e só se entra
+  // nela com um CAPTCHA, à mão. O que não pode é parar de upar quando ele não está no PC. Então o
+  // grupo tem uma LISTA: fica na primeira onde consiga estar, e a expedição é só mais uma entrada.
+  const bloco = codigo.slice(codigo.indexOf('const lugarDoGrupo ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  // Estar na terceira basta: subir dali para a primeira a cada batida seria trocar de caçada por
+  // nada, e cada troca custa a viagem e o risco de um modal pelo meio.
+  assert.match(corpo, /const aqui = lista\.find\(\(nome\) => porta\?\.estouEm\?\.\(nome\)\);/);
+  assert.match(corpo, /if \(aqui\) return \{ aqui, ir: null \};/);
+  // E só se viaja para onde dá: a expedição não é destino, é um lugar que se respeita.
+  assert.match(corpo, /porta\?\.daParaIr\?\.\(nome\) !== false/);
+  // O time guardado confere-se na que VAI ser aberta, não na lista toda: as outras podem nunca
+  // chegar a ser usadas.
+  const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
+  assert.match(batida, /timeDe\?\.\(lugar\.ir\)/);
+  // A caçada única de antes vira a primeira da lista, e não se perde.
+  assert.match(codigo, /if \(!cfg\.grupo\.cacadas\.length && cfg\.grupo\.cacada\)/);
+});
+
+test('as pedras revezam-se, e qual esta a correr nao se guarda', () => {
+  // Pedido em 12/10/2026: cada pedra da XP só divide com Pokémon da sua região (hoje Kanto e
+  // Johto) e **só o Pokémon ativo divide** — medido pelo dono. Logo, duas pedras na equipe ao mesmo
+  // tempo seriam um slot gasto à toa: elas têm de se revezar.
+  assert.match(
+    codigo,
+    /const turnosDoGrupo = \(\) => \(cfg\.grupo\.turnos \|\| \[\]\)\.filter\(Boolean\);/,
+  );
+  // O turno a correr é o primeiro que ainda tem alguém abaixo do alvo. NÃO se guarda qual é: o
+  // nível já diz, como em todo o resto deste modo. Guardar "vai no turno 2" seria uma segunda
+  // verdade, pronta a mentir depois de um F5 ou de uma troca feita à mão.
+  const escolha = codigo.slice(codigo.indexOf('const turnoDeAgora ='));
+  assert.match(
+    escolha.slice(0, 300),
+    /\.find\(\(turno\) => piscinaDoTurno\(turno, todos\)\.some\(\(b\) => b\.nivel < alvo\)\)/,
+  );
+  assert.ok(!/grupo\.vez|turnoAtual\s*=/.test(codigo), 'nada guarda qual pedra está a correr');
+  // Acabados todos, fica o primeiro: alguém tem de continuar a caçar, e a escolha tem de ser sempre
+  // a mesma ou a equipe ficava a dançar entre as pedras sem ninguém a upar.
+  assert.match(codigo, /const turno = correndo \|\| turnos\[0\];/);
+  // A piscina de um turno não inclui a própria pedra.
+  assert.match(codigo, /const vistos = new Set\(\[turno\.fixo\]\);/);
+  // A região NÃO é conferida, e de propósito: quem diz qual Pokémon é de qual pedra é o dono, ao
+  // pôr os times certos no turno certo. Adivinhar pelo `species_id` seria apostar que o jogo numera
+  // como a Pokédex nacional, e isso não foi medido.
+  assert.ok(!/species_id|regiao\s*===\s*'kanto'/i.test(codigo), 'ninguém adivinha a região');
+  // O fixo e os times soltos de antes viram o primeiro turno.
+  assert.match(
+    codigo,
+    /cfg\.grupo\.turnos = \[\{ fixo: cfg\.grupo\.fixo \|\| '', times: cfg\.grupo\.times \|\| \[\] \}\];/,
+  );
+});
+
+test('a pedra de um turno escolhe-se entre a equipe e os times dele', () => {
+  // Só a equipe não chega desde que há turnos: a pedra do segundo turno costuma estar na mochila
+  // enquanto o primeiro corre, e era justamente aí que ela tinha de ser escolhida. A coleção
+  // inteira também não serve — 223 linhas não são uma escolha, são uma busca.
+  const bloco = codigo.slice(codigo.indexOf('const candidatosAPedra ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /for \(const p of equipe\(\)\)/);
+  assert.match(corpo, /for \(const nome of semVazios\(turno\.times \|\| \[\]\)\)/);
+  // E a coleção lê-se quando o painel precisa dela: configurar faz-se com a escada PARADA, que é
+  // justamente quando a batida não a leria.
+  assert.match(codigo, /const garantirColecao = \(\) => \{/);
+  assert.match(
+    codigo,
+    /if \(colecao\.size \|\| pedindoBichos \|\| cfg\.modo === 'escada'\) return;/,
+  );
 });

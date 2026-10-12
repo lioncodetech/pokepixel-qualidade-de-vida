@@ -182,6 +182,11 @@
       { id: 'p5', nome: 'Spearow' },
       { id: 'p6', nome: 'Zubat' },
     ],
+    // A turma da SEGUNDA pedra: o rodizio so' se prova com duas pedras e piscinas separadas.
+    'Turma J': [
+      { id: 'j1', nome: 'Totodile' },
+      { id: 'j2', nome: 'Chikorita' },
+    ],
   };
 
   /**
@@ -200,6 +205,9 @@
     { id: 'p6', nome: 'Zubat', especie: 'zubat', nivel: 14 },
     // De proposito: mesma especie do Caterpie. Tem de ser saltado, nao tentado.
     { id: 'p7', nome: 'Caterpie', especie: 'caterpie', nivel: 9 },
+    // A piscina da segunda pedra.
+    { id: 'j1', nome: 'Totodile', especie: 'totodile', nivel: 8 },
+    { id: 'j2', nome: 'Chikorita', especie: 'chikorita', nivel: 8 },
   ];
 
   const hud = document.querySelector('.hud');
@@ -256,7 +264,13 @@
 
   // --------------------------------------------------------------- a porta das Caçadas
 
-  const GUARDADAS = ['Caça de Pidgey', 'Caça de Ralts', 'Caça de Dratini', 'Cidade de Cerulean'];
+  const GUARDADAS = [
+    'Expedição',
+    'Caça de Pidgey',
+    'Caça de Ralts',
+    'Caça de Dratini',
+    'Cidade de Cerulean',
+  ];
   /** O nível que cada caçada exige. Abaixo dele, o aluno morre — como morreu no jogo. */
   const EXIGE = {
     'Caça de Pidgey': 1,
@@ -425,7 +439,15 @@
     },
     cacadas: {
       nomes: () => GUARDADAS,
-      atual: () => ({ nome: onde, regiao: '', modo: '' }),
+      atual: () => ({ nome: onde, regiao: '', modo: '', tipo: 'cacada' }),
+      /**
+       * As duas portas que o modo de grupo usa para a lista de lugares.
+       *
+       * `A expedição` existe aqui so' como um lugar onde NAO se consegue entrar: e' a unica forma
+       * de provar que a lista salta o que nao da' para abrir, em vez de bater na porta e falhar.
+       */
+      estouEm: (nome) => nome === onde,
+      daParaIr: (nome) => nome !== 'Expedição',
       ir: async (nome) => {
         anotar(`caçadas: pedido para ir a "${nome}"`);
         await new Promise((r) => setTimeout(r, 300));
