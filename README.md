@@ -1783,6 +1783,25 @@ rivais, uma por rodada, em silêncio. Por isso quem decide é a **diferença de 
 lida pela API antes e depois do combate: subiu, ganhou. A classe entra só como segunda opinião, para
 o caso improvável de os pontos não se mexerem.
 
+### Na expedição ela espera, e a rodada fica a dever
+
+A expedição dura duas horas a cada quatro, tem CAPTCHA para entrar e você só está lá porque quis.
+Uma janela de 13h-15h cai dentro dela com facilidade — e um combate de arena no meio podia tirá-lo
+de lá, coisa que eu não medi e não vou medir às suas custas.
+
+Então a Arena faz o que a Escada já fazia: espera. Mas espera de um jeito que não lhe custa o dia —
+quando a expedição acaba, ela faz a rodada **mesmo que a janela de horário já tenha fechado**. As
+tentativas só se perdem à meia-noite de Brasília, então o dia ainda dá para recuperar.
+
+O prazo dessa dívida é o `resets_at` da própria arena, guardado como instante na hora de adiar.
+Assim a batida seguinte decide com um `Date.now()` e sem perguntar nada à API — e a dívida morre
+sozinha quando o dia vira, em vez de disparar de madrugada e gastar a rodada do dia seguinte sem
+ninguém pedir. É a mesma regra do calendário: ocorrência perdida fica perdida.
+
+A expedição é conferida no início da rodada **e antes de cada ataque**, porque ela abre de quatro em
+quatro horas e você pode entrar nela no meio de uma rodada de quinze minutos. Nesse caso o que sobra
+fica a dever, como a rodada inteira ficaria.
+
 ### A vez é pedida por ataque, e não pela rodada inteira
 
 A batalha joga-se sozinha — os golpes saem sem ninguém clicar e o pokémon derrotado é substituído

@@ -203,6 +203,10 @@
 
   let vouGanhar = true;
   let demora = 3000;
+  let naExpedicao = false;
+  // A arena vira o dia a' meia-noite de Brasilia. Aqui vira daqui a uma hora, que e' o que torna a
+  // divida da expedição exercitavel sem mexer no relogio da maquina.
+  let reinicia = Date.now() + 3600000;
 
   // ------------------------------------------------------------------ a ponte de mentira
 
@@ -219,6 +223,7 @@
         restantes: estado.tentativas.remaining,
         feitas: estado.tentativas.used,
         limite: estado.tentativas.limit,
+        reinicia,
       },
       atualizacao: {
         gratis: estado.atualizacoes.livres > 0,
@@ -441,6 +446,18 @@
     controlar: () => {},
     visivel: () => true,
     anotar: () => {},
+    /**
+     * A porta das Caçadas, com o unico campo que a Arena lhe pede: o tipo do lugar.
+     *
+     * E' a mesma porta por onde a Escada sabe da expedição. Uma segunda leitura, feita aqui,
+     * seria uma segunda verdade sobre onde o jogador esta'.
+     */
+    cacadas: {
+      atual: () =>
+        naExpedicao
+          ? { nome: 'Expedição Diária Cooperativa', tipo: 'expedicao' }
+          : { nome: 'Caça de Ralts', tipo: 'hunt' },
+    },
   };
 
   // ------------------------------------------------------------------ os comandos
@@ -473,6 +490,16 @@
     anotar('fila: o Ginásio soltou a vez');
     filaMexeu();
   });
+  comando('estou na expedição: não', (b) => {
+    naExpedicao = !naExpedicao;
+    b.target.textContent = `estou na expedição: ${naExpedicao ? 'sim' : 'não'}`;
+    anotar(naExpedicao ? 'jogo: entrei na expedição' : 'jogo: a expedição acabou');
+  });
+  comando('a arena vira o dia agora', () => {
+    reinicia = Date.now() - 1000;
+    anotar('jogo: meia-noite na arena — o dia virou');
+  });
+
   comando('gastar as atualizações grátis', () => {
     estado.atualizacoes.livres = 0;
     anotar('jogo: acabaram as atualizações grátis — a próxima custa 25 💎');

@@ -117,6 +117,20 @@ PPX.modulo(
       barrados: {},
       /** De que temporada e' a lista de barrados. Virou a temporada, a lista limpa-se. */
       temporada: 0,
+      /**
+       * O instante em que a arena vira o dia, quando ha' uma rodada **a dever** por causa da
+       * expedição. `0` = nao se deve nada.
+       *
+       * Escolha do dono em 12/10/2026, com a expedição dele a correr: na expedição a Arena espera,
+       * como a Escada ja' esperava — e faz a rodada quando ela acabar, **mesmo que a janela de
+       * horario ja' tenha fechado**. As tentativas so' se perdem a' meia-noite de Brasilia, entao
+       * o dia ainda da' para recuperar; perder duas horas de expedição e um CAPTCHA, nao.
+       *
+       * O prazo e' o `resets_at` do proprio jogo, guardado como instante. Assim a batida seguinte
+       * decide com um `Date.now()` e sem perguntar nada a' API — e a divida morre sozinha quando o
+       * dia vira, em vez de ficar guardada para uma madrugada qualquer.
+       */
+      devendo: 0,
     };
 
     let cfg = { ...PADRAO, ...(ler(CHAVE, null) || {}) };
@@ -166,6 +180,18 @@ PPX.modulo(
     };
 
     // ------------------------------------------------------------- a tela do jogo
+
+    /**
+     * Se o jogador esta' **dentro** da expedição agora.
+     *
+     * Quem responde e' a porta das Caçadas, que le' o HUD da corrida — a mesma que a Escada usa.
+     * Com a ferramenta Caçadas desligada ninguem sabe, e entao nao se adivinha: a Arena corre como
+     * corria. E' o mesmo que ela ja' faz quando nao ha' fila.
+     */
+    const naExpedicao = () => globalThis.PPX?.cacadas?.atual?.()?.tipo === 'expedicao';
+
+    const ESPERO_A_EXPEDICAO =
+      'Você está na expedição — espero aqui e faço a rodada quando ela acabar.';
 
     const janela = () => document.querySelector('.defense-window');
     const tituloDaJanela = () => (janela()?.querySelector('header h3')?.textContent || '').trim();
@@ -439,6 +465,10 @@ PPX.modulo(
       parar = false;
       const linhas = [];
       try {
+        if (naExpedicao()) {
+          await ficarADever(aviso);
+          return;
+        }
         if (!(await abrirJanela())) {
           aviso('Não consegui abrir a janela da Arena de Defesa.', true);
           return;
@@ -446,6 +476,13 @@ PPX.modulo(
         for (let feitos = 0; feitos < Math.max(1, Number(cfg.quantos) || 5); feitos += 1) {
           if (parar) {
             aviso('Parei a pedido.');
+            return;
+          }
+          // Conferido a cada ataque, e nao so' no inicio: a expedição abre de quatro em quatro
+          // horas e o dono pode entrar nela no meio de uma rodada de quinze minutos. O que sobra
+          // fica a dever, como a rodada inteira ficaria.
+          if (naExpedicao()) {
+            await ficarADever(aviso);
             return;
           }
           let estado = await pedirEstado();
@@ -539,6 +576,23 @@ PPX.modulo(
       }
     };
 
+    /**
+     * Guarda a rodada que a expedição adiou, com o prazo que o jogo da'.
+     *
+     * Le' o estado **uma vez** so' para saber a que horas a arena vira o dia; dai' em diante a
+     * batida decide sozinha. Se a leitura falhar, nao se inventa prazo nenhum: fica-se sem divida,
+     * e no maximo perde-se a rodada de hoje — que e' o lado certo de errar.
+     */
+    const ficarADever = async (aviso) => {
+      aviso(ESPERO_A_EXPEDICAO);
+      if (cfg.devendo && Date.now() < cfg.devendo) return;
+      const estado = await pedirEstado();
+      if (!estado?.ok || !estado.tentativas.reinicia) return;
+      cfg.devendo = estado.tentativas.reinicia;
+      gravar();
+      desenhar();
+    };
+
     const pontosEmTexto = (pontos) =>
       pontos === null || pontos === 0 ? '' : `(${pontos > 0 ? '+' : ''}${pontos} pts)`;
 
@@ -551,6 +605,29 @@ PPX.modulo(
     let relogio = 0;
     const bater = () => {
       if (!cfg.ligada || correndo) return;
+      // A divida morre com o dia dela: a arena reseta as tentativas, e uma rodada de ontem feita
+      // de madrugada seria a rodada de hoje gasta sem ninguem pedir. Ver `devendo`.
+      if (cfg.devendo && Date.now() >= cfg.devendo) {
+        cfg.devendo = 0;
+        gravar();
+        desenhar();
+      }
+      // A expedição e' esperada aqui tambem, e nao so' dentro da rodada: assim a batida nao abre a
+      // janela da arena por cima do jogo dele a cada vinte segundos.
+      if (naExpedicao()) {
+        if (esperaDaJanela() !== null && esperaDaJanela() <= 0) {
+          cfg.ultima = Date.now();
+          gravar();
+          void ficarADever(dizer);
+        }
+        return;
+      }
+      if (cfg.devendo) {
+        cfg.devendo = 0;
+        gravar();
+        void rodada(dizer);
+        return;
+      }
       const falta = esperaDaJanela();
       if (falta === null || falta > 0) return;
       cfg.ultima = Date.now();
@@ -648,12 +725,17 @@ PPX.modulo(
         .map((l) => `<span style="color:${CORES[l.estado] || '#8b97a8'}">●</span>`)
         .join('');
       const falta = esperaDaJanela();
-      const quando =
-        !cfg.ligada || falta === null
-          ? 'parada'
-          : falta <= 0
-            ? 'agora'
-            : `em ${Math.ceil(falta / 60000)} min`;
+      const quando = !cfg.ligada
+        ? 'parada'
+        : naExpedicao()
+          ? 'depois da expedição'
+          : cfg.devendo
+            ? 'assim que der'
+            : falta === null
+              ? 'parada'
+              : falta <= 0
+                ? 'agora'
+                : `em ${Math.ceil(falta / 60000)} min`;
       campo('[data-resumo]').innerHTML = `${marcas || '—'} <span>${quando}</span>`;
     };
 
@@ -776,6 +858,7 @@ PPX.modulo(
         return;
       }
       cfg.ultima = Date.now();
+      cfg.devendo = 0;
       gravar();
       void rodada(dizer);
     });

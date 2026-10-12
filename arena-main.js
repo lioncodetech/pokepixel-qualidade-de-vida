@@ -69,6 +69,10 @@
         restantes: Number(a.remaining) || 0,
         feitas: Number(a.used) || 0,
         limite: Number(a.limit) || 0,
+        // Quando o dia da arena vira. E' o prazo de uma rodada adiada pela expedição — ver
+        // `devendo`, em `arena.js`. Atravessa em milissegundos porque do outro lado e' com
+        // `Date.now()` que ele se compara, e nao com uma string.
+        reinicia: Date.parse(a.resets_at) || 0,
       },
       // De graça ou nada: `cost_diamonds` atravessa so' para o painel poder dizer o preço que
       // **nao** vai pagar.

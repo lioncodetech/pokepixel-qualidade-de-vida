@@ -180,3 +180,54 @@ test('a ferramenta esta no catalogo, no manifest e com atalho proprio', () => {
   for (const arquivo of ['cacadas.js', 'escada.js', 'gym.js', 'times.js', 'raridades.js'])
     assert.ok(!ler(arquivo).includes("=== 'KeyM'"), `${arquivo} não usa a tecla M`);
 });
+
+test('na expedicao a arena espera, e a rodada fica a dever ate o dia virar', () => {
+  // Escolha do dono em 12/10/2026, com a expedição dele a correr: perder a rodada de hoje custa
+  // pontos que a meia-noite devolve; perder duas horas de expedição e um CAPTCHA, não.
+  assert.match(
+    codigo,
+    /const naExpedicao = \(\) => globalThis\.PPX\?\.cacadas\?\.atual\?\.\(\)\?\.tipo === 'expedicao';/,
+  );
+  // A mesma porta que a Escada usa. Uma leitura própria do HUD seria uma segunda verdade sobre
+  // onde o jogador está.
+  const rodada = codigo.slice(codigo.indexOf('const rodada = async'));
+  const corpo = rodada.slice(0, rodada.indexOf('\n    };'));
+  // Confere-se no início E a cada ataque: a expedição abre de quatro em quatro horas, e o dono
+  // pode entrar nela no meio de uma rodada de quinze minutos.
+  assert.ok(
+    corpo.split('if (naExpedicao()) {').length - 1 === 2,
+    'a expedição é conferida no início da rodada e a cada ataque',
+  );
+  assert.match(corpo, /await ficarADever\(aviso\);/);
+  // E a janela da arena não chega a abrir-se por cima do jogo dele.
+  assert.ok(
+    corpo.indexOf('if (naExpedicao()) {') < corpo.indexOf('await abrirJanela()'),
+    'espera-se antes de abrir a janela, não depois',
+  );
+});
+
+test('o prazo da divida vem do jogo, e ela morre quando o dia da arena vira', () => {
+  // O `resets_at` da própria arena, guardado como instante: assim a batida decide com um
+  // `Date.now()` e sem perguntar nada à API, e a dívida não sobrevive para uma madrugada qualquer
+  // — fazê-la de madrugada seria gastar a rodada de hoje sem ninguém pedir.
+  assert.match(ponte, /reinicia: Date\.parse\(a\.resets_at\) \|\| 0,/);
+  const deve = codigo.slice(codigo.indexOf('const ficarADever = async'));
+  const corpo = deve.slice(0, deve.indexOf('\n    };'));
+  assert.match(corpo, /if \(cfg\.devendo && Date\.now\(\) < cfg\.devendo\) return;/);
+  assert.match(corpo, /cfg\.devendo = estado\.tentativas\.reinicia;/);
+  // Sem leitura não se inventa prazo: no máximo perde-se a rodada de hoje, que é o lado certo de
+  // errar.
+  assert.match(corpo, /if \(!estado\?\.ok \|\| !estado\.tentativas\.reinicia\) return;/);
+  const bate = codigo.slice(codigo.indexOf('const bater = () =>'));
+  const batida = bate.slice(0, bate.indexOf('\n    };'));
+  assert.match(batida, /if \(cfg\.devendo && Date\.now\(\) >= cfg\.devendo\) \{/);
+  // A dívida é cobrada assim que a expedição acaba — mesmo com a janela de horário já fechada.
+  assert.ok(
+    batida.indexOf('if (naExpedicao()) {') < batida.indexOf('if (cfg.devendo) {'),
+    'primeiro espera-se a expedição, depois cobra-se a dívida',
+  );
+  assert.ok(
+    batida.indexOf('if (cfg.devendo) {') < batida.indexOf('const falta = esperaDaJanela();'),
+    'a dívida corre sem depender da janela de horário, que já pode ter fechado',
+  );
+});
