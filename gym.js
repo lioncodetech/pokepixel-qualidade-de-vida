@@ -287,7 +287,9 @@ PPX.modulo(
 
     const janelaPorTitulo = (regex) =>
       [...document.querySelectorAll('.pokeidle-panel')].find(
-        (p) => visivel(p) && regex.test((p.querySelector('.pokeidle-panel__title')?.textContent || '').trim()),
+        (p) =>
+          visivel(p) &&
+          regex.test((p.querySelector('.pokeidle-panel__title')?.textContent || '').trim()),
       );
 
     /** Fecha qualquer menu da barra de cima: um menu aberto faz o jogo recusar abrir janelas. */
@@ -528,7 +530,10 @@ PPX.modulo(
         else if (Date.now() - semSinalDesde >= PACIENCIA_SEM_SINAL)
           return { acabou: false, erro: 'a arena não abriu depois do desafio' };
         if (Date.now() - inicio >= TETO_DO_COMBATE)
-          return { acabou: false, erro: `o combate passou de ${Math.round(TETO_DO_COMBATE / 60000)} min sem acabar` };
+          return {
+            acabou: false,
+            erro: `o combate passou de ${Math.round(TETO_DO_COMBATE / 60000)} min sem acabar`,
+          };
         avisar(lutando ? `Lutando… ${relogioDoCombate()}` : 'Esperando a arena…');
         await espera(1000);
       }
@@ -636,10 +641,13 @@ PPX.modulo(
       );
       if (!linha) {
         await fecharJanela(janela);
-        return { ok: false, erro: `não achei "${cacada.nome}" na lista de ${cacada.regiao || 'caçadas'}` };
+        return {
+          ok: false,
+          erro: `não achei "${cacada.nome}" na lista de ${cacada.regiao || 'caçadas'}`,
+        };
       }
-      const botao = [...linha.querySelectorAll('button')].find(
-        (b) => /^Caçar$/i.test((b.textContent || '').trim()),
+      const botao = [...linha.querySelectorAll('button')].find((b) =>
+        /^Caçar$/i.test((b.textContent || '').trim()),
       );
       if (!botao) {
         await fecharJanela(janela);
@@ -746,19 +754,22 @@ PPX.modulo(
       const bruto = ler(CHAVE_AGENDA, null) || {};
       // O `reset` viaja junto: `guardarAgenda(agenda())` e' o caminho de toda a gravacao, e um
       // campo que nao estivesse aqui seria apagado na primeira mudanca de horario.
-      return Object.assign({ reset: String(bruto.reset ?? '00:00') }, Object.fromEntries(
-        REGIOES.map((r) => [
-          r,
-          {
-            ligado: bruto[r]?.ligado === true,
-            horarios: String(bruto[r]?.horarios ?? ''),
-            // Vazio quer dizer todo dia — e' como esta agenda sempre se comportou, e e' o que o
-            // ginasio do dia pede na maioria das vezes.
-            dias: String(bruto[r]?.dias ?? ''),
-            ultima: Number(bruto[r]?.ultima) || 0,
-          },
-        ]),
-      ));
+      return Object.assign(
+        { reset: String(bruto.reset ?? '00:00') },
+        Object.fromEntries(
+          REGIOES.map((r) => [
+            r,
+            {
+              ligado: bruto[r]?.ligado === true,
+              horarios: String(bruto[r]?.horarios ?? ''),
+              // Vazio quer dizer todo dia — e' como esta agenda sempre se comportou, e e' o que o
+              // ginasio do dia pede na maioria das vezes.
+              dias: String(bruto[r]?.dias ?? ''),
+              ultima: Number(bruto[r]?.ultima) || 0,
+            },
+          ]),
+        ),
+      );
     };
 
     const guardarAgenda = (nova) => gravar(CHAVE_AGENDA, nova);
@@ -799,7 +810,9 @@ PPX.modulo(
      * versao nova.
      */
     const horaDoReset = () => {
-      const casa = /^\s*(\d{1,2}):?(\d{2})?\s*$/.exec(String((ler(CHAVE_AGENDA, null) || {}).reset ?? '00:00'));
+      const casa = /^\s*(\d{1,2}):?(\d{2})?\s*$/.exec(
+        String((ler(CHAVE_AGENDA, null) || {}).reset ?? '00:00'),
+      );
       if (!casa) return 0;
       return (Number(casa[1]) % 24) * 60 + (Number(casa[2] ?? 0) % 60);
     };
@@ -816,7 +829,44 @@ PPX.modulo(
     const estadoDe = (regiao) => {
       const linha = placar()[regiao];
       if (!linha || linha.dia !== diaDoServidor()) return { estado: 'vazio' };
-      return linha;
+      // Um estado em branco e' o que `marcarAMao` deixa quando se roda ate' "ainda nao foi feito":
+      // guarda-se a linha, para a marca de ontem nao voltar, mas ela conta como vazia.
+      return linha.estado ? linha : { ...linha, estado: 'vazio' };
+    };
+
+    /**
+     * A ordem em que o clique do dono roda as marcas do placar.
+     *
+     * **"Deu erro" nao entra na roda**: ninguem quer marcar um erro a mao — quem marca um erro e'
+     * a corrida que falhou. Partindo de um erro, o clique seguinte e' "Vitória", que e' o caso que
+     * o dono descreveu: deu erro, ele foi ver, e o ginasio ja' estava ganho.
+     */
+    const VOLTA = ['vazio', 'vitoria', 'derrota'];
+
+    /**
+     * Marca a mao o que aconteceu num ginasio hoje.
+     *
+     * O placar e' memoria, e nao mandante: nada aqui faz o ginasio correr nem deixar de correr —
+     * a agenda e' que manda nisso. O que se corrige e' o que o painel **diz**, que depois de um
+     * erro, ou de uma vitoria ganha com as proprias maos, estava a mentir. Pedido do dono em
+     * 12/10/2026: "as vezes da erro e eu vou manualmente e vejo que ja ganhou".
+     *
+     * O texto fica a dizer que foi a mao, para ninguem mais tarde ler aquilo como medida.
+     */
+    const marcarAMao = (regiao) => {
+      const agora = estadoDe(regiao).estado || 'vazio';
+      const i = VOLTA.indexOf(agora);
+      const proximo = VOLTA[(i + 1) % VOLTA.length];
+      anotarPlacar(
+        regiao,
+        proximo === 'vazio' ? '' : proximo,
+        proximo === 'vazio' ? '' : 'marcado à mão',
+      );
+      dizer(
+        proximo === 'vazio'
+          ? `${regiao}: marquei como ainda não feito hoje.`
+          : `${regiao}: marquei ${CORES[proximo][1].toLowerCase()} à mão.`,
+      );
     };
 
     const anotarPlacar = (regiao, estado, texto) => {
@@ -855,7 +905,7 @@ PPX.modulo(
         <button type="button" class="volta" data-voltar>Voltar para a caçada</button>
         <div class="agenda">
           <div class="linha">
-            <span class="sinal" data-sinal="KANTO"></span>
+            <span class="sinal" data-sinal="KANTO" data-marcar="KANTO"></span>
             <label class="liga"><input type="checkbox" data-auto="KANTO"> Kanto</label>
             <input type="text" data-horas="KANTO" placeholder="08:00-09:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
@@ -864,7 +914,7 @@ PPX.modulo(
               title="Fazer o ginásio de Kanto agora">▶</button>
           </div>
           <div class="linha">
-            <span class="sinal" data-sinal="JOHTO"></span>
+            <span class="sinal" data-sinal="JOHTO" data-marcar="JOHTO"></span>
             <label class="liga"><input type="checkbox" data-auto="JOHTO"> Johto</label>
             <input type="text" data-horas="JOHTO" placeholder="19:00-20:00"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
@@ -944,6 +994,12 @@ PPX.modulo(
          aconteceu enquanto ninguem estava olhando. */
       #lioncode-gym .sinal { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto;
         background: #424a57; box-shadow: 0 0 0 1px #0006 inset; }
+      /* Um ponto de dez pixels e' pouco para acertar com o rato: a area de clique cresce com uma
+         borda transparente, que nao mexe no desenho nem empurra a linha. */
+      #lioncode-gym [data-marcar] { cursor: pointer; border: 4px solid transparent;
+        background-clip: padding-box; width: 18px; height: 18px; margin: -4px; }
+      #lioncode-gym .quando[data-marcar] { width: auto; height: auto; border-radius: 0;
+        box-shadow: none; }
       #lioncode-gym .estado { margin: 0; color: #9aa6b8; min-height: 1.4em; }
       #lioncode-gym .estado.ruim { color: #ff9b9b; }
       #lioncode-gym .estado.bom { color: #7ddba0; font-weight: 600; }
@@ -1116,11 +1172,16 @@ PPX.modulo(
         linha.title = titulo;
         const ponto = document.createElement('span');
         ponto.className = 'sinal';
+        ponto.dataset.marcar = regiao;
+        ponto.title = 'Clique para corrigir: ainda não feito → Vitória → Derrota';
         ponto.style.background = cor;
         const nome = document.createElement('b');
         nome.textContent = regiao === 'KANTO' ? 'Kanto' : 'Johto';
         const diz = document.createElement('span');
         diz.className = 'quando';
+        // A palavra tambem corrige: e' nela que o dono esta' olhando quando ve' que ela mente.
+        diz.dataset.marcar = regiao;
+        diz.title = ponto.title;
         // Cinza dispensa palavra: o ponto ja' diz que nao foi feito, e a hora de um ginasio que
         // nao aconteceu nao existe.
         const emAndamento = tarefa()?.regiao === regiao;
@@ -1427,7 +1488,10 @@ PPX.modulo(
         );
         if (!desafiar || desafiar.disabled) {
           await fecharJanela(janela);
-          return { ok: false, erro: 'o botão "Desafiar agora" não está disponível (tentativas do dia?)' };
+          return {
+            ok: false,
+            erro: 'o botão "Desafiar agora" não está disponível (tentativas do dia?)',
+          };
         }
 
         // Este e' o ultimo clique da fase de entrada, entao a pausa dele leva o que sobrou do
@@ -1463,7 +1527,10 @@ PPX.modulo(
           // Mas diz-se o que **se viu**, como nos ginasios: foi a falta disto que fez perder uma
           // publicacao inteira a adivinhar porque e' que o clique nao pegava.
           const visto = (resumo.visto || [])
-            .map((e) => `${(e.textContent || '?').trim().slice(0, 12)}${clicavel(e) ? '' : ' (desligado)'}`)
+            .map(
+              (e) =>
+                `${(e.textContent || '?').trim().slice(0, 12)}${clicavel(e) ? '' : ' (desligado)'}`,
+            )
             .join(' | ');
           dizer(
             `Não consegui confirmar o resumo${visto ? ` — vi: ${visto}` : ' — não achei o botão'}; sigo mesmo assim.`,
@@ -1483,7 +1550,12 @@ PPX.modulo(
         const r = await trocarTime(dados.timeVolta);
         // Uma falha aqui nao apaga o ginasio que ja' foi feito, mas tem de ser dita: seguir para a
         // cacada com o time de ginasio seria pior do que parar.
-        return r.ok ? { ok: true } : { ok: false, erro: `o ginásio foi feito, mas não voltei ao time "${dados.timeVolta}": ${r.erro}` };
+        return r.ok
+          ? { ok: true }
+          : {
+              ok: false,
+              erro: `o ginásio foi feito, mas não voltei ao time "${dados.timeVolta}": ${r.erro}`,
+            };
       }
 
       if (etapa === 'voltar') {
@@ -1608,6 +1680,12 @@ PPX.modulo(
      * caçada" e nos times a' vista, e deixa-la para tras faria o proximo clique agir noutro lugar.
      * Quem grava e enche as listas e' o proprio `change` que ja' existia.
      */
+    // Corrigir o placar a mao, pelo sinal — aberto ou minimizado, e' o mesmo clique.
+    painel.addEventListener('click', (evento) => {
+      const marca = evento.target.closest?.('[data-marcar]');
+      if (marca) marcarAMao(marca.dataset.marcar);
+    });
+
     painel.addEventListener('click', (evento) => {
       const botao = evento.target.closest?.('[data-ir-regiao]');
       if (!botao) return;
@@ -1773,7 +1851,9 @@ PPX.modulo(
 
         if (jaNaCacada) {
           celebrar(
-            paraOTime ? `Time "${paraOTime}" montado. Você já estava na caçada.` : 'Você já está numa caçada.',
+            paraOTime
+              ? `Time "${paraOTime}" montado. Você já estava na caçada.`
+              : 'Você já está numa caçada.',
           );
           return;
         }

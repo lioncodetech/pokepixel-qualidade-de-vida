@@ -1133,3 +1133,46 @@ test('um time que nao existe nesta conta nao e um time', () => {
   // Sem a ferramenta Times a responder, não se inventa recusa: a lista vazia não prova nada.
   assert.match(corpo, /if \(Array\.isArray\(sabidos\) && sabidos\.length\)/);
 });
+
+test('os comandos nao se escondem junto com o corpo', () => {
+  // Pedido do dono em 12/10/2026: minimizada é como ela vive, e iniciar, parar, pausar e retomar
+  // são justamente o que ele quer alcançar sem abrir nada. O `.corpo` é o que o minimizar esconde,
+  // então os botões saíram de lá para fora — um só par de botões, e não uma cópia a desencontrar-se.
+  const html = codigo.slice(codigo.indexOf('painel.innerHTML = `'));
+  const marcacao = html.slice(0, html.indexOf('`;'));
+  assert.ok(
+    marcacao.indexOf('data-ligar') < marcacao.indexOf('<div class="corpo">'),
+    'os botões vêm antes do corpo, e por isso sobrevivem ao minimizar',
+  );
+  // E a caixa dos botões não leva um `hidden` de volta: escondê-la é desfazer o pedido.
+  assert.match(marcacao, /<div class="botoes">/);
+  assert.ok(!/class="botoes"[^>]/.test(marcacao), 'nada de atributos a esconder os comandos');
+  assert.equal(marcacao.split('data-ligar').length - 1, 1, 'há um só botão de ligar');
+  assert.equal(marcacao.split('data-pausar').length - 1, 1, 'há um só botão de pausar');
+  assert.match(
+    codigo,
+    /#lioncode-escada\.minimizado \.botoes \{/,
+    'minimizados, cabem no estreito',
+  );
+});
+
+test('o corpo rola, e o teto e medido em vez de adivinhado', () => {
+  // Com nove degraus, a fila de times e o bloco do fim, o painel passava do rodapé da tela e o
+  // "+ time" ficava abaixo do monitor — visto na janela do dono em 12/10/2026.
+  assert.match(codigo, /#lioncode-escada \.corpo \{[^}]*overflow-y: auto;/s);
+  // O CSS traz um teto redondo, que é o chão; quem manda é a medida de onde o corpo está, porque
+  // o painel arrasta-se e um número fixo deixaria passar quem o pusesse mais abaixo.
+  assert.match(codigo, /max-height: calc\(100vh - 170px\);/);
+  const ajuste = codigo.slice(codigo.indexOf('const ajustarAltura = ()'));
+  const corpo = ajuste.slice(0, ajuste.indexOf('\n    };'));
+  assert.match(corpo, /innerHeight - topo - 12/, 'o teto sai da posição real, com um respiro');
+  assert.match(corpo, /corpo\.style\.maxHeight = '';/, 'limpa antes de medir, senão mede-se a si');
+  // Aba escondida não tem viewport: tenta-se outra vez em vez de congelar um teto errado.
+  assert.match(corpo, /requestAnimationFrame\(ajustarAltura\)/);
+  // E remede-se quando a lista muda de tamanho, quando o painel se arrasta e quando a janela muda.
+  assert.match(codigo, /addEventListener\('resize', recolocar\)/);
+  assert.ok(
+    codigo.indexOf('const ajustarAltura = ()') < codigo.indexOf('const desenhar = ('),
+    'declarada antes de desenhar, que a chama já na subida da página',
+  );
+});

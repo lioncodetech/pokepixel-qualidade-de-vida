@@ -1838,16 +1838,19 @@ PPX.modulo(
       <div class="resumo" data-resumo>
         <p class="estado" data-estado-min></p>
       </div>
+      <!-- **Os comandos vivem fora do corpo, e e' de proposito.** O corpo e' o que o minimizar
+           esconde; iniciar, parar, pausar e retomar sao justamente o que se quer alcançar sem
+           abrir nada. Pedido do dono em 12/10/2026, para esta e para a Arena. -->
+      <div class="botoes">
+        <button type="button" class="ligar" data-ligar>Iniciar</button>
+        <button type="button" class="ligar" data-pausar>Pausar</button>
+      </div>
       <div class="corpo">
         <select data-modo title="Como ela upa — os dois modos mexem na mesma equipe, então só um corre">
           <option value="escada">modo: escada de caçadas</option>
           <option value="grupo">modo: grupo até o nível X</option>
           <option value="passo">modo: grupo subindo de N em N</option>
         </select>
-        <div class="botoes">
-          <button type="button" class="ligar" data-ligar>Iniciar</button>
-          <button type="button" class="ligar" data-pausar>Pausar</button>
-        </div>
         <label class="caixa"><input type="checkbox" data-trocar> deixar trocar de caçada</label>
         <div data-escada>
         <ul data-lista></ul>
@@ -1916,7 +1919,19 @@ PPX.modulo(
       #lioncode-escada header button {
         background: none; border: 0; color: #8b97a8; font-size: 16px; cursor: pointer; padding: 0 2px;
       }
-      #lioncode-escada .corpo { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+      /* **O corpo rola, e o cabeçalho nao.** Com nove degraus, dois times na fila e o bloco do fim,
+         este painel passa da altura da tela e o "+ time" fica abaixo do rodape do monitor — medido
+         na janela do dono em 12/10/2026, com a tela cheia de degraus. O que rola e' so' o corpo:
+         o titulo, o resumo e os botoes de comando ficam parados onde a mao ja' os procura.
+         O numero daqui e' o chao: supoe o painel no lugar de sempre. Quem manda e' o
+         ajustarAltura(), que mede onde o corpo **esta'** — o painel arrasta-se, e um teto so' de
+         CSS deixaria passar do rodape quem o tivesse posto mais abaixo. */
+      #lioncode-escada .corpo { display: flex; flex-direction: column; gap: 8px;
+        padding: 0 10px 10px; max-height: calc(100vh - 170px); overflow-y: auto;
+        overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2a3244 transparent; }
+      #lioncode-escada .corpo::-webkit-scrollbar { width: 8px; }
+      #lioncode-escada .corpo::-webkit-scrollbar-thumb { background: #2a3244; border-radius: 4px; }
+      #lioncode-escada .corpo::-webkit-scrollbar-track { background: transparent; }
       #lioncode-escada button.ligar, #lioncode-escada button.mais {
         background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a; border-radius: 6px;
         padding: 7px; font: inherit; cursor: pointer;
@@ -1965,7 +1980,7 @@ PPX.modulo(
         border-top: 1px solid #202835; padding-top: 7px; }
       #lioncode-escada .fim select { width: 100%; }
       #lioncode-escada .fila { display: flex; flex-direction: column; gap: 5px; }
-      #lioncode-escada .botoes { display: flex; gap: 6px; }
+      #lioncode-escada .botoes { display: flex; gap: 6px; padding: 0 10px 10px; }
       #lioncode-escada .botoes button { flex: 1; }
       #lioncode-escada [data-pausar] { background: #3a3220; border-color: #5c4e2c; }
       #lioncode-escada [data-pausar]:hover { background: #4a4028; }
@@ -1988,6 +2003,9 @@ PPX.modulo(
       #lioncode-escada.minimizado .resumo { display: block; padding: 0 9px 8px; }
       #lioncode-escada.minimizado { width: 210px; }
       #lioncode-escada.minimizado .corpo { display: none; }
+      /* Os botoes ficam, e e' o que se queria. Menores, porque minimizado o painel e' estreito. */
+      #lioncode-escada.minimizado .botoes { padding: 0 9px 9px; }
+      #lioncode-escada.minimizado .botoes button { padding: 4px 6px; font-size: 12px; }
       #lioncode-escada.minimizado header { border-bottom: 0; padding: 6px 8px; }
       #lioncode-escada.minimizado header strong { font-size: 12px; letter-spacing: .06em; }
     `;
@@ -2375,6 +2393,34 @@ PPX.modulo(
      * 11/10/2026: o "Não consegui ir para X: …" nunca chegava a ser lido, porque o `finally` do
      * caminho a' mao redesenhava logo a seguir.
      */
+    /**
+     * Quanto o corpo pode crescer antes de o painel passar do fundo da tela.
+     *
+     * Um teto escrito no CSS seria um palpite sobre onde o painel esta': ele arrasta-se, e um
+     * painel posto mais abaixo passaria do rodape com a mesma conta. Aqui a medida sai de onde o
+     * corpo **esta'** agora, e sobra um dedo de respiro por baixo.
+     *
+     * Chamada depois de cada desenho, de cada arrasto e de cada mudanca de tamanho da janela — e
+     * nunca com o painel escondido, que nao tem caixa e daria zero.
+     */
+    const ajustarAltura = () => {
+      const corpo = painel.querySelector('.corpo');
+      if (!corpo || painel.style.display === 'none') return;
+      // Limpar primeiro devolve o teto do CSS, que e' o chao desta conta: se a medida nao der, a
+      // barra existe na mesma, so' que por um numero redondo em vez do exacto.
+      corpo.style.maxHeight = '';
+      // Janela ainda sem altura: acontece num separador escondido (medido na banca — `innerHeight`
+      // e `clientHeight` sao zero com `document.hidden`). Tenta-se no quadro seguinte; escondido
+      // o quadro nao vem, e quando a aba voltar o `resize` trata disto.
+      if (!innerHeight) {
+        requestAnimationFrame(ajustarAltura);
+        return;
+      }
+      const topo = corpo.getBoundingClientRect().top;
+      const cabe = Math.max(140, Math.round(innerHeight - topo - 12));
+      corpo.style.maxHeight = `${cabe}px`;
+    };
+
     const desenhar = (dizerPorque = true) => {
       const ligar = campo('[data-ligar]');
       ligar.textContent = cfg.ligada ? 'Parar' : 'Iniciar';
@@ -2408,6 +2454,7 @@ PPX.modulo(
       // defeito de uma hora: a fila de times sumiu do painel, e com ela o unico lugar de dizer
       // "quando estes acabarem, upa os outros".
       campo('[data-junta]').style.display = cfg.subida ? '' : 'none';
+      ajustarAltura();
       // Cada fim pede uma coisa diferente, ou nenhuma. Mostrar os tres campos ao mesmo tempo faria
       // o painel perguntar duas coisas que nao vao ser usadas.
       const destino = campo('[data-destino]');
@@ -2749,11 +2796,13 @@ PPX.modulo(
     // ------------------------------------------------------------- mostrar e esconder
 
     const recolocar = () => {
-      if (globalThis.PPX?.canto?.aplicar(painel, ler(CHAVE_POS, null))) return;
-      painel.style.left = 'auto';
-      painel.style.top = '96px';
-      painel.style.right = '262px';
-      painel.style.bottom = 'auto';
+      if (!globalThis.PPX?.canto?.aplicar(painel, ler(CHAVE_POS, null))) {
+        painel.style.left = 'auto';
+        painel.style.top = '96px';
+        painel.style.right = '262px';
+        painel.style.bottom = 'auto';
+      }
+      ajustarAltura();
     };
 
     const mostrarPainel = (sim) => {
@@ -2805,6 +2854,8 @@ PPX.modulo(
         movendo = null;
         const pos = globalThis.PPX?.canto?.medir(painel);
         if (pos) gravarChave(CHAVE_POS, pos);
+        // Arrastado para baixo, o corpo tem menos chao: o teto reconta-se onde ele parou.
+        ajustarAltura();
       });
     }
 

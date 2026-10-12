@@ -128,11 +128,29 @@ test('a janela da arena abre-se sozinha, em dois cliques', () => {
   assert.match(codigo, /for \(const tipo of \['pointerdown', 'mousedown', 'mouseup', 'click'\]\)/);
 });
 
+test('a tela de preparacao reconhece-se pelo que tem, e nao pelo que diz', () => {
+  // Medido no jogo em 12/10/2026: o "Ataque contra <nome>" é um H2, e o h3 daquele cabeçalho é o
+  // "ESCOLHIDOS · 6/6". A primeira versão procurava a frase no `header h3`, ficava dez segundos a
+  // olhar para a tela aberta e dizia que ela não tinha aberto. Um seletor de título por outro era
+  // repetir o erro: o que vale é haver os ataques salvos e o botão que os passos seguintes usam.
+  const corpo = codigo.slice(codigo.indexOf('const naPreparacao ='));
+  const fim = corpo.slice(0, corpo.indexOf('\n    };'));
+  assert.ok(!/Ataque contra/i.test(fim), 'a tela não se reconhece por uma frase do cabeçalho');
+  assert.ok(!/header h3/.test(codigo), 'ninguém lê o h3 do cabeçalho para saber onde está');
+  assert.match(fim, /\.defense-slot/);
+  assert.match(fim, /confirmarDe\(j\)/);
+  assert.match(fim, /!naLista\(\)/, 'a lista de rivais aberta não é a tela de preparação');
+});
+
 test('o ataque salvo e carregado antes do Atacar, e sem ele nao se ataca a esmo', () => {
   const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
   const corpo = atacar.slice(0, atacar.indexOf('\n    };'));
   assert.ok(
-    corpo.indexOf('await carregarTime()') < corpo.indexOf('defense-primary'),
+    corpo.includes('confirmarDe(janela())'),
+    'o botão de confirmar sai da própria janela da arena',
+  );
+  assert.ok(
+    corpo.indexOf('await carregarTime()') < corpo.indexOf('confirmarDe(janela())'),
     'carrega-se a equipe antes de confirmar o ataque',
   );
   // Não conseguir carregar o time pedido é sair pela porta, e não atacar com outra equipe: a
@@ -230,4 +248,23 @@ test('o prazo da divida vem do jogo, e ela morre quando o dia da arena vira', ()
     batida.indexOf('if (cfg.devendo) {') < batida.indexOf('const falta = esperaDaJanela();'),
     'a dívida corre sem depender da janela de horário, que já pode ter fechado',
   );
+});
+
+test('os comandos nao se escondem junto com o corpo', () => {
+  // O mesmo pedido da Escada, no mesmo dia: minimizada, a Arena tem de poder começar, parar e
+  // atacar agora sem abrir o painel. Os botões vivem fora do `.corpo`, que é o que o minimizar
+  // esconde — e são os mesmos botões, não uma segunda cópia a desencontrar-se da primeira.
+  const html = codigo.slice(codigo.indexOf('painel.innerHTML = `'));
+  const marcacao = html.slice(0, html.indexOf('`;'));
+  assert.ok(
+    marcacao.indexOf('data-ligar') < marcacao.indexOf('<div class="corpo">'),
+    'os botões vêm antes do corpo, e por isso sobrevivem ao minimizar',
+  );
+  assert.ok(marcacao.indexOf('data-agora') < marcacao.indexOf('<div class="corpo">'));
+  // E a caixa dos botões não leva um `hidden` de volta: escondê-la é desfazer o pedido.
+  assert.match(marcacao, /<div class="botoes">/);
+  assert.ok(!/class="botoes"[^>]/.test(marcacao), 'nada de atributos a esconder os comandos');
+  assert.equal(marcacao.split('data-ligar').length - 1, 1, 'há um só botão de ligar');
+  assert.equal(marcacao.split('data-agora').length - 1, 1, 'há um só "Atacar agora"');
+  assert.match(codigo, /#lioncode-arena\.minimizado \.botoes \{/);
 });

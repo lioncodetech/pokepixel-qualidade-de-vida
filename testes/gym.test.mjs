@@ -35,7 +35,10 @@ test('a espera pelo combate tem saida para os dois casos tristes', () => {
   assert.match(codigo, /TETO_DO_COMBATE/);
   // `.pvp-battle-clock` é o marcador de "ainda lutando": `.pokeidle-gym-battle` é a raiz do jogo
   // inteiro e existe sempre, então não serve para isto.
-  assert.match(codigo, /const combateEmCurso = \(\) =>\s*Boolean\(document\.querySelector\('\.pvp-battle-clock'\)\)/s);
+  assert.match(
+    codigo,
+    /const combateEmCurso = \(\) =>\s*Boolean\(document\.querySelector\('\.pvp-battle-clock'\)\)/s,
+  );
   assert.doesNotMatch(codigo, /querySelector\('\.pokeidle-gym-battle'\)/);
 });
 
@@ -125,7 +128,10 @@ test('a cacada e guardada antes do primeiro passo', () => {
   // segundo fluxo, com os seus próprios enganos.
   const bloco = codigo.slice(codigo.indexOf('const comecar = (regiao)'));
   assert.match(bloco, /cacada: cacadaAtiva\(\)/);
-  assert.match(codigo, /campo\('\[data-ir\]'\)\.addEventListener\('click', \(\) => \{\s*if \(correndo \|\| tarefa\(\)\) return;\s*comecar\(/);
+  assert.match(
+    codigo,
+    /campo\('\[data-ir\]'\)\.addEventListener\('click', \(\) => \{\s*if \(correndo \|\| tarefa\(\)\) return;\s*comecar\(/,
+  );
   assert.match(codigo, /\.platform-hunt__zone-name/);
   assert.match(codigo, /\.platform-hunt__zone-meta/);
 });
@@ -154,7 +160,10 @@ test('uma falha nao recomeca do zero', () => {
   // Só a desistência apaga a tarefa; o reagendamento, não — daí a janela ser o trecho entre o
   // fim do `if` do teto e o fim da função.
   const entreTentativas = bloco.slice(bloco.indexOf('dados.proxima ='));
-  assert.doesNotMatch(entreTentativas.slice(0, entreTentativas.indexOf('agendar();')), /limparTarefa/);
+  assert.doesNotMatch(
+    entreTentativas.slice(0, entreTentativas.indexOf('agendar();')),
+    /limparTarefa/,
+  );
   assert.match(codigo, /dados\.proxima = Date\.now\(\) \+ ESPERA_APOS_FALHA/);
   assert.match(codigo, /ESPERA_APOS_FALHA = 10 \* 60 \* 1000/);
 });
@@ -166,7 +175,10 @@ test('tres tentativas e para, em vez de insistir para sempre', () => {
   assert.match(codigo, /const MAX_TENTATIVAS = 3;/);
   const bloco = codigo.slice(codigo.indexOf('async function falhou'));
   assert.match(bloco, /if \(dados\.tentativas >= MAX_TENTATIVAS\) \{/);
-  const desistencia = bloco.slice(bloco.indexOf('MAX_TENTATIVAS) {'), bloco.indexOf('dados.proxima ='));
+  const desistencia = bloco.slice(
+    bloco.indexOf('MAX_TENTATIVAS) {'),
+    bloco.indexOf('dados.proxima ='),
+  );
   // A tarefa morta tem de sair: enquanto ela existe, `emCorrida()` responde que sim, os botões
   // ficam travados e a agenda do dia não arranca — o painel ficaria preso para sempre.
   assert.match(desistencia, /limparTarefa\(\);/);
@@ -259,7 +271,10 @@ test('a limpeza acontece depois da recarga e antes de cada abertura', () => {
   const abre = desafiar.indexOf('abrirOGinasio()');
   assert.ok(limpa >= 0 && limpa < abre, 'abre o ginásio sem esperar a tela limpar');
   // E há segunda tentativa, para o anúncio que aparecer entre a limpeza e o clique.
-  assert.match(desafiar.slice(0, desafiar.indexOf('return {')), /janela = await abrirOGinasio\(\);/);
+  assert.match(
+    desafiar.slice(0, desafiar.indexOf('return {')),
+    /janela = await abrirOGinasio\(\);/,
+  );
   // A retomada depois do F5 também espera, em vez de uma pausa fixa de 1,5 s.
   assert.match(codigo, /travarBotoes\(true\);\s*\n\s*await esperarTelaLimpa/);
 });
@@ -304,7 +319,10 @@ test('o tempo esta entre os cliques, e nao antes das etapas', () => {
   // Relatado: "mal entrou a página de vitória já disparou a troca de times". O orçamento era
   // repartido por etapa, e dentro de cada etapa os cliques saíam todos de rajada. Quem respira
   // agora é o próprio clique.
-  assert.match(codigo, /const clicarHumano = async \(el\) => \{\s*await respirarAntesDoClique\(\);/);
+  assert.match(
+    codigo,
+    /const clicarHumano = async \(el\) => \{\s*await respirarAntesDoClique\(\);/,
+  );
   // Nenhum clique sai no mesmo instante do anterior, nem com o orçamento estourado.
   assert.match(codigo, /const PAUSA_ENTRE_CLIQUES = 1500;/);
   assert.match(codigo, /Math\.max\(PAUSA_ENTRE_CLIQUES, justo \* sorteio\(/);
@@ -378,7 +396,11 @@ test('a agenda e a mesma da venda e da loja rapidas', () => {
   // protege é isso: ninguém volta a ter a conta em casa.
   const venda = ler('venda-rapida.js');
   const loja = ler('loja-rapida.js');
-  for (const [nome, fonte] of [['ginásio', codigo], ['venda', venda], ['loja', loja]]) {
+  for (const [nome, fonte] of [
+    ['ginásio', codigo],
+    ['venda', venda],
+    ['loja', loja],
+  ]) {
     assert.match(fonte, /PPX\?\.agenda/, `${nome} não usa o calendário partilhado`);
     assert.doesNotMatch(
       fonte,
@@ -411,7 +433,10 @@ test('o sinal de cada regiao conta o dia do servidor, e nao o da maquina', () =>
   // O dia e' contado a partir da hora em que o servidor reseta, que e' um campo — inventar a hora
   // deixaria o sinal verde depois do reset, ou cinza antes dele.
   assert.match(codigo, /d\.setMinutes\(d\.getMinutes\(\) - horaDoReset\(\)\)/);
-  assert.match(codigo, /if \(!linha \|\| linha\.dia !== diaDoServidor\(\)\) return \{ estado: 'vazio' \}/);
+  assert.match(
+    codigo,
+    /if \(!linha \|\| linha\.dia !== diaDoServidor\(\)\) return \{ estado: 'vazio' \}/,
+  );
   // Derrota nao e' erro: sao estados diferentes, com cores diferentes.
   assert.match(codigo, /dados\.venceu === false \? 'derrota' : 'vitoria'/);
   assert.match(codigo, /anotarPlacar\(dados\.regiao, 'erro', erro\)/);
@@ -426,8 +451,14 @@ test('os dois cinemas sao coisas diferentes', () => {
   // ferramenta via o titulo da entrada, marcava DERROTA (porque "Desafio de ginásio" nao casa
   // com "vitória") e ia montar o time de volta antes de a luta comecar.
   assert.match(codigo, /const RESULTADO = \/\(vit\[óo\]ria\|derrota\|empate\)\/i/);
-  assert.match(codigo, /const tituloDoResultado = \(\) => \(RESULTADO\.test\(textoDoCinema\(\)\) \? cinema\(\) : null\)/);
-  assert.match(codigo, /const noCinemaDeEntrada = \(\) => Boolean\(cinema\(\)\) && !RESULTADO\.test\(textoDoCinema\(\)\)/);
+  assert.match(
+    codigo,
+    /const tituloDoResultado = \(\) => \(RESULTADO\.test\(textoDoCinema\(\)\) \? cinema\(\) : null\)/,
+  );
+  assert.match(
+    codigo,
+    /const noCinemaDeEntrada = \(\) => Boolean\(cinema\(\)\) && !RESULTADO\.test\(textoDoCinema\(\)\)/,
+  );
   // O resultado NAO pode ser reconhecido pela mera presenca do elemento.
   assert.doesNotMatch(codigo, /tituloDoResultado = \(\) => document\.querySelector/);
   // E ha' um clique proprio para entrar na arena, que nao e' o de confirmar o resumo.
@@ -441,7 +472,8 @@ test('os dois cinemas sao coisas diferentes', () => {
 test('cada regiao tem o seu botao de ir, e ele vive tambem no minimizado', () => {
   // Minimizado é o estado em que este painel vive. Mandar abrir o painel inteiro para clicar num
   // botão desfaz o motivo de o ter minimizado — era esse o pedido.
-  for (const regiao of ['KANTO', 'JOHTO']) assert.match(codigo, new RegExp(`data-ir-regiao="${regiao}"`));
+  for (const regiao of ['KANTO', 'JOHTO'])
+    assert.match(codigo, new RegExp(`data-ir-regiao="${regiao}"`));
   assert.match(codigo, /ja\.dataset\.irRegiao = regiao;/, 'o resumo minimizado faz o seu');
 
   const clique = codigo.slice(codigo.indexOf("evento.target.closest?.('[data-ir-regiao]')"));
@@ -484,4 +516,23 @@ test('minimizado mostra o placar, e so esconde o que tapa o jogo', () => {
     (agenda.slice(0, agenda.indexOf('\n    };')).match(/pintarResumo\(\)/g) || []).length === 2,
     'os dois caminhos de pintarAgenda repintam o resumo',
   );
+});
+
+test('o placar corrige-se a mao, e a mao nunca marca erro', () => {
+  // Pedido do dono em 12/10/2026: "às vezes dá erro e eu vou manualmente e vejo que já ganhou, ou
+  // eu mesmo venço manualmente". O placar é memória, e uma memória errada não se discute — corrige.
+  assert.match(codigo, /const VOLTA = \['vazio', 'vitoria', 'derrota'\];/);
+  // "Deu erro" fica de fora da volta: quem marca um erro é a corrida que falhou, não o dono.
+  assert.ok(!/VOLTA = \[[^\]]*'erro'/.test(codigo), 'ninguém marca "deu erro" à mão');
+  const marcar = codigo.slice(codigo.indexOf('const marcarAMao = (regiao)'));
+  const corpo = marcar.slice(0, marcar.indexOf('\n    };'));
+  assert.match(corpo, /VOLTA\[\(i \+ 1\) % VOLTA\.length\]/, 'o clique roda, e volta ao princípio');
+  assert.match(corpo, /marcado à mão/, 'fica escrito que foi à mão, para ninguém ler como medida');
+  // E corrigir o placar não manda no ginásio: quem manda na corrida é a agenda.
+  assert.ok(!/comecar\(/.test(corpo), 'marcar à mão não faz o ginásio correr');
+  // O mesmo clique serve nos dois painéis: o sinal da agenda e o do resumo minimizado.
+  assert.match(codigo, /data-marcar="KANTO"/);
+  assert.match(codigo, /ponto\.dataset\.marcar = regiao;/);
+  assert.match(codigo, /diz\.dataset\.marcar = regiao;/);
+  assert.match(codigo, /const marca = evento\.target\.closest\?\.\('\[data-marcar\]'\);/);
 });

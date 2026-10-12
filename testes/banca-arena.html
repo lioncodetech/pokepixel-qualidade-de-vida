@@ -339,8 +339,12 @@
     anotar(`jogo: tela de preparação contra ${rival.name}`);
     janela.innerHTML = `
       <div class="pokeidle-panel__titlebar"><div class="pokeidle-panel__close">✕</div></div>
-      <header><div><h3>Ataque contra ${rival.name}</h3></div>
-        <button type="button" class="pokeidle-ui-button" data-voltar>Voltar</button></header>
+      <!-- Medido no jogo em 12/10/2026: o titulo e' um H2, e o H3 deste cabeçalho e' o
+           "ESCOLHIDOS · 6/6". Quem reconhecer esta tela pelo h3 do cabeçalho nao a reconhece. -->
+      <header class="defense-workshop-heading">
+        <div><h2>Ataque contra ${rival.name}</h2><p>O primeiro Pokémon inicia a batalha.</p></div>
+        <button type="button" class="pokeidle-ui-button" data-voltar>Voltar</button>
+        <h3>ESCOLHIDOS · 6/6</h3></header>
       <div class="defense-slots"></div>
       <button type="button" class="pokeidle-ui-button defense-primary">Atacar</button>`;
     janela.querySelector('.pokeidle-panel__close').addEventListener('pointerdown', fecharJanela);

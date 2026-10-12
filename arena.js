@@ -10,7 +10,9 @@
 //   um rival         .pvp-defense-opponent  com [data-defense-avatar="<trainer_id>"] dentro
 //                    ja' atacado hoje: .is-used, e o botao fica "Atacado" e `disabled`
 //   atacar           .pvp-action-button.is-accept
-//   preparacao       cabeçalho "Ataque contra <nome>" · .defense-slot (os ataques salvos)
+//   preparacao       .defense-slot (os ataques salvos) + o botao de confirmar, e nenhum rival
+//                    o cabeçalho e' <header class="defense-workshop-heading"> com um H2 "Ataque
+//                    contra <nome>" e um H3 "ESCOLHIDOS · 6/6" — o H3 nao e' o titulo
 //                    cada slot: .defense-slot-number, h4 com o nome, botoes Carregar/Salvar/...
 //                    um slot vazio tem o "Carregar" `disabled`
 //   confirmar        .pokeidle-ui-button.defense-primary ("Atacar")
@@ -194,9 +196,26 @@ PPX.modulo(
       'Você está na expedição — espero aqui e faço a rodada quando ela acabar.';
 
     const janela = () => document.querySelector('.defense-window');
-    const tituloDaJanela = () => (janela()?.querySelector('header h3')?.textContent || '').trim();
     const naLista = () => Boolean(janela()?.querySelector('.pvp-defense-opponent'));
-    const naPreparacao = () => /^Ataque contra/i.test(tituloDaJanela());
+
+    /**
+     * Se a tela de preparação — a dos seis Pokemon e dos ataques salvos — esta' aberta.
+     *
+     * **Reconhece-se pelo que a tela tem, e nao pelo que ela diz.** Ate' 12/10/2026 isto era um
+     * `/^Ataque contra/` lido do `header h3`, e nao funcionava: o "Ataque contra <nome>" e' um H2,
+     * e o H3 daquele cabeçalho e' o "ESCOLHIDOS · 6/6". A ferramenta ficava dez segundos a olhar
+     * para a tela aberta e desistia a dizer que ela nao tinha aberto. Trocar um seletor de titulo
+     * por outro era repetir o erro: o que importa e' haver os ataques salvos para carregar e o
+     * botao para confirmar — que e' exactamente o que os passos seguintes vao usar — e nao haver
+     * ja' a lista de rivais, que e' a outra tela da mesma janela.
+     */
+    const naPreparacao = () => {
+      const j = janela();
+      return Boolean(j?.querySelector('.defense-slot') && confirmarDe(j) && !naLista());
+    };
+
+    /** O botao que gasta a tentativa. Fora da preparação ele nao existe. */
+    const confirmarDe = (j) => j?.querySelector('.pokeidle-ui-button.defense-primary') || null;
 
     /**
      * O clique que o jogo ouve, para os elementos que **nao** sao botoes.
@@ -346,7 +365,7 @@ PPX.modulo(
         return { erro: time.diz };
       }
 
-      const confirmar = document.querySelector('.pokeidle-ui-button.defense-primary');
+      const confirmar = confirmarDe(janela());
       if (!confirmar) return { erro: 'não achei o botão de atacar da tela de preparação' };
       aviso(`Atacando ${alvo.nome}, ${time.diz}…`);
       confirmar.click();
@@ -646,11 +665,13 @@ PPX.modulo(
         <button type="button" data-fechar title="Esconder (Alt+M)">×</button>
       </header>
       <div class="resumo" data-resumo></div>
+      <!-- Fora do corpo: o minimizar esconde o corpo, e iniciar, parar e atacar agora sao o que o
+           dono quer alcançar sem abrir o painel. Ver o mesmo na Escada. -->
+      <div class="botoes">
+        <button type="button" class="ligar" data-ligar>Iniciar</button>
+        <button type="button" data-agora title="Fazer a rodada agora, sem esperar o horário">Atacar agora</button>
+      </div>
       <div class="corpo">
-        <div class="botoes">
-          <button type="button" class="ligar" data-ligar>Iniciar</button>
-          <button type="button" data-agora title="Fazer a rodada agora, sem esperar o horário">Atacar agora</button>
-        </div>
         <div data-agenda></div>
         <label class="caixa">intervalo entre ataques: de
           <input type="number" min="0" data-atraso-min> a
@@ -681,10 +702,12 @@ PPX.modulo(
       #lioncode-arena header button {
         background: none; border: 0; color: #8b97a8; cursor: pointer; font-size: 14px; padding: 0 2px;
       }
-      #lioncode-arena .corpo { padding: 10px; display: grid; gap: 8px; }
+      #lioncode-arena .corpo { padding: 0 10px 10px; display: grid; gap: 8px; }
       #lioncode-arena.minimizado .corpo { display: none; }
       #lioncode-arena .resumo { padding: 6px 10px; color: #8b97a8; font-size: 12px; }
-      #lioncode-arena .botoes { display: flex; gap: 6px; }
+      #lioncode-arena .botoes { display: flex; gap: 6px; padding: 0 10px 10px; }
+      #lioncode-arena.minimizado .botoes { padding: 0 9px 9px; }
+      #lioncode-arena.minimizado .botoes button { padding: 4px 6px; font-size: 12px; }
       #lioncode-arena button.ligar, #lioncode-arena .botoes button, #lioncode-arena .mais {
         flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #2a3244;
         background: #182030; color: #e7edf6; cursor: pointer;

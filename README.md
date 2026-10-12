@@ -672,6 +672,17 @@ botão Caçar"*. Com o ginásio a correr sozinho, é a única forma de saber o q
 ninguém estava a olhar — e derrota e erro ficam distinguíveis, que é a diferença entre "perdi" e
 "nem cheguei a lutar".
 
+**O placar corrige-se à mão.** Clicar no sinal (ou, minimizado, na palavra ao lado dele) roda o
+que ele diz: *ainda não foi feito* → *Vitória* → *Derrota* → *ainda não foi feito*. É para o caso
+que acontece de verdade: deu erro, o dono foi ver à mão e o ginásio já estava ganho — ou ele mesmo
+venceu, pelo jogo, e o painel continuava a dizer que não. **"Deu erro" fica de fora da roda**:
+quem marca um erro é a corrida que falhou, não a pessoa; partindo de um erro, o clique seguinte é
+*Vitória*, que é justamente o caso descrito.
+
+Marcar à mão **não manda no ginásio**: nada aqui faz uma corrida começar ou deixar de começar —
+quem manda nisso é a agenda. O placar é memória, e o que se corrige é uma memória errada. Fica
+escrito no texto da linha que a marca foi posta à mão, para ninguém mais tarde a ler como medida.
+
 **A hora do reset é um campo.** Eu não sei a que horas o PokePixel reseta o ginásio do dia, e
 inventar um número seria pior do que perguntar: o sinal ficaria verde depois do reset, ou cinza
 antes dele. O padrão é meia-noite local; mudar o campo acerta tudo, sem versão nova.
@@ -1520,6 +1531,30 @@ A caixa **deixar trocar de caçada** separa duas perguntas que parecem uma: a es
 correndo — formando o aluno, dizendo em que degrau ele deveria estar — sem ter licença para
 arrastar você para outro mapa.
 
+### O painel rola
+
+Com nove degraus, dois times na fila e o bloco do fim, este painel passa da altura da tela e o
+`+ time` fica abaixo do rodapé do monitor. O **corpo** rola; o título, o resumo e os botões de
+comando ficam parados, onde a mão já os procura.
+
+O teto escrito no CSS é só o chão — ele supõe o painel no lugar de sempre. Quem manda é uma medida
+feita de onde o corpo **está** na tela, refeita a cada desenho, a cada arrasto e a cada mudança de
+tamanho da janela: o painel arrasta-se, e um número fixo deixaria passar do rodapé quem o tivesse
+posto mais abaixo.
+
+### Minimizada, os comandos ficam
+
+Minimizada, a Escada é uma etiqueta com o alvo e a frase do que está acontecendo — e, **debaixo
+dela, os dois botões**: `Iniciar`/`Parar` e `Pausar`/`Retomar`.
+
+Eles não são uma cópia. O que o `–` esconde é o **corpo** do painel, e os botões simplesmente
+deixaram de morar lá dentro: são os mesmos, com os mesmos cliques, um nível acima na marcação. Uma
+segunda cópia seria uma segunda verdade — dois botões a dizer coisas diferentes sobre o mesmo
+estado no dia em que um deles deixasse de ser repintado.
+
+Minimizada é como ela vive: quem a minimiza quer o jogo à vista, e mandar abrir tudo para parar
+uma escada desfaz o motivo de a ter minimizado.
+
 ### O que ela não faz
 
 No pacote do Poke Idle World cada degrau escolhe um time. Aqui não: `PPX.cacadas.ir` monta sempre o
@@ -1839,6 +1874,25 @@ gastaria a tentativa na mesma, e você pediu aquele time por algum motivo.
 **O `✕` da janela da arena não é um botão.** É um `<div>`, e `click()` nele não fecha nada — o jogo
 escuta o `pointerdown`. Nos botões o `click()` basta, e é o que se usa; só ali vai a sequência
 inteira que um rato faz.
+
+**A tela de preparação reconhece-se pelo que tem, e não pelo que diz.** A primeira versão
+confirmava a abertura procurando *"Ataque contra <nome>"* no `h3` do cabeçalho — e falhava sempre,
+com a tela aberta à frente dela: no jogo aquele título é um `h2`, e o `h3` daquele cabeçalho é o
+`ESCOLHIDOS · 6/6`. Trocar um seletor de título por outro era repetir o erro. O que vale é haver os
+ataques salvos para carregar e o botão que confirma — que é exatamente o que os passos seguintes
+vão usar — e já não haver a lista de rivais, que é a outra tela da mesma janela.
+
+### Minimizada, os comandos ficam
+
+Como na Escada: o `–` esconde o **corpo** do painel, e `Iniciar`/`Parar` e `Atacar agora` deixaram
+de morar lá dentro. São os mesmos botões, não uma cópia — duas cópias seriam duas verdades sobre o
+mesmo estado. Minimizada, a etiqueta fica assim:
+
+```
+ARE                □ ×
+● em 42 min
+[ Parar ] [ Atacar agora ]
+```
 
 ### O atalho é Alt+M, com Shift para mostrar
 
