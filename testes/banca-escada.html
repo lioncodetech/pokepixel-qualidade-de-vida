@@ -281,6 +281,12 @@
   let onde = 'Caça de Pidgey';
   let falhar = false;
   let matador = false;
+  /**
+   * Estar dentro da expedição: o jogo não tem zona de caçada nenhuma, e quem pergunta pelo
+   * nome nunca vê diferença entre "estou noutra caçada" e "estou na expedição". É a armadilha
+   * que pôs a escada de degraus a tentar sair de lá a cada batida, no jogo do dono.
+   */
+  let naExpedicao = false;
   /** A caçada monta a equipe inteira — e a ordem dela não sabe nada de formatura. */
   let desarrumar = false;
 
@@ -462,7 +468,10 @@
           minha: false,
         },
       ],
-      atual: () => ({ nome: onde, regiao: '', modo: '', tipo: 'cacada' }),
+      atual: () =>
+        naExpedicao
+          ? { nome: 'Expedição Diária Cooperativa', regiao: '', modo: '', tipo: 'expedicao' }
+          : { nome: onde, regiao: '', modo: '', tipo: 'cacada' },
       /**
        * As duas portas que o modo de grupo usa para a lista de lugares.
        *
@@ -593,6 +602,11 @@
   comando('viajar sempre falha: não', (b) => {
     falhar = !falhar;
     b.target.textContent = `viajar sempre falha: ${falhar ? 'sim' : 'não'}`;
+  });
+  comando('estou na expedição: não', (b) => {
+    naExpedicao = !naExpedicao;
+    b.target.textContent = `estou na expedição: ${naExpedicao ? 'sim' : 'não'}`;
+    anotar(naExpedicao ? 'jogo: entrei na expedição' : 'jogo: a expedição acabou');
   });
   comando('caçada desarruma a ordem: não', (b) => {
     desarrumar = !desarrumar;

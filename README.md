@@ -891,6 +891,24 @@ batida. Agora ela reconhece a expedição (pelo HUD da corrida), guarda-a como a
 reconhecer, e o botão "Ir" dessa linha fica apagado — um botão que não pode funcionar não fica a
 fingir que pode.
 
+#### E no modo de degraus ela espera, em vez de insistir
+
+Medido no jogo do dono em 12/10/2026, com ele **dentro** da expedição e o degrau de Lv 140 apontado
+para "Togetic": o painel repetia *"Degrau 140 não deu: cliquei em Caçar e continuei em «Expedição
+Diária Cooperativa»"*, batida após batida. Ela abria a janela das caçadas, clicava em Caçar, o jogo
+recusava — e ela tentava outra vez.
+
+A expedição já era respeitada, mas **só no modo de grupo**, pela lista de lugares: lá, estar na
+expedição conta como estar onde o grupo fica. No modo de degraus essa lista nem é lida, e a única
+regra era *"o líder não está na caçada do degrau"* — o que é verdade dentro da expedição e leva à
+conclusão errada.
+
+Agora, dentro dela, a escada de degraus **espera, e espera tudo**: não viaja, não troca de aluno,
+não leva à enfermeira. A expedição dura duas horas a cada quatro, exige um CAPTCHA para entrar, e
+você só está lá porque quis — arrastá-lo para fora é desfazer uma escolha sua. Acabada ela, o jogo
+devolve-o à caçada anterior, e a batida seguinte continua de onde parou. Nada disso fica guardado:
+o estado deriva do jogo, como em todo o resto da ferramenta.
+
 A tela **"Expedição concluída"** entrou na lista do que sai da frente antes de qualquer acção. É um
 painel com overlay que tapa tudo até alguém clicar em "Continuar", e o próprio jogo escreve lá: *ao
 continuar, você volta para a sua caçada anterior*. Clicar não decide nada; não clicar é que deixava

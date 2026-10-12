@@ -998,3 +998,34 @@ test('a lista das cacadas fica fresca no instante de escolher', () => {
   );
   assert.match(codigo, /seguirALista\(campo\('\[data-destino\]'\)\);/);
 });
+
+test('na expedicao a escada de degraus espera, e nao tenta sair', () => {
+  // MEDIDO NO JOGO DO DONO EM 12/10/2026, com ele dentro da expedicao e o degrau de Lv 140 em
+  // "Togetic": o painel repetia "Degrau 140 nao deu: cliquei em Cacar e continuei em «Expedicao
+  // Diaria Cooperativa»", batida apos batida. A expedicao ja' era respeitada, mas so' no modo de
+  // grupo, pela lista de lugares — e no modo de degraus essa lista nem e' lida.
+  assert.match(
+    codigo,
+    /const naExpedicao = \(\) => globalThis\.PPX\?\.cacadas\?\.atual\?\.\(\)\?\.tipo === 'expedicao';/,
+  );
+  // Quem responde e' a porta das Cacadas, pelo TIPO: a expedicao nao tem zona, e comparar o nome
+  // do mapa com o degrau nunca da' igual — que e' exactamente como o defeito nascia.
+  const bater = codigo.slice(codigo.indexOf('async function conferir(aviso'));
+  const corpo = bater.slice(0, bater.indexOf('const aluno = alunoDeAgora()'));
+  assert.match(corpo, /if \(naExpedicao\(\)\) \{/);
+  assert.match(corpo, /return 'na expedicao';/);
+  // E espera TUDO: a guarda vem antes da equipe, da enfermeira, da viagem e da troca.
+  assert.ok(
+    corpo.indexOf('naExpedicao()') < corpo.indexOf("if (!equipe().length) return '';"),
+    'a guarda vem antes de qualquer acao da batida',
+  );
+  // So' no modo de degraus: no grupo, estar na expedicao conta como estar onde o grupo fica, e
+  // isso e' uma decisao tomada a pedido do dono.
+  assert.ok(
+    corpo.indexOf("if (cfg.modo !== 'escada') return conferirGrupo(aviso);") <
+      corpo.indexOf('naExpedicao()'),
+    'o grupo segue o seu proprio caminho, com a lista de lugares',
+  );
+  // E o painel diz o mesmo quando perguntado, em vez de inventar o que falta.
+  assert.match(codigo, /espero aqui e volto ao degrau quando ela acabar/);
+});

@@ -364,6 +364,15 @@ PPX.modulo(
      */
     const local = () => globalThis.PPX?.cacadas?.atual?.()?.nome || '';
 
+    /**
+     * Se o jogador esta' **dentro** da expedição agora.
+     *
+     * Quem responde e' a porta das Caçadas, que le' o HUD da corrida — e nao uma leitura daqui.
+     * A expedição nao tem zona de caçada nenhuma, entao `local()` devolve o nome do mapa e
+     * compara-lo com o degrau nunca da' igual: por isso ela precisa de ser perguntada pelo tipo.
+     */
+    const naExpedicao = () => globalThis.PPX?.cacadas?.atual?.()?.tipo === 'expedicao';
+
     const cacadasDoGrupo = () => semVazios(cfg.grupo.cacadas);
 
     /**
@@ -771,6 +780,10 @@ PPX.modulo(
           ? 'Pausada. Clique em Retomar quando quiser.'
           : 'Pausada. A caçada continua; eu é que não mexo em nada.';
       if (cfg.modo !== 'escada') return diagnosticoGrupo();
+      // Antes do castigo e antes de tudo o que falta: dentro da expedição nao falta nada, e' so'
+      // nao ser a vez dela. Ver `conferir`.
+      if (naExpedicao())
+        return 'Você está na expedição — espero aqui e volto ao degrau quando ela acabar.';
       // O castigo tem de ser dito. Medido na banca: depois de uma viagem falhada, o painel ficava
       // a repetir "falta ir para X" e nao ia — e quem olhasse so' a frase concluiria que ela tinha
       // quebrado. Esperar e' uma decisao como outra qualquer, e uma decisao diz-se.
@@ -1508,6 +1521,31 @@ PPX.modulo(
       // Os dois modos mexem na mesma equipe e na mesma caçada, entao daqui em diante sao caminhos
       // separados — e so' um deles corre.
       if (cfg.modo !== 'escada') return conferirGrupo(aviso);
+
+      /**
+       * **NA EXPEDIÇÃO, A ESCADA DE DEGRAUS ESPERA.**
+       *
+       * MEDIDO NO JOGO DO DONO EM 12/10/2026, com ele dentro da expedição e o degrau de Lv 140
+       * apontado para "Togetic": o painel repetia *"Degrau 140 não deu: cliquei em Caçar e
+       * continuei em «Expedição Diária Cooperativa»"*, batida apos batida. Ela abria a janela das
+       * caçadas, clicava em Caçar, o jogo recusava — e ela tentava outra vez.
+       *
+       * A expedição ja' era respeitada, mas **so' no modo de grupo**, pela lista de lugares: la'
+       * estar na expedição conta como estar onde o grupo fica. No modo de degraus essa lista nem e'
+       * lida, e a unica regra era "o lider nao esta' na caçada do degrau" — que e' verdade dentro
+       * da expedição e leva a conclusao errada.
+       *
+       * Aqui ela espera, e espera **tudo**: nao viaja, nao troca de aluno, nao leva a' enfermeira.
+       * A expedição dura duas horas a cada quatro, tem CAPTCHA para entrar e o jogador so' esta'
+       * la' porque quis — arrasta-lo para fora e' desfazer uma escolha dele. Acabada ela, o jogo
+       * devolve-o a' caçada anterior (e' o que a propria tela do fim promete) e a batida seguinte
+       * continua de onde parou, sem nada de guardado: o estado deriva do jogo, como em todo o
+       * resto desta ferramenta.
+       */
+      if (naExpedicao()) {
+        aviso('Você está na expedição — espero aqui e volto ao degrau quando ela acabar.');
+        return 'na expedicao';
+      }
 
       if (!equipe().length) return '';
 
