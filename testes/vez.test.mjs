@@ -131,6 +131,7 @@ const FORA = {
   'times.js':
     'peça: quem chama (o ginásio, a escada no fim da fila e no modo de grupo) já tem a vez — pedir de novo daria impasse',
   'cacadas.js': 'peça: quem chama (o ginásio) já tem a vez — pedir de novo daria impasse',
+  'cacadas-main.js': 'só lê a lista de caçadas pela API, não clica em nada nem entra em caçada',
 };
 
 test('toda ferramenta nova escolhe um lado da fila', () => {

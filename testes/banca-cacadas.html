@@ -9,7 +9,15 @@
 
     1. a janela entra no DOM **antes** da lista — as linhas so' aparecem 2,5 s depois;
     2. a janela reabre na **ultima regiao usada**, e nao na que se quer;
-    3. a cacada em curso so' existe no DOM enquanto corre.
+    3. a cacada em curso so' existe no DOM enquanto corre;
+    4. a "regiao" da cacada em curso e' um **UUID**, como na conta real — nao e' nome de aba
+       nenhuma, e quem a usasse como endereco varreria as abas todas a cada viagem;
+    5. ha' um **nome repetido** ("Nidorina", Lv 10 e Lv 37, as duas em Kanto), que e' o caso em que
+       ir pelo nome leva ao lugar errado em silencio.
+
+  E ha' uma ponte de mentira para `lioncode:cacadas:pedido`, que responde a lista inteira — e' o
+  que o jogo faz com `Api.getZones()`. Ela responde **sempre**, com ou sem `?jogo=1`: sem ela o
+  painel ficaria vazio e o filtro nao teria o que filtrar.
 
   Abra pelo servidor estatico do projeto; por `file://` o navegador recusa carregar `../cacadas.js`.
 -->
@@ -53,6 +61,12 @@
     O botão <code>–</code> do painel recolhe-o para a etiqueta: ali ficam a caçada em curso e as
     setas para folhear as guardadas. É o estado em que o jogo está à vista e o painel não.
   </p>
+  <p>
+    A lista chega do jogo: sete caçadas com <b>nível</b> e região, sem precisar de entrar em
+    nenhuma. Escreva no filtro (<code>nidorina</code>, <code>hoenn</code>, <code>10</code>) para a
+    estreitar; o <code>↻</code> relê. A <b>Ilha Lendária</b> vem trancada, e o <code>Ir</code> dela
+    não finge que funciona.
+  </p>
   <pre data-saida>—</pre>
 </div>
 <script>
@@ -71,14 +85,55 @@
     },
   };
 
+  // O UUID que a caçada em curso mostra por região — medido na conta real, é o `id` do mundo.
+  const UUID_JOHTO = 'ee6523e1-88ec-4d67-bf21-d83e23222518';
+
+  // Nome e **nível**, como `Api.getZones()` devolve. "Nidorina" duas vezes de propósito.
+  const CACADAS = {
+    Kanto: [
+      { nome: 'Caça de Pidgey', nivel: 3 },
+      { nome: 'Caça de Rattata', nivel: 5 },
+      { nome: 'Nidorina', nivel: 10 },
+      { nome: 'Nidorina', nivel: 37 },
+    ],
+    Hoenn: [
+      { nome: 'Caça de Ralts', nivel: 210 },
+      { nome: 'Caça de Kirlia', nivel: 225 },
+    ],
+    'Ilhas Lendárias': [{ nome: 'Ilha Lendária de Entei', nivel: 300 }],
+  };
+  const TRANCADAS = new Set(['Ilhas Lendárias']);
+
+  // A ponte de mentira. Fora do `?jogo=1` também responde: sem lista não há nada para filtrar.
+  addEventListener('lioncode:cacadas:pedido', (evento) => {
+    const eco = evento.detail?.eco;
+    const zonas = [];
+    let ordem = 0;
+    for (const [aba, lista] of Object.entries(CACADAS)) {
+      ordem += 1;
+      for (const z of lista)
+        zonas.push({ nome: z.nome, nivel: z.nivel, aba, ordem, trancado: TRANCADAS.has(aba) });
+    }
+    // Com atraso, como a resposta do servidor: o painel tem de desenhar antes dela chegar.
+    setTimeout(
+      () =>
+        dispatchEvent(
+          new CustomEvent('lioncode:cacadas:resposta', { detail: { eco, ok: true, zonas } }),
+        ),
+      300,
+    );
+  });
+
+  // A banca relê sempre: um catálogo guardado de uma visita anterior esconderia o que se quer ver.
+  localStorage.removeItem('lioncode:cacadas:catalogo');
+
   if (new URLSearchParams(location.search).has('jogo')) {
-    const CACADAS = {
-      Kanto: ['Caça de Pidgey', 'Caça de Rattata'],
-      Hoenn: ['Caça de Ralts', 'Caça de Kirlia'],
-    };
     let emCurso = null;
 
     const pintarCacada = () => {
+      // Para a banca poder conferir **qual** linha foi clicada: o HUD mostra o nome, e duas
+      // caçadas têm o mesmo nome. Sem isto não se distingue a Nidorina Lv 10 da Lv 37.
+      window.__emCurso = emCurso;
       document.querySelector('.platform-hunt')?.remove();
       if (!emCurso) return;
       const caixa = document.createElement('div');
@@ -89,7 +144,8 @@
       nome.textContent = emCurso.nome;
       const meta = document.createElement('div');
       meta.className = 'platform-hunt__zone-meta';
-      meta.textContent = `${emCurso.regiao} · Modo plataforma`;
+      // Na conta real isto é um UUID, e não o nome da região. Ver o cabeçalho.
+      meta.textContent = `${UUID_JOHTO} · Modo plataforma`;
       caixa.append(nome, meta);
       document.body.append(caixa);
     };
@@ -119,21 +175,30 @@
       const corpo = document.createElement('div');
       const abas = document.createElement('div');
 
+      // A linha de verdade: o nome exacto num `strong` dentro de `.hunt-list-identity-copy`, e
+      // uma célula que lê "Nv. 101". É por ela que o nível desempata duas linhas com o mesmo nome.
       const pintarLista = () => {
         corpo.innerHTML = '';
-        for (const nome of CACADAS[regiaoAberta]) {
+        for (const zona of CACADAS[regiaoAberta]) {
           const linha = document.createElement('div');
           linha.className = 'hunt-list-row';
-          const texto = document.createElement('span');
-          texto.textContent = nome + ' ';
+          const identidade = document.createElement('div');
+          identidade.className = 'hunt-list-identity-copy';
+          const forte = document.createElement('strong');
+          forte.textContent = zona.nome;
+          const especie = document.createElement('small');
+          especie.textContent = zona.nome;
+          identidade.append(forte, especie);
+          const nivel = document.createElement('span');
+          nivel.textContent = ` Nv. ${zona.nivel} `;
           const cacar = document.createElement('button');
           cacar.textContent = 'Caçar';
           cacar.addEventListener('click', () => {
-            emCurso = { nome, regiao: regiaoAberta };
+            emCurso = { nome: zona.nome, regiao: regiaoAberta, nivel: zona.nivel };
             pintarCacada();
             janela.remove();
           });
-          linha.append(texto, cacar);
+          linha.append(identidade, nivel, cacar);
           corpo.append(linha);
         }
       };
@@ -158,7 +223,7 @@
       setTimeout(pintarLista, 2500);
     });
 
-    emCurso = { nome: 'Caça de Ralts', regiao: 'Hoenn' };
+    emCurso = { nome: 'Caça de Ralts', regiao: 'Hoenn', nivel: 210 };
     pintarCacada();
   }
 

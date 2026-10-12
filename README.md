@@ -809,6 +809,56 @@ reaparece. Ela é uma comodidade, não um relógio: quem acabou de entrar numa c
 no jogo. E repinta-se **só a marca**, nunca a lista — reconstruir as linhas fecharia um select de
 time aberto na cara de quem estivesse a escolher.
 
+### A lista inteira vem do jogo, e não de ir a uma por uma
+
+Guardar um atalho era um ato de presença: entrar na caçada, porque **o nome só existe na tela
+enquanto ela corre**. Para ter nove atalhos faziam-se nove viagens — e o nível de cada caçada, que é
+a única coisa que decide se ela presta para um Pokémon, não aparecia em canto nenhum do painel.
+
+O jogo sabia a lista inteira o tempo todo. Medido na conta real em 12/10/2026: `Api.getZones()`
+devolve **377 caçadas** com nome, nível e mundo, e `Api.getWorlds()` devolve os quatro mundos
+(Kanto 1–100, Johto 101–200, Hoenn 201–350, Ilhas Lendárias). Uma leitura, sem abrir janela nenhuma.
+
+Então a lista do painel passou a ser a lista do jogo: as suas caçadas em cima, na ordem em que você
+as guardou, e abaixo o resto do mapa por mundo e nível. Cada linha diz `Lv 155 · Johto`. O campo de
+filtro estreita por nome, por região ou por nível, e ignora acentos — quem escreve "lendarias" quer
+achar "Ilhas Lendárias". O `↻` relê a lista; ela relê-se sozinha de 24 em 24 horas, porque é uma
+**cópia** da verdade do jogo e não a verdade: entra uma região nova, muda um nível.
+
+Desenham-se **quarenta linhas** de cada vez. Não é para esconder: cada linha carrega um select de
+times, e quatrocentos selects reconstruídos a cada repintura para mostrar os vinte que caberiam na
+tela é um painel que trava. O rodapé diz quantas ficaram de fora, e o filtro alcança qualquer uma.
+
+Escolher um time numa caçada **guarda-a** nos seus atalhos — dizer "aqui eu monto o time X" é
+precisamente o que distingue uma caçada que você usa de uma que está no mapa. O ✕ só aparece nas
+suas; o que veio da lista do jogo nunca foi guardado, e não há o que apagar. E uma região trancada
+para a sua conta (as Ilhas Lendárias, até o treinador chegar lá) vem com o `Ir` apagado em vez de
+falhar depois de tentar.
+
+#### O UUID era o endereço, e ninguém sabia
+
+A caçada em curso mostra, por região, uma coisa como
+`ee6523e1-88ec-4d67-bf21-d83e23222518 · Modo plataforma` — e esse UUID é o `id` do mundo **Johto**.
+A "região" que parecia lixo guardado era a chave certa para uma tabela que não existia. Agora
+existe: o `label` de cada mundo é exatamente o texto da aba da janela, e a aba de cada caçada
+deixou de ser adivinhada. Meia linha de UUID, essa, não volta a aparecer na etiqueta — nunca disse
+nada a ninguém.
+
+#### Nome repetido desempata pelo nível
+
+Nos 377 registros há **um** nome repetido: "Nidorina" existe duas vezes em Kanto, Lv 10 e Lv 37. O
+nome continua a ser a chave — é o único elo entre as duas telas —, e com o nome só ir para a de
+Lv 37 levava à de Lv 10 **em silêncio**. A linha da lista do jogo traz o nome exato num `strong` e
+uma célula que lê "Nv. 37", e é por ela que se desempata. Um atalho guardado antes desta versão não
+tem nível nenhum, e esse casa com qualquer um — que é o comportamento antigo, não uma regressão.
+
+#### A ponte lê, e não entra
+
+`Api.prepareHunt(zoneId)` e `Nav.goToHunt(mapId)` existem, e levariam direto a qualquer caçada sem
+abrir janela nem varrer abas. Ficam de fora de propósito. Ler a lista não mexe em nada; **entrar** é
+a ação que mexe no jogo de quem joga, e ela continua a passar pelo caminho que você vê na tela, com
+o mesmo botão "Caçar" que você clicaria. A ponte do pacote faz uma coisa só, e essa coisa é ler.
+
 ### A aba certa aprende-se, porque o jogo não diz qual é
 
 A janela das caçadas reabre na última região usada, e a lista só desenha a aba aberta — procurar
@@ -824,6 +874,10 @@ Agora paga-se uma vez: achada a caçada, guarda-se **a aba onde ela estava**, e 
 direta. A varredura fica como rede — uma caçada pode mudar de lugar, e o jogo também não avisa
 disso. É a única coisa que a ferramenta escreve sozinha no atalho; nome, time e modo continuam a
 ser escolha de quem joga.
+
+Com o catálogo, a aba já vem do jogo para as 377 caçadas, e quase nenhuma ida precisa de aprender
+nada. A aba aprendida continua a valer **mais** do que a do catálogo, e nessa ordem: ela foi medida
+naquela conta, numa ida que funcionou.
 
 ### A expedição é um lugar, e não uma caçada
 
@@ -1031,11 +1085,31 @@ ACHOU em "Ilhas Lendárias", botão Caçar presente: true
 ## Escada de caçadas: trocar de caçada sozinha ao subir de nível
 
 Um **degrau** é uma frase: *"a partir do nível N, caçar aqui"*. Você põe quantos quiser, escolhendo
-entre as caçadas que já guardou nas **Caçadas** — e é ela quem viaja, com o time guardado daquela
+entre **as 377 caçadas do jogo** — e é a ferramenta Caçadas quem viaja, com o time guardado daquela
 caçada. A escada só decide **quando**.
 
 O botão **Iniciar** liga o automático. Parada, ela não faz nada sozinha, mas o **▸** de cada degrau
 continua levando você até lá num clique.
+
+### A caçada de um degrau escolhe-se na lista do jogo, com filtro
+
+Antes as opções de um degrau eram só as caçadas que você já tinha guardado. Mas um degrau é uma
+questão de **nível**, e a caçada certa para o Lv 160 existe no jogo muito antes de alguém ter ido
+até lá guardar o atalho: exigir o atalho primeiro fazia montar uma escada de dez degraus custar dez
+viagens, e era por isso que as escadas ficavam curtas.
+
+Agora cada campo de caçada oferece o catálogo inteiro, com o nível e a região em cada opção —
+`Caça de Larvitar · Lv 160 · Johto`. E não é um menu de quatrocentas linhas para rolar com o rato:
+é um campo com **filtro**. Clique para ver tudo, ou escreva um pedaço do nome para estreitar. Quem
+escolhe lá uma caçada que nunca guardou não precisa de guardar nada — a Escada viaja igual.
+
+A lista é **uma só** para o painel todo, e só se reconstrói quando a lista do jogo muda: são 377
+nós, e o painel redesenha-se a cada batida.
+
+Como é um campo de escrever, ele aceita qualquer coisa — então uma caçada que ninguém conhece fica
+**marcada em vermelho** no próprio campo, com o motivo no `title`. Antes era um `select`, e um valor
+órfão ficava lá escrito "(não guardada)"; é a mesma honestidade no campo que o substituiu, em vez de
+descobrir o erro de digitação só na viagem, a dizer "não achei em nenhuma aba".
 
 ### O nível que importa é o do pokémon, não o do treinador
 

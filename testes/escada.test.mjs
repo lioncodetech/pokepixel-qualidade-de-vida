@@ -455,7 +455,7 @@ test('quem sabe o time de uma cacada e a ferramenta Cacadas', () => {
   const cacadas = semComentarios(ler('cacadas.js'));
   assert.match(
     cacadas,
-    /timeDe: \(nome\) => guardadas\(\)\.find\(\(c\) => c\.nome === nome\)\?\.time \|\| '',/,
+    /timeDe: \(nome\) => todasConhecidas\(\)\.find\(\(c\) => c\.nome === nome\)\?\.time \|\| '',/,
   );
   // E a escada não lê o armazenamento das Caçadas por fora: pede pela porta.
   assert.match(codigo, /globalThis\.PPX\?\.cacadas\?\.timeDe/);
@@ -563,7 +563,7 @@ test('nao agir e uma decisao, e e dita', () => {
   for (const frase of [
     /Parada\. Não faço nada sozinha/,
     /A ferramenta Caçadas está desligada/,
-    /Nenhuma caçada guardada/,
+    /Não conheço caçada nenhuma\. Abra as Caçadas \(Alt\+E\) e clique no ↻/,
     /Sem degraus/,
     /Ainda não li o nível do líder/,
     /abaixo do primeiro degrau/,
@@ -921,4 +921,80 @@ test('a pedra de um turno escolhe-se entre a equipe e os times dele', () => {
     codigo,
     /if \(colecao\.size \|\| pedindoBichos \|\| cfg\.modo === 'escada'\) return;/,
   );
+});
+
+test('a cacada de um degrau escolhe-se no catalogo inteiro, e com filtro', () => {
+  // Um degrau é "a partir do Lv N, caçar aqui", e a caçada certa para o Lv N é uma questão de
+  // nível: ela existe no jogo muito antes de alguém ter ido lá guardar o atalho. Exigir o atalho
+  // primeiro fazia montar dez degraus custar dez viagens, e era por isso que as escadas ficavam
+  // curtas.
+  assert.match(codigo, /const todas = globalThis\.PPX\?\.cacadas\?\.todas\?\.\(\);/);
+  assert.match(codigo, /if \(Array\.isArray\(todas\) && todas\.length\) return todas;/);
+  // Sem a ferramenta Caçadas, ou antes de ela ler a lista, sobra o que havia: os atalhos.
+  const fonte = codigo.slice(codigo.indexOf('const cacadasConhecidas ='));
+  assert.match(fonte.slice(0, 600), /return cacadasGuardadas\(\)\.map/);
+  // 377 opções num `select` não são uma escolha, são uma busca sem campo de busca: o campo passou
+  // a ser um `input` ligado a um `datalist`, que é o mesmo campo com filtro de graça.
+  assert.match(codigo, /const DATALISTA = 'lioncode-escada-cacadas';/);
+  assert.match(codigo, /c\.setAttribute\('list', DATALISTA\)/);
+  assert.doesNotMatch(
+    codigo,
+    /const (qual|onde) = document\.createElement\('select'\);\n\s*encherCacadas/,
+  );
+  // E cada opção leva o nível e a região na etiqueta, que é por onde se decide onde upar.
+  const lista = codigo.slice(codigo.indexOf('const encherDatalista ='));
+  assert.match(lista.slice(0, 800), /Lv \$\{c\.nivel\}/);
+  assert.match(lista.slice(0, 800), /c\.regiao/);
+  assert.match(lista.slice(0, 800), /c\.trancada \? 'trancada' : ''/);
+});
+
+test('a lista das cacadas e uma so, e nao se refaz a cada batida', () => {
+  // São 377 nós. Uma lista por campo duplicaria isso a cada degrau novo, e `desenhar` corre a cada
+  // batida — refazer quatrocentos nós de segundo em segundo seria pagar por nada.
+  assert.equal(codigo.match(/<datalist/g)?.length, 1);
+  const lista = codigo.slice(codigo.indexOf('const encherDatalista ='));
+  assert.match(lista.slice(0, 500), /if \(digital === digitalDaLista\) return;/);
+  assert.match(
+    lista.slice(0, 500),
+    /\$\{todas\.length\}\|\$\{todas\[0\]\?\.nome \|\| ''\}\|\$\{todas\.at\(-1\)\?\.nome \|\| ''\}/,
+  );
+  // E o desenho enche-a antes de desenhar os campos que dependem dela.
+  assert.ok(
+    codigo.indexOf('encherDatalista();') < codigo.indexOf("campo('[data-fim]').value"),
+    'a lista enche-se antes dos campos',
+  );
+});
+
+test('uma cacada que ninguem conhece nao fica calada no campo', () => {
+  // Um campo de escrever aceita qualquer coisa, e um erro de digitação só apareceria na viagem —
+  // tarde, e a dizer "não achei em nenhuma aba". Antes era um `select`, e o valor órfão ficava lá
+  // escrito "(não guardada)".
+  const marca = codigo.slice(codigo.indexOf('const marcarCacada ='));
+  const corpo = marca.slice(0, marca.indexOf('\n    };'));
+  assert.match(corpo, /const sabida = !nome \|\| nomesSabidos\.has\(nome\)/);
+  assert.match(corpo, /c\.classList\.toggle\('nao-existe', !sabida\)/);
+  assert.match(corpo, /Não conheço nenhuma caçada chamada/);
+  // E o que se guarda é o nome sem espaços nas pontas: um espaço colado ao nome não acha nada.
+  assert.match(codigo, /cfg\.grupo\.cacadas\[i\] = qual\.value\.trim\(\)/);
+  assert.match(codigo, /degrau\.cacada = onde\.value\.trim\(\)/);
+  assert.match(codigo, /cfg\.destino = e\.target\.value\.trim\(\)/);
+});
+
+test('a lista das cacadas fica fresca no instante de escolher', () => {
+  // Nao ha' `setInterval` nesta ferramenta, de proposito. Mas as Cacadas podem ler o catalogo do
+  // jogo DEPOIS deste painel ter sido desenhado, e foi o que aconteceu no jogo do dono em
+  // 12/10/2026: chegaram 377 cacadas e os campos da Escada continuaram com as dez de antes, ate
+  // alguem mexer no painel. Enche-se ao focar, que e' quando a frescura importa.
+  const segue = codigo.slice(codigo.indexOf('const seguirALista ='));
+  const corpo = segue.slice(0, segue.indexOf('});'));
+  assert.match(corpo, /addEventListener\('focus'/);
+  assert.match(corpo, /encherDatalista\(\);/);
+  assert.match(corpo, /marcarCacada\(c\);/);
+  // Todos os campos de cacada seguem a lista: os que nascem num degrau e o do fim, que e' do HTML.
+  assert.ok(
+    codigo.includes('seguirALista(c);') &&
+      codigo.indexOf('seguirALista(c);') < codigo.indexOf('const campoDeCacada') + 400,
+    'o campo que nasce num degrau segue a lista',
+  );
+  assert.match(codigo, /seguirALista\(campo\('\[data-destino\]'\)\);/);
 });

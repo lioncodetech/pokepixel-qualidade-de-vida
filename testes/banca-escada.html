@@ -439,6 +439,29 @@
     },
     cacadas: {
       nomes: () => GUARDADAS,
+      /**
+       * O catálogo: as guardadas **mais** o jogo inteiro, que é de onde a Escada tira as opções
+       * de cada degrau. Aqui são poucas, mas com nível e região, uma trancada e uma que não é
+       * atalho de ninguém — que são os três casos que a etiqueta da lista tem de dizer.
+       */
+      todas: () => [
+        ...GUARDADAS.map((nome) => ({
+          nome,
+          nivel: EXIGE[nome] || 0,
+          regiao: nome === 'Caça de Ralts' ? 'Hoenn' : 'Kanto',
+          tipo: nome === 'Expedição' ? 'expedicao' : 'cacada',
+          trancada: false,
+          minha: true,
+        })),
+        { nome: 'Caça de Larvitar', nivel: 160, regiao: 'Johto', trancada: false, minha: false },
+        {
+          nome: 'Ilha Lendária de Entei',
+          nivel: 300,
+          regiao: 'Ilhas Lendárias',
+          trancada: true,
+          minha: false,
+        },
+      ],
       atual: () => ({ nome: onde, regiao: '', modo: '', tipo: 'cacada' }),
       /**
        * As duas portas que o modo de grupo usa para a lista de lugares.

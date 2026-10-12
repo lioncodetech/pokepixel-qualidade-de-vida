@@ -22,6 +22,15 @@ PPX.modulo(
     const CHAVE_LISTA = 'lioncode:cacadas:guardadas';
     const CHAVE_POS = 'lioncode:cacadas:posicao';
     const CHAVE_MIN = 'lioncode:cacadas:minimizado';
+    const CHAVE_CATALOGO = 'lioncode:cacadas:catalogo';
+
+    const PEDIDO = 'lioncode:cacadas:pedido';
+    const RESPOSTA = 'lioncode:cacadas:resposta';
+    /** Sem `cacadas-main.js` ninguem responde nunca, e um painel a dizer "lendo" para sempre
+        nao diz o que esta' errado. */
+    const PACIENCIA = 20000;
+    /** De quanto em quanto tempo vale a pena reler a lista do jogo. */
+    const VALIDADE = 24 * 3600 * 1000;
 
     const ler = (chave, padrao) => {
       try {
@@ -40,6 +49,37 @@ PPX.modulo(
 
     const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
     const sorteio = (de, ate) => de + Math.random() * (ate - de);
+
+    let proximoEco = 0;
+
+    /**
+     * Pergunta a' ponte, e desiste com uma frase em vez de ficar a' espera para sempre.
+     *
+     * Mesmo desenho do que `escada.js` usa com `escada-main.js`, e repetido aqui pelo motivo que o
+     * cabeçalho deste arquivo ja' da' para o caminho ate' a caçada: cada ferramenta e' um content
+     * script que pode estar desligado sozinho, e partilhar um utilitario entre duas trocaria linhas
+     * repetidas por uma falha calada.
+     */
+    const pedirPonte = (pedido) =>
+      new Promise((resolver) => {
+        const eco = `c${Date.now()}-${(proximoEco += 1)}`;
+        let relogio = 0;
+        const ouvir = (evento) => {
+          if (evento?.detail?.eco !== eco) return;
+          clearTimeout(relogio);
+          removeEventListener(RESPOSTA, ouvir);
+          resolver(evento.detail);
+        };
+        addEventListener(RESPOSTA, ouvir);
+        relogio = setTimeout(() => {
+          removeEventListener(RESPOSTA, ouvir);
+          resolver({ erro: 'o jogo não respondeu — recarregue a página (F5)' });
+        }, PACIENCIA);
+        dispatchEvent(new CustomEvent(PEDIDO, { detail: { eco, ...pedido } }));
+      });
+
+    /** A lista inteira das caçadas do jogo. Ver o cabeçalho de `cacadas-main.js`. */
+    const pedirZonas = () => pedirPonte({ acao: 'zonas' });
 
     const ate = async (condicao, limite) => {
       const inicio = Date.now();
@@ -265,10 +305,37 @@ PPX.modulo(
 
     const nomeDaAba = (aba) => (aba.textContent || '').trim();
 
-    const linhaDe = (janela, nome) =>
-      [...janela.querySelectorAll('.hunt-list-row')].find((l) =>
-        (l.innerText || '').includes(nome),
-      );
+    /**
+     * A linha da lista que e' mesmo aquela caçada.
+     *
+     * MEDIDO NO JOGO EM 12/10/2026, com a aba de Johto aberta (92 linhas): cada linha e' um `<tr>`
+     * com o nome exacto em `.hunt-list-identity-copy strong` ("Sunkern") e uma celula que le'
+     * "Nv. 101". Antes procurava-se `innerText.includes(nome)`, e isso casa com qualquer linha onde
+     * o texto apareça — a lista traz tambem o nome da especie e as fraquezas.
+     *
+     * **E O NIVEL DESEMPATA, PORQUE HA' EMPATE.** Nos 377 registros do jogo ha' um nome repetido:
+     * "Nidorina" existe duas vezes em Kanto, Lv 10 e Lv 37. Com o nome so', ir para a de Lv 37
+     * levava a' de Lv 10 sem dizer nada. Sabendo o nivel, escolhe-se a certa.
+     *
+     * O `includes` fica como rede: se o jogo trocar o nome das classes, procura-se como se
+     * procurava antes em vez de deixar de achar.
+     */
+    const linhaDe = (janela, nome, nivel) => {
+      const linhas = [...janela.querySelectorAll('.hunt-list-row')];
+      const nomeDa = (l) =>
+        (l.querySelector('.hunt-list-identity-copy strong')?.textContent || '').trim();
+      const exatas = linhas.filter((l) => nomeDa(l) === nome);
+      const candidatas = exatas.length
+        ? exatas
+        : linhas.filter((l) => (l.innerText || '').includes(nome));
+      if (nivel && candidatas.length > 1) {
+        const certa = candidatas.find((l) =>
+          new RegExp(`Nv\\.\\s*${nivel}\\b`).test(l.innerText || ''),
+        );
+        if (certa) return certa;
+      }
+      return candidatas[0];
+    };
 
     /**
      * Limpa o filtro da lista de cacadas.
@@ -367,8 +434,11 @@ PPX.modulo(
       return Boolean(janelaPorTitulo(/CA[ÇC]ADAS/i));
     };
 
-    const irPara = async (alvo, avisar) => {
-      if (!alvo?.nome) return { ok: false, erro: 'esse atalho não tem nome de caçada' };
+    const irPara = async (bruto, avisar) => {
+      if (!bruto?.nome) return { ok: false, erro: 'esse atalho não tem nome de caçada' };
+      // Quem chama pode passar um atalho guardado cru, sem nivel nem aba — pelo `PPX.cacadas.ir`,
+      // por exemplo. O catalogo completa-o aqui, para a ida ser igual venha ela de onde vier.
+      const alvo = completar(bruto);
       // Para a expedição nao se viaja: ela nao esta' na lista da janela, entra-se por um menu da
       // barra de cima e ela so' existe enquanto dura. Guardar serve para a reconhecer, nao para
       // la' chegar.
@@ -425,7 +495,7 @@ PPX.modulo(
       // E diz-se onde se esta' a procurar: sao oito segundos calados, e quem olha para "Abrindo as
       // caçadas…" durante oito segundos conclui que a ferramenta travou. Ela nao travou.
       avisar(`Procurando "${alvo.nome}" em ${abaAberta(jan()) || 'a lista'}…`);
-      let linha = await ate(() => jan() && linhaDe(jan(), alvo.nome), 8000);
+      let linha = await ate(() => jan() && linhaDe(jan(), alvo.nome, alvo.nivel), 8000);
 
       // Nao estava na aba aberta. Varrem-se as outras — e isto e' o caminho normal, nao a excecao:
       // uma `regiao` guardada que nao casa com nenhuma aba (um UUID, "legendary") chega aqui
@@ -444,7 +514,7 @@ PPX.modulo(
         if (!(await abrirAba(jan(), nome))) continue;
         await limparFiltro(jan());
         varridas.push(nome);
-        linha = await ate(() => jan() && linhaDe(jan(), alvo.nome), 4000);
+        linha = await ate(() => jan() && linhaDe(jan(), alvo.nome, alvo.nivel), 4000);
       }
 
       if (!linha) {
@@ -511,6 +581,10 @@ PPX.modulo(
       </div>
       <div class="corpo">
         <button type="button" class="salvar" data-salvar>Guardar a caçada atual</button>
+        <div class="busca">
+          <input type="search" data-filtro placeholder="filtrar por nome, nível ou região" />
+          <button type="button" data-atualizar title="Reler a lista de caçadas do jogo">↻</button>
+        </div>
         <ul data-lista></ul>
         <p class="estado" data-estado></p>
       </div>`;
@@ -538,6 +612,18 @@ PPX.modulo(
       }
       #lioncode-cacadas button.salvar:hover { background: #26344c; }
       #lioncode-cacadas button:disabled { opacity: .5; cursor: default; }
+      #lioncode-cacadas .busca { display: flex; gap: 5px; }
+      #lioncode-cacadas .busca input {
+        flex: 1; min-width: 0; background: #1a2130; color: #e7edf6; border: 1px solid #2a3244;
+        border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12px;
+      }
+      #lioncode-cacadas .busca input::placeholder { color: #70798a; }
+      #lioncode-cacadas .busca button {
+        background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a; border-radius: 6px;
+        padding: 3px 9px; font: inherit; cursor: pointer;
+      }
+      #lioncode-cacadas .busca button:hover:not(:disabled) { background: #26344c; }
+      #lioncode-cacadas .conta { margin: 0; color: #70798a; font-size: 12px; }
       #lioncode-cacadas ul { list-style: none; margin: 0; padding: 0;
         display: flex; flex-direction: column; gap: 5px;
         /* Quem guarda uma dezena de cacadas tinha o painel a passar da tela, e o fim da lista
@@ -685,11 +771,168 @@ PPX.modulo(
       gravarLista(todas);
     };
 
+    /**
+     * O CATALOGO: a lista das caçadas do jogo, como ela e' lida uma vez e guardada.
+     *
+     * POR QUE ELE EXISTE. Guardar um atalho era um ato de presenca — entrar na caçada, ler o nome
+     * do HUD, clicar em guardar — porque o nome so' existe no DOM **enquanto ela corre**. Para ter
+     * nove atalhos faziam-se nove viagens, e o nivel de cada caçada nao aparecia em canto nenhum
+     * do painel. O jogo sabia a lista inteira o tempo todo: 377 caçadas, com nome, nivel e mundo.
+     * Ver `cacadas-main.js` para o que foi medido.
+     *
+     * **ELE NAO E' A VERDADE, E' UMA COPIA DELA.** O que o jogo responde hoje pode mudar amanha —
+     * entra uma regiao nova, muda um nivel. Por isso guarda-se o instante junto, relê-se de 24 em
+     * 24 horas, e o ↻ relê a pedido. E por isso nada do catalogo entra no atalho guardado sem
+     * passar por `paraGuardar`: o que a extensao descobriu sozinha nao se escreve como se fosse
+     * escolha do dono, que e' a mesma regra que o `config.js` segue para exportar.
+     */
+    const catalogo = () => {
+      const bruto = ler(CHAVE_CATALOGO, null);
+      return {
+        quando: Number(bruto?.quando) || 0,
+        zonas: Array.isArray(bruto?.zonas) ? bruto.zonas.filter((z) => z && z.nome) : [],
+      };
+    };
+
+    /** As zonas com aquele nome — **mais de uma** quando o jogo repete o nome. Ver `linhaDe`. */
+    const zonasDe = (nome) => catalogo().zonas.filter((z) => z.nome === nome);
+
+    /**
+     * Um UUID nao e' uma regiao para ninguem ler.
+     *
+     * `.platform-hunt__zone-meta` mostra o `id` do mundo, e seis dos nove atalhos da conta real
+     * tinham isso guardado como "regiao". Hoje sabe-se o que ele e' — ver `cacadas-main.js` —, mas
+     * sem catalogo nao ha' como o traduzir, e meia linha de UUID na etiqueta e' pior do que nada.
+     */
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+
+    /**
+     * Enche o atalho com o que o catalogo sabe: o nivel e a aba.
+     *
+     * **Nao sobrescreve nada do dono.** A aba aprendida numa ida anterior vale mais do que a do
+     * catalogo, porque ela foi medida naquela conta. E nome repetido so' se resolve se o proprio
+     * atalho disser de qual nivel e' — adivinhar levaria a' Nidorina errada.
+     */
+    const completar = (c) => {
+      if (!c || c.tipo === 'expedicao') return c;
+      const iguais = zonasDe(c.nome);
+      const z = c.nivel
+        ? iguais.find((x) => x.nivel === c.nivel)
+        : iguais.length === 1
+          ? iguais[0]
+          : null;
+      if (!z) return c;
+      return { ...c, nivel: c.nivel || z.nivel, aba: c.aba || z.aba, trancado: z.trancado };
+    };
+
+    /** So' o que e' escolha do dono. O resto deriva do jogo e relê-se. */
+    const paraGuardar = (c) => ({
+      nome: c.nome,
+      nivel: Number(c.nivel) || 0,
+      aba: c.aba || '',
+      regiao: c.regiao || '',
+      modo: c.modo || '',
+      tipo: c.tipo || 'cacada',
+      time: c.time || '',
+    });
+
+    /**
+     * A lista que o painel mostra: os atalhos do dono primeiro, e depois o jogo inteiro.
+     *
+     * Os dele em cima e na ordem em que ele os guardou, porque sao os que ele usa; o resto por
+     * mundo e nivel, que e' a ordem em que o jogo os desenha. Uma caçada do catalogo desaparece
+     * daqui quando passa a ser atalho dele — e **so' a de nivel igual**, para que guardar a
+     * Nidorina de Lv 37 nao esconda a de Lv 10.
+     */
+    const todasConhecidas = () => {
+      const minhas = guardadas().map(completar);
+      const jaMinha = (z) =>
+        minhas.some((c) => c.nome === z.nome && (!c.nivel || c.nivel === z.nivel));
+      const resto = catalogo()
+        .zonas.filter((z) => !jaMinha(z))
+        .sort((a, b) => a.ordem - b.ordem || a.nivel - b.nivel || a.nome.localeCompare(b.nome))
+        .map((z) => ({
+          nome: z.nome,
+          nivel: z.nivel,
+          aba: z.aba,
+          regiao: '',
+          modo: '',
+          tipo: 'cacada',
+          time: '',
+          trancado: z.trancado,
+          doJogo: true,
+        }));
+      return [...minhas, ...resto];
+    };
+
+    let pedindoZonas = false;
+
+    /**
+     * Lê a lista do jogo quando ela falta ou envelheceu.
+     *
+     * Chamado tambem quando o painel reaparece, e nao so' ao carregar: a extensao arranca em
+     * `document_idle`, que e' antes de o jogo publicar a `Api` — a primeira tentativa costuma
+     * apanhar "o jogo ainda não publicou a API". Calada, se for automatica: um painel a reclamar
+     * de uma coisa que ninguem pediu e' ruido. Pelo ↻, diz tudo.
+     */
+    const garantirCatalogo = (forcado) => {
+      if (pedindoZonas) return;
+      const agora = catalogo();
+      if (!forcado && agora.zonas.length && Date.now() - agora.quando < VALIDADE) return;
+      pedindoZonas = true;
+      campo('[data-atualizar]').disabled = true;
+      if (forcado) dizer('Lendo a lista de caçadas do jogo…');
+      void pedirZonas()
+        .then((lido) => {
+          if (lido?.ok && lido.zonas?.length) {
+            gravar(CHAVE_CATALOGO, { quando: Date.now(), zonas: lido.zonas });
+            insistencias = 0;
+            desenhar();
+            if (forcado) celebrar(`${lido.zonas.length} caçadas na lista.`);
+            return;
+          }
+          if (forcado) dizer(`Não li a lista: ${lido?.erro || 'o jogo não disse porquê'}`, true);
+          else insistir();
+        })
+        .finally(() => {
+          pedindoZonas = false;
+          campo('[data-atualizar]').disabled = indo;
+        });
+    };
+
+    /**
+     * **A PRIMEIRA LEITURA FALHA, E ELA TEM DE INSISTIR SOZINHA.**
+     *
+     * Medido no jogo do dono em 12/10/2026, com a extensao recarregada e a pagina em F5: a ponte
+     * respondia as 377 caçadas quando perguntada a' mao, e o catalogo estava **vazio**. Nao era a
+     * ponte: a extensao corre em `document_idle`, que e' antes de o jogo publicar a `Api`, e a
+     * tentativa do arranque apanhou "o jogo ainda não publicou a API".
+     *
+     * A unica retentativa que havia era "quando o painel reaparece" — e um painel que nunca se
+     * esconde nunca reaparece. Ficava um ↻ a' espera de alguem o clicar, o que e' pedir ao dono que
+     * resolva um problema de arranque que ele nao tem como adivinhar.
+     *
+     * Entao insiste-se, com espera crescente e um numero de vezes contado: a tela do jogo pode
+     * demorar, mas nao demora para sempre, e um laço sem fim a bater na ponte seria trocar um
+     * silencio por um incomodo. Esgotadas as tentativas, fica o ↻ — e ai' ele e' o que resta, nao
+     * o unico caminho.
+     */
+    const INSISTE = [4000, 12000, 40000];
+    let insistencias = 0;
+
+    const insistir = () => {
+      const espera = INSISTE[insistencias];
+      if (espera === undefined) return;
+      insistencias += 1;
+      setTimeout(() => garantirCatalogo(false), espera);
+    };
+
     let indo = false;
 
     const travar = (sim) => {
       indo = sim;
       campo('[data-salvar]').disabled = sim;
+      campo('[data-atualizar]').disabled = sim || pedindoZonas;
       for (const b of lista.querySelectorAll('button')) b.disabled = sim;
       for (const b of painel.querySelectorAll('.resumo button')) b.disabled = sim;
     };
@@ -789,22 +1032,83 @@ PPX.modulo(
       void levar(todas[onde]);
     });
 
+    /** Sem acentos e em minusculas: quem escreve "lendarias" quer achar "Ilhas Lendárias". */
+    const chao = (texto) =>
+      String(texto || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+    /**
+     * Quantas linhas se desenham de uma vez.
+     *
+     * A lista inteira do jogo sao 377 caçadas, e cada linha leva um `select` com os times:
+     * desenhar tudo seria quase quatrocentos selects reconstruidos a cada repintura para mostrar
+     * os vinte que caberiam na tela. O teto nao esconde nada — diz quantas ficaram de fora, e o
+     * filtro alcança qualquer uma delas.
+     */
+    const TETO = 40;
+
+    let filtro = '';
+
+    /** O que fica a' vista: o filtro casa com o nome, com a regiao ou com o nivel. */
+    const aMostrar = () => {
+      const todas = todasConhecidas();
+      const busca = chao(filtro).trim();
+      if (!busca) return todas;
+      return todas.filter(
+        (c) =>
+          chao(c.nome).includes(busca) ||
+          chao(c.aba || c.regiao).includes(busca) ||
+          (c.nivel ? String(c.nivel).startsWith(busca) : false),
+      );
+    };
+
+    /** A linha de baixo de cada item. O UUID nao entra: ver `UUID`. */
+    const legenda = (alvo) => {
+      if (alvo.tipo === 'expedicao') return legendaDaExpedicao();
+      const regiao = alvo.aba || (UUID.test(alvo.regiao || '') ? '' : alvo.regiao);
+      return (
+        [alvo.nivel ? `Lv ${alvo.nivel}` : '', regiao, alvo.modo, alvo.trancado ? 'trancada' : '']
+          .filter(Boolean)
+          .join(' · ') || 'sem região'
+      );
+    };
+
+    /**
+     * Duas linhas sao a mesma caçada.
+     *
+     * O nome continua a ser a chave — e' o unico elo entre as duas telas, como diz o cabeçalho —,
+     * mas um nome repetido no jogo ("Nidorina", Lv 10 e Lv 37) desempata-se pelo nivel quando os
+     * dois lados o sabem. Quem nao sabe o nivel casa com qualquer um, que e' o comportamento
+     * antigo: um atalho guardado antes desta versao nao tem nivel nenhum.
+     */
+    const eMesma = (a, b) =>
+      Boolean(a) &&
+      Boolean(b) &&
+      a.nome === b.nome &&
+      (!a.nivel || !b.nivel || a.nivel === b.nivel);
+
     const desenhar = () => {
       // O resumo acompanha: `desenhar` corre depois de guardar, de apagar e de chegar a uma
       // cacada, e e' nessa ultima que o minimizado tem de passar a dizer "você está aqui".
       pintarResumo();
-      const todas = guardadas();
+      const todas = aMostrar();
       const agora = cacadaAtiva();
       lista.innerHTML = '';
       if (!todas.length) {
         const vazio = document.createElement('p');
         vazio.className = 'vazio';
-        vazio.textContent = 'Nenhum atalho ainda. Entre numa caçada e clique em guardar.';
+        vazio.textContent = filtro.trim()
+          ? `Nada com "${filtro.trim()}".`
+          : catalogo().zonas.length
+            ? 'Nenhum atalho ainda. Entre numa caçada e clique em guardar.'
+            : 'Ainda não li a lista de caçadas do jogo — clique em ↻.';
         lista.append(vazio);
         return;
       }
       const nomesDeTime = globalThis.PPX?.times?.nomes?.() || [];
-      for (const alvo of todas) {
+      for (const alvo of todas.slice(0, TETO)) {
         const item = document.createElement('li');
         const cima = document.createElement('div');
         cima.className = 'cima';
@@ -814,14 +1118,10 @@ PPX.modulo(
         nome.textContent = alvo.nome;
         nome.title = alvo.nome;
         const onde = document.createElement('small');
-        const partes =
-          alvo.tipo === 'expedicao'
-            ? [legendaDaExpedicao()]
-            : [alvo.regiao, alvo.modo].filter(Boolean);
         const aqui = mesmoLugar(agora, alvo);
         onde.dataset.cacada = alvo.nome;
         if (alvo.tipo) onde.dataset.tipo = alvo.tipo;
-        onde.dataset.onde = partes.join(' · ') || 'sem região';
+        onde.dataset.onde = legenda(alvo);
         onde.textContent = aqui ? 'você está aqui' : onde.dataset.onde;
         onde.classList.toggle('agora', aqui);
         rotulo.append(nome, onde);
@@ -830,20 +1130,27 @@ PPX.modulo(
         ir.type = 'button';
         ir.textContent = 'Ir';
         // Um botao que nao pode funcionar nao fica a fingir que pode: a expedição guarda-se para
-        // ser reconhecida, e quem entra nela e' o jogador.
-        ir.disabled = alvo.tipo === 'expedicao';
-        ir.title = ir.disabled ? 'Na expedição entra você' : `Ir para "${alvo.nome}"`;
+        // ser reconhecida, e quem entra nela e' o jogador. As Ilhas Lendarias respondem
+        // `locked: true` enquanto o treinador nao chega ao nivel delas, e a aba vem desativada.
+        ir.disabled = alvo.tipo === 'expedicao' || alvo.trancado === true;
+        ir.title =
+          alvo.tipo === 'expedicao'
+            ? 'Na expedição entra você'
+            : alvo.trancado === true
+              ? 'Esta região ainda está trancada para a sua conta'
+              : `Ir para "${alvo.nome}"`;
         ir.addEventListener('click', () => void levar(alvo));
 
         const apagar = document.createElement('button');
         apagar.type = 'button';
         apagar.dataset.apagar = '';
         apagar.textContent = '×';
-        // O que e' do jogo nao se esquece: a expedição estaria de volta na batida seguinte.
-        apagar.hidden = Boolean(alvo.fixa);
+        // O que e' do jogo nao se esquece: a expedição estaria de volta na batida seguinte, e uma
+        // caçada que veio da lista do jogo nunca foi guardada — nao ha' o que apagar.
+        apagar.hidden = Boolean(alvo.fixa) || alvo.doJogo === true;
         apagar.title = `Esquecer "${alvo.nome}"`;
         apagar.addEventListener('click', () => {
-          gravarLista(guardadas().filter((c) => c.nome !== alvo.nome));
+          gravarLista(guardadas().filter((c) => !eMesma(c, alvo)));
           desenhar();
           dizer(`"${alvo.nome}" esquecida.`);
         });
@@ -876,21 +1183,41 @@ PPX.modulo(
         times.value = alvo.time || '';
         times.classList.toggle('sem-time', !times.value);
         times.addEventListener('change', () => {
-          gravarLista(
-            guardadas().map((c) => (c.nome === alvo.nome ? { ...c, time: times.value } : c)),
-          );
+          // **ESCOLHER UM TIME GUARDA A CAÇADA.** Ela pode ter vindo da lista do jogo, e dizer
+          // "esta aqui monta o time X" e' precisamente o que distingue uma caçada que o dono usa
+          // de uma que esta' no mapa. Guardar e' consequencia da escolha, nao um segundo passo.
+          const todasMinhas = guardadas();
+          const onde = todasMinhas.findIndex((c) => eMesma(c, alvo));
+          if (onde >= 0) todasMinhas[onde] = { ...todasMinhas[onde], time: times.value };
+          else todasMinhas.push(paraGuardar({ ...alvo, time: times.value }));
+          gravarLista(todasMinhas);
           times.classList.toggle('sem-time', !times.value);
           dizer(
             times.value
               ? `"${alvo.nome}" passa a montar o time "${times.value}".`
               : `"${alvo.nome}" deixa de trocar o time.`,
           );
+          // A linha mudou de lado — era do jogo, passou a ser atalho dele, e ganhou o ×.
+          if (onde < 0) desenhar();
         });
         item.append(times);
 
         lista.append(item);
       }
+      if (todas.length > TETO) {
+        const conta = document.createElement('p');
+        conta.className = 'conta';
+        conta.textContent = `…e mais ${todas.length - TETO}. Escreva mais no filtro.`;
+        lista.append(conta);
+      }
     };
+
+    campo('[data-filtro]').addEventListener('input', (evento) => {
+      filtro = evento.target.value || '';
+      desenhar();
+    });
+
+    campo('[data-atualizar]').addEventListener('click', () => garantirCatalogo(true));
 
     /** Guarda a cacada que esta' na tela. Regravar a mesma atualiza a regiao e o modo. */
     const guardarAtual = () => {
@@ -906,12 +1233,15 @@ PPX.modulo(
         celebrar('A expedição já está sempre na lista — não precisa de ser guardada.');
         return;
       }
+      // O catalogo acrescenta o nivel e a aba ao que o HUD da'. Sem ele guarda-se como antes:
+      // nome, regiao e modo bastam para achar a caçada varrendo as abas.
+      const cheio = completar(agora);
       const todas = guardadas();
-      const onde = todas.findIndex((c) => c.nome === agora.nome);
+      const onde = todas.findIndex((c) => eMesma(c, cheio));
       // Regravar atualiza a regiao e o modo, mas **nao** mexe no time escolhido: guardar de novo e'
       // corrigir o endereco, nao desfazer a configuracao.
-      if (onde >= 0) todas[onde] = { ...agora, time: todas[onde].time || '' };
-      else todas.push({ ...agora, time: '' });
+      if (onde >= 0) todas[onde] = paraGuardar({ ...cheio, time: todas[onde].time || '' });
+      else todas.push(paraGuardar(cheio));
       gravarLista(todas);
       desenhar();
       celebrar(onde >= 0 ? `"${agora.nome}" atualizada.` : `"${agora.nome}" guardada.`);
@@ -986,6 +1316,9 @@ PPX.modulo(
       // Com o relogio em dez minutos, a marca pode estar velha quando o painel reaparece. Repintar
       // aqui nao reconstroi linha nenhuma, por isso nao fecha um select aberto.
       if (sim) pintarMarca();
+      // A extensao arranca antes de o jogo publicar a `Api`: a leitura da lista costuma falhar na
+      // primeira tentativa, e esta e' a segunda — sem custo, porque so' tenta se faltar.
+      if (sim) garantirCatalogo(false);
     };
 
     let minimizado = ler(CHAVE_MIN, false) === true;
@@ -1052,6 +1385,7 @@ PPX.modulo(
     });
 
     desenhar();
+    garantirCatalogo(false);
     aplicarMinimo();
     recolocar();
     pintar();
@@ -1077,6 +1411,27 @@ PPX.modulo(
        */
       globalThis.PPX.cacadas = {
         nomes: () => guardadas().map((c) => c.nome),
+
+        /**
+         * Tudo o que esta ferramenta conhece: os atalhos do dono **mais** a lista do jogo.
+         *
+         * Separada de `nomes()` de proposito. `nomes()` sao os atalhos dele — curta, na ordem em
+         * que ele os guardou, e e' ela que serve a quem quer oferecer "as suas caçadas". Isto sao
+         * as 377, e so' serve a quem tem como filtrar: despejar 377 opcoes num `select` nao e'
+         * uma escolha, e' uma busca sem campo de busca.
+         *
+         * Cada uma diz o nivel e a regiao, porque e' por ai' que se escolhe onde upar, e diz se
+         * da' para abrir — regiao trancada e expedição nao dao.
+         */
+        todas: () =>
+          todasConhecidas().map((c) => ({
+            nome: c.nome,
+            nivel: c.nivel || 0,
+            regiao: c.aba || (UUID.test(c.regiao || '') ? '' : c.regiao || ''),
+            tipo: c.tipo || 'cacada',
+            trancada: c.trancado === true,
+            minha: c.doJogo !== true,
+          })),
         atual: () => cacadaAtiva(),
 
         /**
@@ -1091,7 +1446,7 @@ PPX.modulo(
          *
          * Com isto ela diz o porque' e o que fazer. Continua sem poder mudar nada disto.
          */
-        timeDe: (nome) => guardadas().find((c) => c.nome === nome)?.time || '',
+        timeDe: (nome) => todasConhecidas().find((c) => c.nome === nome)?.time || '',
 
         /**
          * Se da' para esta ferramenta levar o jogador ate' la'.
@@ -1099,17 +1454,29 @@ PPX.modulo(
          * Hoje so' a expedição diz que nao. Quem automatiza precisa de saber isto **antes** de
          * tentar, para poder escolher outro lugar da lista em vez de bater na porta e falhar.
          */
-        daParaIr: (nome) => guardadas().find((c) => c.nome === nome)?.tipo !== 'expedicao',
+        daParaIr: (nome) => {
+          const alvo = todasConhecidas().find((c) => c.nome === nome);
+          return alvo?.tipo !== 'expedicao' && alvo?.trancado !== true;
+        },
+
+        /**
+         * O nivel daquela caçada, ou `0` quando o catalogo ainda nao foi lido.
+         *
+         * Serve para quem escolhe onde upar: o nivel da caçada e' o que decide se ela presta para
+         * um Pokemon ou se ela o leva a apanhar porrada. Nome repetido devolve o primeiro, e e' por
+         * isso que isto nao e' endereço de nada — e' informacao para ler.
+         */
+        nivelDe: (nome) => todasConhecidas().find((c) => c.nome === nome)?.nivel || 0,
 
         /** Se o jogador esta' naquele lugar agora — a expedição casa por tipo, nao por nome. */
         estouEm: (nome) =>
           mesmoLugar(
             cacadaAtiva(),
-            guardadas().find((c) => c.nome === nome),
+            todasConhecidas().find((c) => c.nome === nome),
           ),
         ir: async (nome) => {
-          const alvo = guardadas().find((c) => c.nome === nome);
-          if (!alvo) return { ok: false, erro: `não há atalho guardado para "${nome}"` };
+          const alvo = todasConhecidas().find((c) => c.nome === nome);
+          if (!alvo) return { ok: false, erro: `não conheço nenhuma caçada chamada "${nome}"` };
           mostrarPainel(true);
           if (indo) return { ok: false, erro: 'já há uma ida em andamento' };
           travar(true);

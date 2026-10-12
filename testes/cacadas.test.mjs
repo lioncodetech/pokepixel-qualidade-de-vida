@@ -82,7 +82,7 @@ test('abrir a janela nao acredita no DOM sobre ela estar aberta', () => {
     'a janela visível é respeitada antes de qualquer clique',
   );
   // E a ida usa esta porta, em vez de clicar por conta própria.
-  const ida = codigo.slice(codigo.indexOf('const irPara = async (alvo, avisar)'));
+  const ida = codigo.slice(codigo.indexOf('const irPara = async (bruto, avisar)'));
   assert.match(ida.slice(0, 600), /if \(!\(await abrirJanela\(\)\)\)/);
   assert.doesNotMatch(ida.slice(0, 600), /data-menu-id="hunts"/);
 });
@@ -149,7 +149,7 @@ test('a regiao guardada e uma pista, e nao achando varre as abas', () => {
   assert.match(bloco, /casa\(alvo\.regiao\)/);
   assert.match(
     bloco,
-    /linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome\), 4000\)/,
+    /linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome, alvo\.nivel\), 4000\)/,
   );
   // A aba já aberta não é visitada de novo, e a varredura para assim que acha.
   assert.match(bloco, /const varridas = \[abaAberta\(jan\(\)\)\];/);
@@ -168,7 +168,7 @@ test('espera a lista ser pintada, e a falha diz o que viu', () => {
   // as abas da loja (~285 ms), a grade do inventário, os ginásios do mapa, o resumo do combate.
   assert.match(
     codigo,
-    /let linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome\), 8000\);/,
+    /let linha = await ate\(\(\) => jan\(\) && linhaDe\(jan\(\), alvo\.nome, alvo\.nivel\), 8000\);/,
   );
   assert.match(codigo, /querySelectorAll\('\.hunt-list-row'\)/);
   // E a falha separa os dois casos tristes, que pedem coisas diferentes de quem lê: a lista existe
@@ -187,8 +187,8 @@ test('o nome guardado e a chave de busca, e por isso nao se renomeia', () => {
 
 test('guardar a mesma cacada atualiza, e nao duplica', () => {
   // Dois atalhos com o mesmo nome seriam indistinguíveis, e `PPX.cacadas.ir` pegaria o primeiro.
-  assert.match(codigo, /const onde = todas\.findIndex\(\(c\) => c\.nome === agora\.nome\)/);
-  assert.match(codigo, /if \(onde >= 0\) todas\[onde\] = \{ \.\.\.agora, time:/);
+  assert.match(codigo, /const onde = todas\.findIndex\(\(c\) => eMesma\(c, cheio\)\)/);
+  assert.match(codigo, /if \(onde >= 0\) todas\[onde\] = paraGuardar\(\{ \.\.\.cheio, time:/);
 });
 
 test('a barra de cima leva clique cru, e o resto clique de gente', () => {
@@ -225,7 +225,7 @@ test('a porta PPX.cacadas devolve o resultado, como a do Times', () => {
   // Quem chama precisa saber o que aconteceu, e não adivinhar lendo a tela.
   assert.match(codigo, /globalThis\.PPX\.cacadas = \{/);
   assert.match(codigo, /nomes: \(\) => guardadas\(\)\.map\(\(c\) => c\.nome\)/);
-  assert.match(codigo, /erro: `não há atalho guardado para "\$\{nome\}"`/);
+  assert.match(codigo, /erro: `não conheço nenhuma caçada chamada "\$\{nome\}"`/);
 });
 
 test('o time do atalho e montado antes de entrar na cacada', () => {
@@ -246,7 +246,10 @@ test('o time e opcional, e regravar o atalho nao o apaga', () => {
   // transformaria um atalho de um clique num formulário.
   assert.match(codigo, /— sem trocar o time —/);
   // Guardar de novo é corrigir o endereço, não desfazer a configuração.
-  assert.match(codigo, /todas\[onde\] = \{ \.\.\.agora, time: todas\[onde\]\.time \|\| '' \}/);
+  assert.match(
+    codigo,
+    /todas\[onde\] = paraGuardar\(\{ \.\.\.cheio, time: todas\[onde\]\.time \|\| '' \}\)/,
+  );
   // Um time que deixou de existir não pode sumir em silêncio.
   assert.match(codigo, /\(não existe mais\)/);
 });
@@ -348,7 +351,7 @@ test('a expedicao e um lugar, e nao uma cacada', () => {
   assert.match(ida.slice(0, 600), /if \(alvo\.tipo === 'expedicao'\)/);
   assert.match(codigo, /daParaIr: \(nome\) =>/);
   // E o botão não fica a fingir que funciona.
-  assert.match(codigo, /ir\.disabled = alvo\.tipo === 'expedicao';/);
+  assert.match(codigo, /ir\.disabled = alvo\.tipo === 'expedicao' \|\| alvo\.trancado === true;/);
   // "Estou aqui" casa por TIPO, e não por nome: a expedição de amanhã pode chamar-se outra coisa.
   assert.match(codigo, /a\.tipo === 'expedicao' \? b\.tipo === 'expedicao' : a\.nome === b\.nome/);
 });
@@ -409,7 +412,197 @@ test('a expedicao nao se guarda: ela esta sempre la', () => {
     'ninguém escreve a lista por fora do gravarLista',
   );
   // O que é do jogo não se esquece: estaria de volta na batida seguinte.
-  assert.match(codigo, /apagar\.hidden = Boolean\(alvo\.fixa\);/);
+  assert.match(codigo, /apagar\.hidden = Boolean\(alvo\.fixa\) \|\| alvo\.doJogo === true;/);
   // E guardar estando lá dentro diz isso, em vez de criar uma segunda entrada.
   assert.match(codigo, /A expedição já está sempre na lista/);
+});
+
+// ---------------------------------------------------------------- o catalogo das cacadas
+
+const ponte = ler('cacadas-main.js');
+const ponteCodigo = ponte
+  .split('\n')
+  .filter((linha) => !/^\s*(\/\/|\*|\/\*)/.test(linha))
+  .join('\n');
+
+test('a lista das cacadas vem do jogo, e nao de ir a uma por uma', () => {
+  // Medido na conta real em 12/10/2026: `Api.getZones()` devolve 377 caçadas e `Api.getWorlds()`
+  // os quatro mundos. Guardar um atalho era um ato de presença — o nome só existe no DOM enquanto
+  // a caçada corre —, e o jogo sabia a lista inteira o tempo todo.
+  assert.match(ponteCodigo, /api\?\.getZones !== 'function'/);
+  assert.match(ponteCodigo, /await api\.getWorlds\(\)/);
+  assert.match(ponteCodigo, /await api\.getZones\(\)/);
+  // Só caçadas: nos 377 registros `type` era sempre 'hunt', e um `type` novo não pode entrar na
+  // lista como se fosse uma caçada.
+  assert.match(ponteCodigo, /z\?\.type === 'hunt'/);
+  // E o `label` do mundo é exatamente o texto da aba da janela — é ele que vira endereço.
+  assert.match(ponteCodigo, /aba: String\(m\?\.label \|\| ''\)/);
+  assert.match(ponteCodigo, /aba: mundo\.aba \|\| ''/);
+  // E o nivel e' um numero so': nos 377 registros `min_level`, `max_level` e `recommended_level`
+  // sao iguais, conferidos um por um. Uma faixa "155-155" seria desenhar o que o jogo nao tem.
+  assert.match(ponteCodigo, /nivel: Number\(z\?\.min_level\) \|\| 0/);
+  // Atravessam cinco campos, e não os dezoito que cada zona tem.
+  const volta = ponteCodigo.slice(ponteCodigo.indexOf('zonas: ('));
+  assert.match(volta.slice(0, 900), /nome:[\s\S]*nivel:[\s\S]*aba:[\s\S]*ordem:[\s\S]*trancado:/);
+  assert.doesNotMatch(volta.slice(0, 900), /encounters|capture_rate|power_score|map_x/);
+  // Do outro lado, quem pede é a ferramenta — e pede uma coisa só.
+  assert.match(codigo, /const pedirZonas = \(\) => pedirPonte\(\{ acao: 'zonas' \}\)/);
+});
+
+test('a ponte das cacadas le, e nao entra em cacada nenhuma', () => {
+  // `Api.prepareHunt(zoneId)` e `Nav.goToHunt(mapId)` existem e levariam direto, sem abrir janela
+  // nem varrer abas. Ficam de fora: entrar é a ação que mexe no jogo do dono, e ela continua a
+  // passar pelo botão "Caçar" que ele mesmo clicaria. Ler a lista não mexe em nada.
+  assert.match(ponteCodigo, /const FAZ = \{ zonas \};/);
+  assert.doesNotMatch(ponteCodigo, /prepareHunt|goToHunt|stopHunt|healTeam/);
+  // E o motivo fica escrito onde quem for acrescentar uma ação tropeça nele.
+  assert.match(ponte, /nao entra em caçada nenhuma/);
+});
+
+test('o catalogo e uma copia da verdade, e por isso tem prazo', () => {
+  // O que o jogo responde hoje muda amanhã: entra uma região nova, muda um nível. Guardar sem
+  // prazo seria passar a mostrar uma lista velha para sempre, sem nunca dizer que está velha.
+  assert.match(codigo, /const VALIDADE = 24 \* 3600 \* 1000;/);
+  assert.match(codigo, /gravar\(CHAVE_CATALOGO, \{ quando: Date\.now\(\), zonas: lido\.zonas \}\)/);
+  const garantir = codigo.slice(codigo.indexOf('const garantirCatalogo ='));
+  assert.match(
+    garantir.slice(0, 600),
+    /if \(!forcado && agora\.zonas\.length && Date\.now\(\) - agora\.quando < VALIDADE\) return;/,
+  );
+  // A extensão arranca antes de o jogo publicar a `Api`: a primeira tentativa costuma falhar, e
+  // por isso tenta-se outra vez quando o painel reaparece — calado, porque ninguém pediu.
+  assert.match(codigo, /if \(sim\) garantirCatalogo\(false\);/);
+  assert.match(
+    garantir.slice(0, 900),
+    /if \(forcado\) dizer\('Lendo a lista de caçadas do jogo…'\)/,
+  );
+});
+
+test('nome repetido desempata-se pelo nivel, porque o jogo repete nome', () => {
+  // Nos 377 registros há um nome repetido: "Nidorina" existe duas vezes em Kanto, Lv 10 e Lv 37.
+  // Com o nome só, ir para a de Lv 37 levava à de Lv 10 sem dizer nada.
+  const bloco = codigo.slice(codigo.indexOf('const linhaDe ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /const linhaDe = \(janela, nome, nivel\)/);
+  // O nome exato vem do `strong` da linha, e não de um `includes` no texto todo — a linha traz
+  // também o nome da espécie e as fraquezas.
+  assert.match(corpo, /\.hunt-list-identity-copy strong/);
+  assert.match(corpo, /nomeDa\(l\) === nome/);
+  assert.match(corpo, /if \(nivel && candidatas\.length > 1\)/);
+  assert.ok(corpo.includes('new RegExp(`Nv\\\\.\\\\s*${nivel}\\\\b`)'), 'desempata pelo "Nv. N"');
+  // E o `includes` fica como rede: se o jogo trocar as classes, procura-se como antes.
+  assert.match(corpo, /linhas\.filter\(\(l\) => \(l\.innerText \|\| ''\)\.includes\(nome\)\)/);
+  // A mesma caçada é nome **e** nível; quem não sabe o nível casa com qualquer um, que é o que
+  // acontece com um atalho guardado antes desta versão.
+  const mesma = codigo.slice(codigo.indexOf('const eMesma ='));
+  assert.match(mesma.slice(0, 300), /a\.nome === b\.nome &&/);
+  assert.match(mesma.slice(0, 300), /\(!a\.nivel \|\| !b\.nivel \|\| a\.nivel === b\.nivel\)/);
+});
+
+test('o que a extensao descobriu sozinha nao se escreve como escolha do dono', () => {
+  // A mesma regra do `config.js`: catálogo, estoque e contagem são o retrato do jogo. `trancado` e
+  // `doJogo` derivam da lista e relêem-se; guardá-los criaria uma segunda verdade.
+  const guardar = codigo.slice(codigo.indexOf('const paraGuardar ='));
+  const corpo = guardar.slice(0, guardar.indexOf('});'));
+  assert.match(
+    corpo,
+    /nome:[\s\S]*nivel:[\s\S]*aba:[\s\S]*regiao:[\s\S]*modo:[\s\S]*tipo:[\s\S]*time:/,
+  );
+  assert.doesNotMatch(corpo, /trancado|doJogo|ordem/);
+  // E tudo o que vai para o armazém passa por aqui.
+  assert.match(codigo, /todasMinhas\.push\(paraGuardar\(\{ \.\.\.alvo, time: times\.value \}\)\)/);
+  assert.match(codigo, /else todas\.push\(paraGuardar\(cheio\)\);/);
+});
+
+test('a lista inteira nao se desenha de uma vez, e o que falta diz-se', () => {
+  // 377 caçadas, cada linha com um `select` de times: desenhar tudo seria quase quatrocentos
+  // selects reconstruídos a cada repintura para mostrar os vinte que caberiam na tela.
+  assert.match(codigo, /const TETO = 40;/);
+  assert.match(codigo, /for \(const alvo of todas\.slice\(0, TETO\)\)/);
+  // O teto não esconde nada: diz quantas ficaram de fora, e o filtro alcança qualquer uma.
+  assert.match(codigo, /if \(todas\.length > TETO\)/);
+  assert.match(codigo, /…e mais \$\{todas\.length - TETO\}\. Escreva mais no filtro\./);
+  // O filtro casa com o nome, com a região ou com o nível, e sem acentos: quem escreve
+  // "lendarias" quer achar "Ilhas Lendárias".
+  assert.match(codigo, /\.normalize\('NFD'\)/);
+  const filtra = codigo.slice(codigo.indexOf('const aMostrar ='));
+  assert.match(filtra.slice(0, 700), /chao\(c\.nome\)\.includes\(busca\)/);
+  assert.match(filtra.slice(0, 700), /chao\(c\.aba \|\| c\.regiao\)\.includes\(busca\)/);
+  assert.match(filtra.slice(0, 700), /String\(c\.nivel\)\.startsWith\(busca\)/);
+});
+
+test('escolher um time guarda a cacada que veio da lista do jogo', () => {
+  // Dizer "aqui eu monto o time X" é precisamente o que distingue uma caçada que o dono usa de uma
+  // que está no mapa. Guardar é consequência da escolha, não um segundo passo que ele tem de
+  // descobrir — e era esse segundo passo que custava uma viagem por caçada.
+  const bloco = codigo.slice(codigo.indexOf("times.addEventListener('change'"));
+  const corpo = bloco.slice(0, bloco.indexOf('item.append(times)'));
+  assert.match(corpo, /const onde = todasMinhas\.findIndex\(\(c\) => eMesma\(c, alvo\)\)/);
+  assert.match(corpo, /else todasMinhas\.push\(paraGuardar/);
+  assert.match(corpo, /if \(onde < 0\) desenhar\(\)/);
+});
+
+test('o UUID do mundo nao vai para a etiqueta', () => {
+  // `.platform-hunt__zone-meta` mostra o `id` do mundo, e seis dos nove atalhos da conta real
+  // tinham isso guardado como "região". Hoje sabe-se o que ele é — é a chave do mundo —, e meia
+  // linha de UUID na etiqueta nunca disse nada a ninguém.
+  assert.match(codigo, /const UUID = \/\^\[0-9a-f\]\{8\}-\[0-9a-f\]\{4\}-\/i;/);
+  const bloco = codigo.slice(codigo.indexOf('const legenda ='));
+  assert.match(
+    bloco.slice(0, 600),
+    /alvo\.aba \|\| \(UUID\.test\(alvo\.regiao \|\| ''\) \? '' : alvo\.regiao\)/,
+  );
+  // E o nível entra na etiqueta, que é a pergunta que não tinha resposta nenhuma no painel.
+  assert.match(bloco.slice(0, 600), /alvo\.nivel \? `Lv \$\{alvo\.nivel\}` : ''/);
+});
+
+test('a aba do catalogo e endereco, e a aprendida continua a valer mais', () => {
+  // O `label` do mundo é o texto da aba. Mas a aba aprendida numa ida real foi medida naquela
+  // conta, e por isso não se sobrescreve: `c.aba || z.aba`, nessa ordem.
+  const bloco = codigo.slice(codigo.indexOf('const completar ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /aba: c\.aba \|\| z\.aba/);
+  assert.match(corpo, /nivel: c\.nivel \|\| z\.nivel/);
+  // Nome repetido só se resolve se o próprio atalho disser de qual nível é.
+  assert.match(corpo, /iguais\.length === 1/);
+  // E a ida completa o que recebe, para ser igual venha ela do botão ou da porta.
+  assert.match(codigo, /const alvo = completar\(bruto\);/);
+});
+
+test('a porta tem duas listas, e nao uma: os atalhos dele e o jogo inteiro', () => {
+  // `nomes()` sao os atalhos do dono — curta, na ordem dele —, e serve a quem quer oferecer "as
+  // suas cacadas". `todas()` sao as 377, e so' serve a quem tem como filtrar: despejar 377 opcoes
+  // num `select` nao e' uma escolha, e' uma busca sem campo de busca. Juntar as duas numa teria
+  // enchido os selects da Escada de quatrocentas linhas sem ninguem pedir.
+  assert.match(codigo, /nomes: \(\) => guardadas\(\)\.map\(\(c\) => c\.nome\)/);
+  const todas = codigo.slice(codigo.indexOf('todas: () =>'));
+  const corpo = todas.slice(0, todas.indexOf('})),') + 4);
+  assert.match(corpo, /todasConhecidas\(\)\.map/);
+  // Cada uma diz o nivel e a regiao, porque e' por ai' que se escolhe onde upar, e diz se da' para
+  // abrir: regiao trancada e expedicao nao dao.
+  assert.match(corpo, /nivel: c\.nivel \|\| 0/);
+  assert.match(corpo, /trancada: c\.trancado === true/);
+  assert.match(corpo, /minha: c\.doJogo !== true/);
+  // E o UUID tambem nao sai por aqui: ver `UUID`.
+  assert.match(corpo, /UUID\.test\(c\.regiao \|\| ''\)/);
+});
+
+test('a primeira leitura falha, e a lista insiste sozinha', () => {
+  // Medido no jogo do dono em 12/10/2026, com a extensao recarregada e a pagina em F5: a ponte
+  // respondia as 377 cacadas quando perguntada a mao, e o catalogo estava vazio. A extensao corre
+  // em `document_idle`, que e antes de o jogo publicar a `Api`.
+  //
+  // A unica retentativa era "quando o painel reaparece" — e um painel que nunca se esconde nunca
+  // reaparece. Ficava um nada, com um botao a espera de alguem adivinhar que tinha de o clicar.
+  assert.match(codigo, /const INSISTE = \[4000, 12000, 40000\];/);
+  const insiste = codigo.slice(codigo.indexOf('const insistir ='));
+  const corpo = insiste.slice(0, insiste.indexOf('\n    };'));
+  // Contado, e nao um laco sem fim: a tela do jogo demora, mas nao demora para sempre.
+  assert.match(corpo, /if \(espera === undefined\) return;/);
+  assert.match(corpo, /insistencias \+= 1;/);
+  assert.match(corpo, /setTimeout\(\(\) => garantirCatalogo\(false\), espera\)/);
+  // So a tentativa automatica insiste: pelo recarregar a mao, quem decide tentar de novo e o dono.
+  assert.match(codigo, /else insistir\(\);/);
+  // E o sucesso zera a conta, para o proximo arranque ter as tres tentativas outra vez.
+  assert.match(codigo, /insistencias = 0;/);
 });

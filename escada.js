@@ -490,8 +490,30 @@ PPX.modulo(
       );
     };
 
-    /** As caçadas guardadas, que sao as opcoes de cada degrau. */
+    /** As caçadas guardadas: as do dono, curtas, na ordem dele. */
     const cacadasGuardadas = () => globalThis.PPX?.cacadas?.nomes?.() || [];
+
+    /**
+     * Todas as caçadas que o pacote conhece — os atalhos do dono mais a lista do jogo.
+     *
+     * **POR QUE O CATALOGO INTEIRO, E NAO SO' OS ATALHOS.** Um degrau e' "a partir do Lv N, caçar
+     * aqui", e a caçada certa para o Lv N e' uma questao de nivel: ela existe no jogo muito antes
+     * de alguem ter ido la' guardar o atalho. Exigir o atalho primeiro fazia montar uma escada de
+     * dez degraus custar dez viagens — e era o motivo pelo qual as escadas ficavam curtas.
+     *
+     * Sem a ferramenta Caçadas, ou antes de ela ler a lista, sobra o que havia: os atalhos.
+     */
+    const cacadasConhecidas = () => {
+      const todas = globalThis.PPX?.cacadas?.todas?.();
+      if (Array.isArray(todas) && todas.length) return todas;
+      return cacadasGuardadas().map((nome) => ({
+        nome,
+        nivel: 0,
+        regiao: '',
+        trancada: false,
+        minha: true,
+      }));
+    };
 
     /**
      * O degrau em que um lider de nivel `n` deveria estar: o mais alto que ele ja' alcancou.
@@ -759,8 +781,8 @@ PPX.modulo(
       if (faltam > 0) return `Esperando ${faltam}s para tentar de novo — ou use o ▸ agora.`;
       if (!globalThis.PPX?.cacadas?.ir)
         return 'A ferramenta Caçadas está desligada — ligue-a no menu (Alt+Q). É ela que viaja.';
-      if (!cacadasGuardadas().length)
-        return 'Nenhuma caçada guardada. Entre numa caçada e guarde o atalho nas Caçadas (Alt+E).';
+      if (!cacadasConhecidas().length)
+        return 'Não conheço caçada nenhuma. Abra as Caçadas (Alt+E) e clique no ↻ para eu ler a lista do jogo.';
       if (!cfg.degraus.length) return 'Sem degraus. Um degrau é "a partir do nível N, caçar aqui".';
 
       // O fim da escada vem antes do degrau: com a equipe toda no teto nao ha' aluno, e dizer em
@@ -1723,7 +1745,8 @@ PPX.modulo(
             <option value="time">formados: ir à cidade e trocar de time</option>
             <option value="cidade">formados: voltar para a cidade</option>
           </select>
-          <select data-destino title="A caçada onde parar"></select>
+          <input type="text" list="lioncode-escada-cacadas" data-destino
+                 title="A caçada onde parar">
           <div class="fila" data-times>
             <ul data-fila></ul>
             <button type="button" class="mais" data-mais-time>+ time</button>
@@ -1753,6 +1776,7 @@ PPX.modulo(
           </label>
         </div>
         <p class="estado" data-estado></p>
+        <datalist data-cacadas id="lioncode-escada-cacadas"></datalist>
       </div>`;
 
     const estilo = document.createElement('style');
@@ -1793,6 +1817,9 @@ PPX.modulo(
         border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
       }
       #lioncode-escada li select { flex: 1; min-width: 0; }
+      #lioncode-escada input.cacada { flex: 1; min-width: 0; }
+      /* Uma caçada que ninguem conhece nao fica calada: ver marcarCacada. */
+      #lioncode-escada input.nao-existe { border-color: #7a3b3b; color: #ff9b9b; }
       #lioncode-escada li button {
         background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a; border-radius: 6px;
         padding: 3px 7px; font: inherit; font-size: 12px; cursor: pointer;
@@ -1862,29 +1889,91 @@ PPX.modulo(
       ecoar();
     };
 
-    /** Preenche um `select` com as caçadas guardadas, mantendo o valor se ele ainda existir. */
-    const encherCacadas = (sel, valor, vazio) => {
-      const nomes = cacadasGuardadas();
-      sel.innerHTML = '';
-      const nada = document.createElement('option');
-      nada.value = '';
-      nada.textContent = vazio;
-      sel.append(nada);
-      for (const nome of nomes) {
+    /**
+     * A LISTA DE CAÇADAS E' UMA SO', PARTILHADA, E E' UM `datalist`.
+     *
+     * Com as 377 caçadas do jogo, um `select` por degrau deixou de servir: rolar quatrocentas
+     * linhas com o rato para achar "Caça de Azurill" nao e' escolher. Um `datalist` e' o mesmo
+     * campo com filtro de graça — clicar mostra tudo, escrever estreita, e o navegador faz a
+     * busca. Cada opcao leva o nivel e a regiao na etiqueta, que e' por onde se decide.
+     *
+     * Uma lista para o painel todo, e nao uma por campo: sao 377 nos, e um degrau novo nao tem por
+     * que duplicar isso. Ela so' se reconstroi quando a lista do jogo muda — `desenhar` corre a
+     * cada batida, e refazer quatrocentos nos a cada batida seria pagar por nada.
+     */
+    const DATALISTA = 'lioncode-escada-cacadas';
+
+    let nomesSabidos = new Set();
+    let digitalDaLista = '';
+
+    const encherDatalista = () => {
+      const todas = cacadasConhecidas();
+      const digital = `${todas.length}|${todas[0]?.nome || ''}|${todas.at(-1)?.nome || ''}`;
+      nomesSabidos = new Set(todas.map((c) => c.nome));
+      if (digital === digitalDaLista) return;
+      digitalDaLista = digital;
+      const lista = campo('[data-cacadas]');
+      lista.innerHTML = '';
+      for (const c of todas) {
         const o = document.createElement('option');
-        o.value = nome;
-        o.textContent = nome;
-        sel.append(o);
+        o.value = c.nome;
+        o.label =
+          [c.nivel ? `Lv ${c.nivel}` : '', c.regiao, c.trancada ? 'trancada' : '']
+            .filter(Boolean)
+            .join(' · ') || (c.minha ? 'atalho seu' : '');
+        lista.append(o);
       }
-      // Um valor guardado cuja caçada foi apagada nao desaparece calado: ele fica na lista, para o
-      // dono ver que o degrau aponta para algo que ja' nao existe.
-      if (valor && !nomes.includes(valor)) {
-        const o = document.createElement('option');
-        o.value = valor;
-        o.textContent = `${valor} (não guardada)`;
-        sel.append(o);
-      }
-      sel.value = valor || '';
+    };
+
+    /**
+     * Marca o campo cuja caçada ninguem conhece.
+     *
+     * Um campo de escrever aceita qualquer coisa, e um erro de digitação so' apareceria na viagem
+     * — tarde, e a dizer "não achei em nenhuma aba". Antes era um `select`, e o valor orfao ficava
+     * la' escrito "(não guardada)"; isto e' a mesma honestidade no campo que o substituiu.
+     */
+    const marcarCacada = (c) => {
+      const nome = (c.value || '').trim();
+      const sabida = !nome || nomesSabidos.has(nome);
+      c.classList.toggle('nao-existe', !sabida);
+      c.title = sabida
+        ? 'A caçada — clique para ver a lista, ou escreva para filtrar'
+        : `Não conheço nenhuma caçada chamada "${nome}"`;
+    };
+
+    /** Põe o valor no campo da caçada, e diz se ele é uma caçada que existe. */
+    const encherCacadas = (campoDaCacada, valor, vazio) => {
+      campoDaCacada.placeholder = vazio;
+      campoDaCacada.value = valor || '';
+      marcarCacada(campoDaCacada);
+    };
+
+    /**
+     * Mantem a lista fresca no instante em que alguem vai escolher.
+     *
+     * **A ESCADA PARADA NAO REDESENHA SOZINHA** — nao ha' `setInterval` nenhum nesta ferramenta, de
+     * proposito: quem avisa que o HUD mudou e' o HUD. Mas as Caçadas podem ler o catalogo do jogo
+     * **depois** deste painel ter sido desenhado, e foi o que aconteceu no jogo do dono em
+     * 12/10/2026: a lista do jogo chegou com 377 caçadas e os campos da Escada continuaram com as
+     * dez de antes, ate' alguem mexer no painel.
+     *
+     * Enche-se ao focar, que e' o instante exacto em que a frescura importa e e' barato: a lista
+     * so' se reconstroi se a do jogo mudou (ver `encherDatalista`).
+     */
+    const seguirALista = (c) =>
+      c.addEventListener('focus', () => {
+        encherDatalista();
+        marcarCacada(c);
+      });
+
+    /** O campo de uma caçada: um `input` ligado à lista partilhada. */
+    const campoDeCacada = () => {
+      const c = document.createElement('input');
+      c.type = 'text';
+      c.setAttribute('list', DATALISTA);
+      c.className = 'cacada';
+      seguirALista(c);
+      return c;
     };
 
     /**
@@ -2041,10 +2130,10 @@ PPX.modulo(
       }
       for (const [i, nome] of cfg.grupo.cacadas.entries()) {
         const item = document.createElement('li');
-        const qual = document.createElement('select');
+        const qual = campoDeCacada();
         encherCacadas(qual, nome, 'escolha a caçada');
         qual.addEventListener('change', () => {
-          cfg.grupo.cacadas[i] = qual.value;
+          cfg.grupo.cacadas[i] = qual.value.trim();
           gravar();
           desenhar();
           void conferir();
@@ -2187,6 +2276,7 @@ PPX.modulo(
       }
       campo('[data-trocar]').checked = cfg.trocar !== false;
       campo('[data-teto]').value = cfg.teto ?? '';
+      encherDatalista();
       campo('[data-fim]').value = cfg.fim || 'nada';
       // Cada fim pede uma coisa diferente, ou nenhuma. Mostrar os tres campos ao mesmo tempo faria
       // o painel perguntar duas coisas que nao vao ser usadas.
@@ -2233,10 +2323,10 @@ PPX.modulo(
           desenhar();
         });
 
-        const onde = document.createElement('select');
+        const onde = campoDeCacada();
         encherCacadas(onde, degrau.cacada, 'escolha a caçada');
         onde.addEventListener('change', () => {
-          degrau.cacada = onde.value;
+          degrau.cacada = onde.value.trim();
           gravar();
           desenhar();
         });
@@ -2403,8 +2493,10 @@ PPX.modulo(
       void conferir();
     });
 
+    seguirALista(campo('[data-destino]'));
+
     campo('[data-destino]').addEventListener('change', (e) => {
-      cfg.destino = e.target.value;
+      cfg.destino = e.target.value.trim();
       cfg.formados = false;
       gravar();
       desenhar();
