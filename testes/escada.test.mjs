@@ -1030,7 +1030,7 @@ test('na expedicao a escada de degraus espera, e nao tenta sair', () => {
   assert.match(codigo, /espero aqui e volto ao degrau quando ela acabar/);
 });
 
-test('o teto dos degraus pode subir de N em N, e deriva do jogo', () => {
+test('a equipe sobe junta de N em N, e o teto continua a ser um fim', () => {
   // Pedido pelo dono em 12/10/2026: "na escada, no modo escada de cacadas, eu quero poder colocar
   // que nem tem no modo grupo subindo N em N, onde eu nao vou colocar uma pedra em nenhum poke e
   // eles vao ficar upando sempre que todos estao no mesmo level".
@@ -1039,16 +1039,17 @@ test('o teto dos degraus pode subir de N em N, e deriva do jogo', () => {
   const corpo = sobe.slice(0, sobe.indexOf('const formado = (p, teto'));
   // Sem subida, o teto e' o que esta' escrito: a escada de sempre nao muda de comportamento.
   assert.match(corpo, /if \(!teto \|\| !subida\) return teto \|\| null;/);
-  // O teto escrito e' um teto a serio: quem ainda esta' abaixo dele sobe ate' ele, e nao ate' ele
-  // mais a subida. E' aqui que esta ferramenta difere do modo de grupo, onde o campo e' o MINIMO.
-  assert.match(corpo, /if \(menor < teto\) return teto;/);
-  // E o resto e' o primeiro degrau acima do MENOR nivel da equipe.
+  // O degrau de agora sai do MENOR nivel da equipe — e' o que faz a equipe subir junta.
   assert.match(corpo, /const menor = Math\.min\(\.\.\.niveis\);/);
-  assert.match(corpo, /return teto \+ subida \* Math\.ceil\(\(menor - teto \+ 1\) \/ subida\);/);
+  // **A LINHA QUE FAZ A FILA DE TIMES EXISTIR.** Sem o `Math.min`, a conta passa do teto e ninguem
+  // se forma nunca: `fimDaEscada` deixa de correr e os outros times nao chegam a ter vez. Foi o
+  // defeito de uma hora, apanhado pelo dono: "nao encontro onde colocar os outros times".
+  assert.match(corpo, /if \(menor >= teto\) return teto;/);
+  assert.match(corpo, /return Math\.min\(teto, menor \+ subida\);/);
   // NAO HA' CONTADOR DE RODADAS, ao contrario do modo de grupo: aqui o jogo diz o nivel de cada um,
   // e um contador ao lado seria uma segunda verdade — que se perderia no primeiro F5 e, pior,
   // ficaria errada quando o dono metesse um Lv 1 na equipe.
-  assert.ok(!corpo.includes('rodada'), 'o teto de agora deriva da equipe, nao de um contador');
+  assert.ok(!corpo.includes('rodada'), 'o degrau de agora deriva da equipe, nao de um contador');
 });
 
 test('quem se formou mede-se pelo teto de agora, e o teto le-se uma vez por batida', () => {
@@ -1063,23 +1064,31 @@ test('quem se formou mede-se pelo teto de agora, e o teto le-se uma vez por bati
   assert.match(codigo, /A equipe toda chegou ao Lv \$\{tetoDeAgora\(\)\}/);
 });
 
-test('com o teto a subir nao existe fim, e o painel nao o pergunta', () => {
-  // Com `subida`, `proximoAluno` nunca devolve vazio — mal o ultimo chega ao teto, o teto sobe e
-  // ele deixa de estar formado. Logo `fimDaEscada` nunca corre, e deixar a' vista um "formados:
-  // voltar para a cidade" seria o painel a prometer o que a ferramenta nao faz.
-  assert.match(codigo, /const tetoSobe = Boolean\(cfg\.teto\) && Boolean\(cfg\.subida\);/);
-  assert.match(codigo, /campo\('\[data-fim\]'\)\.style\.display = tetoSobe \? 'none' : '';/);
-  assert.match(codigo, /campo\('\[data-sem-fim\]'\)\.style\.display = tetoSobe \? '' : 'none';/);
-  // E tudo o que pendura do fim esconde-se com ele, em vez de ficar solto no painel.
-  assert.match(codigo, /destino\.style\.display = !tetoSobe && cfg\.fim === 'cacada'/);
+test('a subida nao esconde o fim da escada, que e onde moram os outros times', () => {
+  // O defeito de uma hora: com a subida posta, o painel escondia o "formados: ..." inteiro — e com
+  // ele a fila de times. O dono: "nao encontro onde colocar os outros times".
+  assert.ok(!codigo.includes('tetoSobe'), 'nada no painel depende de o teto fugir');
+  assert.match(codigo, /destino\.style\.display = cfg\.fim === 'cacada' \? '' : 'none';/);
   assert.match(
     codigo,
-    /campo\('\[data-times\]'\)\.style\.display = !tetoSobe && cfg\.fim === 'time'/,
+    /campo\('\[data-times\]'\)\.style\.display = cfg\.fim === 'time' \? '' : 'none';/,
   );
-  assert.match(codigo, /const perguntando = !tetoSobe && filaAcabou\(\);/);
-  // A escolha do fim fica GUARDADA: esconder nao e' apagar, e ela volta quando a subida sair.
-  const ouve = codigo.slice(codigo.indexOf("['[data-subida]', 'subida'],"));
-  assert.ok(!ouve.slice(0, 400).includes('cfg.fim ='), 'a subida nao mexe na escolha do fim');
+  assert.match(codigo, /const perguntando = filaAcabou\(\);/);
+  // A unica coisa que a subida mostra e' a frase que explica o que ela faz.
+  assert.match(codigo, /campo\('\[data-junta\]'\)\.style\.display = cfg\.subida \? '' : 'none';/);
   // Mexer no teto ou na subida muda quem e' o aluno: o cumprido era do aluno anterior.
+  const ouve = codigo.slice(codigo.indexOf("['[data-subida]', 'subida'],"));
   assert.match(ouve.slice(0, 500), /cfg\.formados = false;/);
+});
+
+test('um rotulo com campo no meio nao empurra as palavras para fora do painel', () => {
+  // Medido no painel do dono em 12/10/2026: "formar em Lv" partido em duas linhas, o campo
+  // esticado e o "e mais" orfao. Um `input` dentro de um flex cresce; os numeros levam largura
+  // fixa, e o rotulo pode quebrar em vez de transbordar.
+  const estilo = ler('escada.js');
+  assert.match(estilo, /#lioncode-escada \.caixa \{[^}]*flex-wrap: wrap;/);
+  assert.match(
+    estilo,
+    /#lioncode-escada \.caixa input\[type="number"\] \{ width: 58px; flex: none; \}/,
+  );
 });

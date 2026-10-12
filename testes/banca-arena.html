@@ -1,0 +1,504 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca da Arena de Defesa</title>
+<!--
+  Banca da Arena de Defesa.
+
+  Ela monta a arena de mentira com as marcas que a ferramenta tem de ver no jogo — medidas na conta
+  real em 12/10/2026 — e com as armadilhas que importam:
+
+   1. a janela da arena **nao existe** ate' alguem abrir o grupo "Eventos" e clicar no item dela;
+   2. um rival ja' atacado hoje volta na lista com `.is-used` e o botao desativado;
+   3. atualizar a lista e' de graça **tres vezes**; a quarta custaria diamante, e e' por isso que
+      aqui ela aparece paga — para provar que a ferramenta para em vez de clicar;
+   4. a batalha joga-se sozinha e demora; aqui demora 3 s, porque o que se quer ver e' a ordem dos
+      passos, nao o relogio;
+   5. a tela de preparação tem tres ataques salvos e so' o primeiro esta' cheio: um slot vazio tem
+      o "Carregar" desativado, como no jogo.
+-->
+<style>
+  body {
+    margin: 0;
+    background: #0b0f16;
+    color: #e7edf6;
+    font: 14px/1.5 system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .nota {
+    max-width: 640px;
+    padding: 16px;
+  }
+  code {
+    background: #182030;
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  pre[data-saida] {
+    background: #0d1219;
+    border: 1px solid #2a3244;
+    border-radius: 8px;
+    padding: 10px;
+    white-space: pre-wrap;
+    min-height: 90px;
+  }
+  .comandos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 16px 16px;
+  }
+  .comandos button {
+    background: #182030;
+    color: #e7edf6;
+    border: 1px solid #33405a;
+    border-radius: 6px;
+    padding: 5px 9px;
+    font: 12px system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .pokeidle-top-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 10px 16px;
+  }
+  .pokeidle-top-toolbar button {
+    background: #182030;
+    color: #e7edf6;
+    border: 1px solid #33405a;
+    border-radius: 6px;
+    padding: 5px 9px;
+    cursor: pointer;
+  }
+  .pokeidle-top-toolbar__dropdown-btn[hidden] {
+    display: none;
+  }
+  .defense-window {
+    position: fixed;
+    left: 16px;
+    top: 90px;
+    width: 420px;
+    background: #121823;
+    border: 1px solid #2a3244;
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .defense-window h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+  }
+  .pokeidle-panel__close {
+    float: right;
+    cursor: pointer;
+    color: #8b97a8;
+  }
+  .pvp-defense-opponent {
+    border: 1px solid #2a3244;
+    border-radius: 8px;
+    padding: 6px;
+    margin: 6px 0;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .pvp-defense-opponent.is-used {
+    opacity: 0.5;
+  }
+  .pvp-defense-opponent span.nome {
+    flex: 1;
+  }
+  .defense-slot {
+    border: 1px solid #2a3244;
+    border-radius: 8px;
+    padding: 6px;
+    margin: 6px 0;
+  }
+  .defense-slot h4 {
+    margin: 0;
+    font-size: 13px;
+    display: inline;
+  }
+  .pokeidle-pvp-battle,
+  .pvp-result {
+    position: fixed;
+    right: 16px;
+    top: 90px;
+    width: 300px;
+    background: #121823;
+    border: 1px solid #2a3244;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .pvp-result.is-win {
+    border-color: #2f6b3a;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+</style>
+
+<div class="pokeidle-top-toolbar">
+  <button class="pokeidle-top-toolbar__btn" data-menu-id="events">Eventos</button>
+  <button class="pokeidle-top-toolbar__dropdown-btn" data-menu-id="arena-defense" hidden>
+    Arena de Defesa
+  </button>
+</div>
+
+<div class="nota">
+  <p>
+    Banca da <b>Arena de Defesa</b>. A janela da arena não existe até alguém abrir —
+    <code>Eventos</code> e depois <code>Arena de Defesa</code> —, e é isso que a ferramenta tem de
+    saber fazer sozinha às 13h com o jogo fechado nessa parte.
+  </p>
+  <p>
+    Escreva um horário (por exemplo <code>00:00-23:59</code>), ponha <code>pvp1</code> no ataque
+    salvo e clique em <b>Atacar agora</b>. A batalha aqui demora 3 s.
+  </p>
+  <p>
+    <code>a próxima batalha: ganho</code> é a armadilha que importa: com <b>perco</b>, o rival
+    derrotado tem de entrar na lista dos barrados e <b>nunca mais</b> ser atacado — nem depois de
+    uma atualização que o traga de volta.
+  </p>
+  <p>
+    As atualizações grátis são três. Esgotadas, o botão passa a custar diamante: a ferramenta tem de
+    <b>parar</b> em vez de clicar nele.
+  </p>
+  <pre data-saida>—</pre>
+</div>
+
+<div class="comandos"></div>
+
+<script>
+  const saida = document.querySelector('[data-saida]');
+  const registo = [];
+  const anotar = (txt) => {
+    registo.push(txt);
+    saida.textContent = registo.slice(-16).join('\n');
+  };
+
+  // ------------------------------------------------------------------ o estado de mentira
+
+  let semente = 1;
+  const novoRival = (nome) => ({
+    trainer_id: `id-${(semente += 1)}`,
+    name: nome,
+    points: 900 + semente * 7,
+    power: 40000 + semente * 1000,
+    win_points: 14,
+    loss_points: 13,
+    used: false,
+  });
+
+  const estado = {
+    tentativas: { remaining: 5, used: 0, limit: 5 },
+    atualizacoes: { livres: 3, limite: 3 },
+    temporada: 1,
+    pontos: 1000,
+    oponentes: [novoRival('Isabella'), novoRival('kick'), novoRival('Soratta Kanda')],
+  };
+  // O terceiro ja' foi atacado hoje: e' o estado em que a conta do dono estava quando se mediu.
+  estado.oponentes[2].used = true;
+  estado.tentativas.remaining = 4;
+  estado.tentativas.used = 1;
+
+  let vouGanhar = true;
+  let demora = 3000;
+
+  // ------------------------------------------------------------------ a ponte de mentira
+
+  addEventListener('lioncode:arena:pedido', (e) => {
+    const eco = e.detail?.eco;
+    const responder = (d) =>
+      dispatchEvent(new CustomEvent('lioncode:arena:resposta', { detail: { eco, ...d } }));
+    if (e.detail?.acao !== 'estado') return responder({ erro: 'não sei fazer isso' });
+    anotar('ponte: leram o estado da arena');
+    responder({
+      ok: true,
+      ligada: true,
+      tentativas: {
+        restantes: estado.tentativas.remaining,
+        feitas: estado.tentativas.used,
+        limite: estado.tentativas.limit,
+      },
+      atualizacao: {
+        gratis: estado.atualizacoes.livres > 0,
+        restantes: estado.atualizacoes.livres,
+        limite: estado.atualizacoes.limite,
+        pagamento: estado.atualizacoes.livres > 0 ? 'free' : 'diamonds',
+        diamantes: estado.atualizacoes.livres > 0 ? 0 : 25,
+      },
+      temporada: { id: estado.temporada, nome: `Temporada ${estado.temporada}` },
+      pontos: estado.pontos,
+      espera: { contagem: 1, limite: 10 },
+      oponentes: estado.oponentes.map((o) => ({
+        id: o.trainer_id,
+        nome: o.name,
+        pontos: o.points,
+        poder: o.power,
+        ganha: o.win_points,
+        perde: o.loss_points,
+        usado: o.used,
+      })),
+    });
+  });
+
+  // ------------------------------------------------------------------ a janela de mentira
+
+  const barra = document.querySelector('.pokeidle-top-toolbar');
+  barra.querySelector('[data-menu-id="events"]').addEventListener('click', () => {
+    const item = barra.querySelector('[data-menu-id="arena-defense"]');
+    item.hidden = !item.hidden;
+  });
+  barra.querySelector('[data-menu-id="arena-defense"]').addEventListener('click', () => {
+    abrirJanela();
+  });
+
+  let janela = null;
+
+  const fecharJanela = () => {
+    janela?.remove();
+    janela = null;
+  };
+
+  const abrirJanela = () => {
+    if (janela) return;
+    janela = document.createElement('div');
+    janela.className = 'pokeidle-panel game-window defense-window';
+    document.body.append(janela);
+    anotar('jogo: a janela da arena abriu');
+    desenharLista();
+  };
+
+  const desenharLista = () => {
+    if (!janela) return;
+    janela.innerHTML = `
+      <div class="pokeidle-panel__titlebar"><div class="pokeidle-panel__close">✕</div></div>
+      <header>
+        <div><h3>Escolha uma defesa para atacar</h3></div>
+        <div class="defense-refresh-actions">
+          <button type="button" class="pokeidle-btn pvp-defense-refresh" data-defense-refresh>${
+            estado.atualizacoes.livres > 0
+              ? `Atualizar grátis · ${estado.atualizacoes.livres}/${estado.atualizacoes.limite}`
+              : 'Atualizar · 25 💎'
+          }</button>
+        </div>
+      </header>
+      <div class="lista"></div>`;
+    janela.querySelector('.pokeidle-panel__close').addEventListener('pointerdown', fecharJanela);
+    janela.querySelector('.pvp-defense-refresh').addEventListener('click', atualizar);
+    const lista = janela.querySelector('.lista');
+    for (const o of estado.oponentes) {
+      const cartao = document.createElement('div');
+      cartao.className = `pvp-defense-opponent${o.used ? ' is-used' : ''}`;
+      cartao.innerHTML = `
+        <span class="pvp-defense-avatar" data-defense-avatar="${o.trainer_id}">🧑</span>
+        <span class="nome">${o.name} · ${o.points} pts</span>
+        <button type="button" class="pvp-action-button is-accept" ${o.used ? 'disabled' : ''}>${
+          o.used ? 'Atacado' : 'Atacar'
+        }</button>`;
+      if (!o.used)
+        cartao.querySelector('button').addEventListener('click', () => prepararAtaque(o));
+      lista.append(cartao);
+    }
+  };
+
+  /**
+   * Atualizar a lista. Aqui esta' a armadilha: a quarta vez **custa**, e a banca deixa o botao la'
+   * a' mesma — se a ferramenta o clicar, ela gasta diamante e a banca diz isso em voz alta.
+   */
+  const atualizar = () => {
+    if (estado.atualizacoes.livres <= 0) {
+      anotar('❌ jogo: ATUALIZAÇÃO PAGA — isto custaria 25 💎');
+      return;
+    }
+    estado.atualizacoes.livres -= 1;
+    // A lista inteira e' outra: `pair_daily_limit: 1` impede repetir um rival no mesmo dia, entao
+    // o jogo nao devolve os ja' atacados. E' isto que torna os dois ultimos ataques possiveis.
+    estado.oponentes = [
+      novoRival(`Rival ${semente + 1}`),
+      novoRival(`Rival ${semente + 1}`),
+      novoRival(`Rival ${semente + 1}`),
+    ];
+    anotar(`jogo: lista atualizada de graça (restam ${estado.atualizacoes.livres})`);
+    desenharLista();
+  };
+
+  const TIMES = [
+    { nome: 'pvp1', cheio: true },
+    { nome: 'pvp2', cheio: false },
+    { nome: 'pvp3', cheio: false },
+  ];
+  let timeCarregado = '';
+
+  const prepararAtaque = (rival) => {
+    anotar(`jogo: tela de preparação contra ${rival.name}`);
+    janela.innerHTML = `
+      <div class="pokeidle-panel__titlebar"><div class="pokeidle-panel__close">✕</div></div>
+      <header><div><h3>Ataque contra ${rival.name}</h3></div>
+        <button type="button" class="pokeidle-ui-button" data-voltar>Voltar</button></header>
+      <div class="defense-slots"></div>
+      <button type="button" class="pokeidle-ui-button defense-primary">Atacar</button>`;
+    janela.querySelector('.pokeidle-panel__close').addEventListener('pointerdown', fecharJanela);
+    janela.querySelector('[data-voltar]').addEventListener('click', () => {
+      anotar('jogo: voltou para a lista sem atacar');
+      desenharLista();
+    });
+    const slots = janela.querySelector('.defense-slots');
+    TIMES.forEach((t, i) => {
+      const slot = document.createElement('article');
+      slot.className = 'defense-slot';
+      slot.innerHTML = `
+        <header><span class="defense-slot-number">${i + 1}</span>
+          <div><h4 title="${t.nome}">${t.nome}</h4><small>${t.cheio ? '6/6 · Salva' : 'vazia'}</small></div>
+        </header>
+        <button type="button" ${t.cheio ? '' : 'disabled'}>Carregar</button>
+        <button type="button">Salvar</button>
+        <button type="button" ${t.cheio ? '' : 'disabled'}>Renomear</button>`;
+      slot.querySelector('button').addEventListener('click', () => {
+        timeCarregado = t.nome;
+        anotar(`jogo: carregou o ataque salvo "${t.nome}"`);
+      });
+      slots.append(slot);
+    });
+    janela
+      .querySelector('.defense-primary')
+      .addEventListener('click', () => void batalhar(rival));
+  };
+
+  const batalhar = async (rival) => {
+    if (estado.tentativas.remaining <= 0) {
+      anotar('❌ jogo: ATACOU SEM TENTATIVA');
+      return;
+    }
+    estado.tentativas.remaining -= 1;
+    estado.tentativas.used += 1;
+    rival.used = true;
+    anotar(
+      `jogo: batalha contra ${rival.name} começou (equipe: ${timeCarregado || 'a que estava'})`,
+    );
+    desenharLista();
+    const arena = document.createElement('div');
+    arena.className = 'pokeidle-pvp-battle';
+    arena.textContent = `Batalha contra ${rival.name}…`;
+    document.body.append(arena);
+    await new Promise((r) => setTimeout(r, demora));
+    arena.remove();
+
+    const ganhou = vouGanhar;
+    estado.pontos += ganhou ? rival.win_points : -rival.loss_points;
+    const fim = document.createElement('div');
+    fim.className = `pvp-result ${ganhou ? 'is-win' : 'is-loss'}`;
+    fim.innerHTML = `<p>${ganhou ? 'Vitória' : 'Derrota'} contra ${rival.name}</p>
+      <button type="button" class="pvp-result__button">Voltar ao local anterior</button>`;
+    fim.querySelector('button').addEventListener('click', () => fim.remove());
+    document.body.append(fim);
+    anotar(`jogo: ${ganhou ? 'vitória' : 'derrota'} (pontos agora: ${estado.pontos})`);
+  };
+
+  // ------------------------------------------------------------------ o PPX de mentira
+
+  let dono = '';
+  const esperaNaFila = [];
+  const ouvintesDaFila = new Set();
+  const filaMexeu = () => {
+    for (const fn of ouvintesDaFila)
+      try {
+        fn(dono ? { id: dono } : null, [...esperaNaFila]);
+      } catch {
+        /* quem ouve nao derruba quem fala */
+      }
+  };
+
+  window.PPX = {
+    modulo: (meta, fn) => fn(),
+    vez: {
+      pedir: async (id) => {
+        if (dono && dono !== id) {
+          esperaNaFila.push(id);
+          anotar(`fila: ${id} ficou na fila (a vez é de ${dono})`);
+          filaMexeu();
+          return null;
+        }
+        dono = id;
+        anotar(`fila: ${id} pegou a vez`);
+        filaMexeu();
+        return () => {
+          if (dono !== id) return;
+          dono = '';
+          anotar(`fila: ${id} soltou a vez`);
+          filaMexeu();
+        };
+      },
+      dono: () => (dono ? { id: dono } : null),
+      esperando: () => [...esperaNaFila],
+      nome: (id) => (id === 'gym' ? 'o Ginásio do dia' : id),
+      aoMudar: (fn) => {
+        ouvintesDaFila.add(fn);
+        return () => ouvintesDaFila.delete(fn);
+      },
+    },
+    canto: { medir: () => null, aplicar: () => false },
+    controlar: () => {},
+    visivel: () => true,
+    anotar: () => {},
+  };
+
+  // ------------------------------------------------------------------ os comandos
+
+  const comandos = document.querySelector('.comandos');
+  const comando = (rotulo, fn) => {
+    const b = document.createElement('button');
+    b.textContent = rotulo;
+    b.addEventListener('click', fn);
+    comandos.append(b);
+    return b;
+  };
+
+  comando('a próxima batalha: ganho', (b) => {
+    vouGanhar = !vouGanhar;
+    b.target.textContent = `a próxima batalha: ${vouGanhar ? 'ganho' : 'perco'}`;
+  });
+  comando('a batalha demora 3 s', (b) => {
+    demora = demora === 3000 ? 12000 : 3000;
+    b.target.textContent = `a batalha demora ${demora / 1000} s`;
+  });
+  comando('outra ferramenta pega a vez', () => {
+    dono = 'gym';
+    anotar('fila: o Ginásio pegou a vez');
+    filaMexeu();
+  });
+  comando('a outra solta a vez', () => {
+    dono = '';
+    esperaNaFila.length = 0;
+    anotar('fila: o Ginásio soltou a vez');
+    filaMexeu();
+  });
+  comando('gastar as atualizações grátis', () => {
+    estado.atualizacoes.livres = 0;
+    anotar('jogo: acabaram as atualizações grátis — a próxima custa 25 💎');
+    if (janela) desenharLista();
+  });
+  comando('virar a temporada', () => {
+    estado.temporada += 1;
+    anotar(`jogo: começou a Temporada ${estado.temporada}`);
+  });
+  comando('devolver as 5 tentativas', () => {
+    estado.tentativas.remaining = 5;
+    estado.tentativas.used = 0;
+    for (const o of estado.oponentes) o.used = false;
+    anotar('jogo: o dia virou — 5 tentativas outra vez');
+    if (janela) desenharLista();
+  });
+  comando('limpar o que está guardado', () => {
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith('lioncode:arena')) localStorage.removeItem(k);
+    location.reload();
+  });
+
+  for (const nome of ['agenda', 'config', 'arena']) {
+    const script = document.createElement('script');
+    script.src = `../${nome}.js?t=${Date.now()}`;
+    script.async = false;
+    document.head.append(script);
+  }
+</script>

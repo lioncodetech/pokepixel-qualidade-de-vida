@@ -1,0 +1,182 @@
+// Guardas da décima segunda ferramenta: a Arena de Defesa.
+//
+// Como as outras que só existem contra o DOM do jogo, o que se protege aqui são as **decisões** —
+// e nesta ferramenta elas custam dinheiro de verdade: o jogo vende entradas a 25 diamantes e
+// atualizações depois das três grátis. Um refactor que desfaça qualquer uma destas linhas continua
+// a ler bem, e a conta do dono é que paga.
+//
+// O comportamento está na banca, em `testes/banca-arena.html`, que atravessa a rodada inteira com
+// a batalha, a derrota, o barramento e a recusa de pagar.
+//
+// Rode com: node --test testes/*.test.mjs
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const ler = (arquivo) => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
+
+// Os comentários citam de propósito as coisas que o código não pode conter.
+const semComentarios = (texto) =>
+  texto
+    .split('\n')
+    .filter((linha) => !/^\s*(\/\/|\*|\/\*)/.test(linha))
+    .join('\n');
+
+const codigo = semComentarios(ler('arena.js'));
+const ponte = semComentarios(ler('arena-main.js'));
+
+test('a ponte lê, e não ataca nem atualiza', () => {
+  // `attackPvPDefense` e `refreshPvPDefenseOpponents` existem na mesma API, ao lado da leitura.
+  // Pô-las na ponte deixaria a ação mais cara do jogo a um CustomEvent de distância de qualquer
+  // engano — e esta ponte ouve `window`, que a página inteira alcança.
+  assert.ok(!ponte.includes('attackPvPDefense'), 'a ponte não ataca');
+  assert.ok(!ponte.includes('refreshPvPDefenseOpponents'), 'a ponte não atualiza');
+  assert.ok(!ponte.includes('savePvPDefense'), 'a ponte não salva nada');
+  assert.match(ponte, /const FAZ = \{ estado \}/);
+  assert.match(ponte, /getPvPDefenseState/);
+});
+
+test('nunca se compra entrada nem atualizacao com diamante', () => {
+  // O dono foi explícito, e é a razão de esta ferramenta existir com estas travas.
+  // 1. as entradas extras não são tocadas: o nome delas nem aparece do lado de cá.
+  assert.ok(!codigo.includes('extra_'), 'as entradas compradas não entram no código');
+  // 2. a licença para atualizar vem da API, e lê-se ANTES do clique.
+  const atualizar = codigo.slice(codigo.indexOf('const atualizarGratis = async'));
+  const corpo = atualizar.slice(0, atualizar.indexOf('\n    };'));
+  assert.match(corpo, /if \(!estado\.atualizacao\.gratis\) return false;/);
+  assert.ok(
+    corpo.indexOf('atualizacao.gratis') < corpo.indexOf('botao.click()'),
+    'a licença lê-se antes do clique, não depois',
+  );
+  // 3. e a licença é o `payment` da API, nunca o texto do botão: ler "grátis" de uma string para
+  // decidir se uma coisa custa diamante é apostar numa tradução.
+  assert.match(ponte, /gratis: at\.payment === 'free' && Number\(at\.free_remaining\) > 0/);
+  assert.ok(!corpo.includes('textContent'), 'a decisão não sai do texto do botão');
+});
+
+test('ninguem ataca sem tentativa, e quem conta e o jogo', () => {
+  const rodada = codigo.slice(codigo.indexOf('const rodada = async'));
+  const corpo = rodada.slice(0, rodada.indexOf('\n    };'));
+  assert.match(corpo, /if \(estado\.tentativas\.restantes <= 0\)/);
+  // A contagem é relida a cada volta, e a sobra depois do ataque vem do estado que o próprio
+  // ataque leu. Uma contagem desta ferramenta divergia no primeiro ataque feito à mão.
+  assert.match(corpo, /const sobra = r\.estado \? r\.estado\.tentativas\.restantes : 0;/);
+  assert.match(corpo, /if \(sobra <= 0\)/);
+});
+
+test('a vez e pedida por ataque, e nao pela rodada inteira', () => {
+  // Cinco ataques com os intervalos do dono passam dos quinze minutos. Segurar a fila esse tempo
+  // todo pararia a Escada, o ginásio e a venda por uma coisa que não tem pressa nenhuma.
+  const rodada = codigo.slice(codigo.indexOf('const rodada = async'));
+  const corpo = rodada.slice(0, rodada.indexOf('\n    };'));
+  assert.match(corpo, /soltar = await esperarAVez\(aviso\);/);
+  assert.match(corpo, /} finally \{\n\s+if \(soltar\) soltar\(\);\n\s+\}/);
+  // O pedido está DENTRO do laço dos ataques, e o intervalo fica de fora dele — é isso que deixa
+  // a fila livre entre um ataque e outro.
+  assert.ok(
+    corpo.indexOf('for (let feitos') < corpo.indexOf('esperarAVez'),
+    'a vez é pedida dentro do laço dos ataques',
+  );
+  assert.ok(
+    corpo.indexOf('if (soltar) soltar();') < corpo.indexOf('Esperando ${atraso}s'),
+    'a vez é solta antes do intervalo, não depois',
+  );
+  assert.match(codigo, /const MINHA_VEZ = 'arena';/);
+});
+
+test('ganhou ou perdeu decide-se pelos pontos, e nao pela classe da tela', () => {
+  // `.pvp-result.is-win` está medido; a classe da derrota não. Tratar "não é is-win" como derrota
+  // faria uma classe renomeada barrar a lista inteira de rivais, uma por rodada, em silêncio.
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  const corpo = atacar.slice(0, atacar.indexOf('\n    };'));
+  assert.match(corpo, /const classeDizVitoria = fim\.classList\.contains\('is-win'\);/);
+  assert.match(
+    corpo,
+    /pontosDepois === null \|\| pontosDepois === pontosAntes\n\s+\? classeDizVitoria\n\s+: pontosDepois > pontosAntes/,
+  );
+});
+
+test('quem vence o dono fica de fora ate a temporada virar', () => {
+  // Pedido dele: "quando perde quero que pule aquela defesa e não entre mais". Guarda-se o
+  // `trainer_id` porque o nome muda e o id não.
+  assert.match(codigo, /cfg\.barrados = \{ \.\.\.cfg\.barrados, \[alvo\.id\]: \{ nome: alvo\.nome/);
+  assert.match(codigo, /const barrado = \(id\) => Object\.hasOwn\(cfg\.barrados, id\);/);
+  const temporada = codigo.slice(codigo.indexOf('const conferirTemporada ='));
+  const corpo = temporada.slice(0, temporada.indexOf('\n    };'));
+  assert.match(
+    corpo,
+    /if \(!estado\.temporada\.id \|\| estado\.temporada\.id === cfg\.temporada\) return;/,
+  );
+  assert.match(corpo, /cfg\.barrados = \{\};/);
+  // E o alvo escolhido nunca é um barrado.
+  assert.match(codigo, /estado\.oponentes\.filter\(\(o\) => !o\.usado && !barrado\(o\.id\)\)/);
+});
+
+test('a janela da arena abre-se sozinha, em dois cliques', () => {
+  // Às 13h a janela está fechada: sem isto a rodada não tinha onde clicar. O item do menu só
+  // existe depois de o grupo abrir — dai' a espera no meio, em vez de dois cliques a torcer.
+  const abrir = codigo.slice(codigo.indexOf('const abrirJanela = async'));
+  const corpo = abrir.slice(0, abrir.indexOf('\n    };'));
+  assert.match(corpo, /data-menu-id="events"/);
+  assert.match(corpo, /data-menu-id="arena-defense"/);
+  assert.ok(
+    corpo.indexOf('grupo.click()') < corpo.indexOf('await ate('),
+    'espera-se o item do menu aparecer antes de o clicar',
+  );
+  // O `✕` da janela é um DIV: medido, `el.click()` nele não fecha nada.
+  assert.match(codigo, /for \(const tipo of \['pointerdown', 'mousedown', 'mouseup', 'click'\]\)/);
+});
+
+test('o ataque salvo e carregado antes do Atacar, e sem ele nao se ataca a esmo', () => {
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  const corpo = atacar.slice(0, atacar.indexOf('\n    };'));
+  assert.ok(
+    corpo.indexOf('await carregarTime()') < corpo.indexOf('defense-primary'),
+    'carrega-se a equipe antes de confirmar o ataque',
+  );
+  // Não conseguir carregar o time pedido é sair pela porta, e não atacar com outra equipe: a
+  // tentativa gasta-se na mesma, e foi por isso que ele pediu um time em especial.
+  assert.match(corpo, /if \(!time\.ok\) \{/);
+  assert.match(corpo, /voltar\?\.click\(\);\n\s+return \{ erro: time\.diz \};/);
+  // Um slot vazio tem o "Carregar" desativado, e isso não é um slot para carregar.
+  assert.match(codigo, /b\.textContent\.trim\(\) === 'Carregar' && !b\.disabled/);
+});
+
+test('o intervalo entre ataques e sorteado dentro da faixa do dono', () => {
+  assert.match(codigo, /const sorteado = \(menor, maior\) =>/);
+  const sorteia = codigo.slice(codigo.indexOf('const sorteado = (menor, maior)'));
+  const corpo = sorteia.slice(0, sorteia.indexOf('\n    };'));
+  assert.match(corpo, /Math\.round\(a \+ Math\.random\(\) \* \(b - a\)\)/);
+  // Um mínimo acima do máximo não é uma faixa: é um engano, e corrige-se para o mais lento.
+  assert.match(codigo, /if \(cfg\.atrasoMax < cfg\.atrasoMin\) cfg\.atrasoMax = cfg\.atrasoMin;/);
+});
+
+test('o horario vem do calendario, e o que nao se entende nao vira todo dia', () => {
+  // A regra do AGENTS.md: sem nenhuma regra válida todo dia conta, então um engano de escrita
+  // transformaria uma rodada marcada numa rodada a toda a hora.
+  assert.match(codigo, /const calendario = \(\) => globalThis\.PPX\?\.agenda \|\| null;/);
+  assert.match(codigo, /calendario\(\)\?\.esperaDaAgenda\(/);
+  assert.match(codigo, /horas\.classList\.toggle\('campo-mau', Boolean\(cfg\.horarios\) && !bom\)/);
+  // Mexer na agenda apaga o carimbo: o `ultima` era da agenda antiga, e guardá-lo faria a janela
+  // nova passar por já usada.
+  const mudou = codigo.slice(codigo.indexOf('const agendaMudou = ()'));
+  assert.match(mudou.slice(0, 500), /cfg\.ultima = 0;/);
+});
+
+test('a ferramenta esta no catalogo, no manifest e com atalho proprio', () => {
+  const manifest = JSON.parse(ler('manifest.json'));
+  const blocos = manifest.content_scripts;
+  const deCa = blocos.find((b) => b.js.includes('escada.js'));
+  const deLa = blocos.find((b) => b.world === 'MAIN');
+  assert.ok(deCa.js.includes('arena.js'), 'arena.js é carregada do lado de cá');
+  assert.ok(deLa.js.includes('arena-main.js'), 'a ponte é carregada no mundo da página');
+  const nucleo = ler('nucleo.js');
+  assert.match(nucleo, /\{ id: 'arena', nome: 'Arena de Defesa', atalhos: '[^']+' \}/);
+  // Duas ferramentas na mesma tecla seria uma a roubar a outra. Alt+M era o único par livre, e é
+  // por isso que esta usa a mesma tecla com e sem Shift — e o Shift tem de ser conferido.
+  assert.match(codigo, /if \(evento\.code !== 'KeyM'\) return;/);
+  assert.match(codigo, /mostrarPainel\(evento\.shiftKey === true\);/);
+  for (const arquivo of ['cacadas.js', 'escada.js', 'gym.js', 'times.js', 'raridades.js'])
+    assert.ok(!ler(arquivo).includes("=== 'KeyM'"), `${arquivo} não usa a tecla M`);
+});

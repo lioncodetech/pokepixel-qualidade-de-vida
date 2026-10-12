@@ -1129,32 +1129,40 @@ Como é um campo de escrever, ele aceita qualquer coisa — então uma caçada q
 órfão ficava lá escrito "(não guardada)"; é a mesma honestidade no campo que o substituiu, em vez de
 descobrir o erro de digitação só na viagem, a dizer "não achei em nenhuma aba".
 
-### O teto pode subir de N em N, e aí ninguém se forma
+### A equipe pode subir junta, de N em N níveis
 
-No modo de grupo já havia *"mínimo Lv 135 e mais 2 níveis"*. Pedido pelo dono em 12/10/2026, os
-degraus passaram a ter o mesmo: ao lado de **formar em Lv** há um **e mais N níveis**, e com ele o
-teto deixa de ser uma linha de chegada e passa a ser um degrau de altura fixa — 165, depois 167,
-depois 169.
+Sem isto, a escada é um aluno de cada vez do princípio ao fim: o primeiro da equipe vai do Lv 1 ao
+teto enquanto os outros cinco esperam no Lv 1. É o que se quer quando há um só a formar — e não é o
+que se quer quando a equipe toda tem de subir.
 
-O efeito é a equipe subir **junta**, sem pedra em ninguém. O aluno é um de cada vez: quem chega ao
-teto de agora forma-se e passa a vez ao seguinte, e só quando o **último** chega é que o teto sobe
-outro degrau e a volta recomeça do primeiro. Sem isso, o primeiro da equipe ia sozinho do Lv 1 ao
-165 enquanto os outros cinco esperavam.
+Por isso, debaixo do **formar em Lv** há um **subindo N níveis por vez**. Com ele, o degrau de agora
+deixa de ser o teto e passa a ser o nível mais baixo da equipe mais N: com 145/145/145, teto 155 e
+passo 10, todos vão ao 155; com passo 2, vão ao 147, depois 149, e assim até o 155. Cada um sobe até
+o degrau de agora e passa a vez ao seguinte, e quando o último chega a conta anda outro passo.
+
+**O teto continua a ser um fim, e isso é a parte que importa.** O degrau de agora nunca passa do
+número que você escreveu — e é por essa linha que a fila de times existe: chegada a equipe inteira
+ao teto, todos estão formados, o *"formados: ir à cidade e trocar de time"* acontece, e os outros
+times entram. A primeira versão disto deixou o degrau fugir para sempre; ninguém se formava nunca, o
+fim da escada não acontecia uma única vez, e a fila de times sumiu do painel. Durou uma hora, e foi
+o dono quem a apanhou: *"não encontro onde colocar os outros times"*.
 
 **Não há contador de rodadas, e é de propósito.** O modo de grupo guarda um, porque lá o alvo não
-está escrito em lugar nenhum do jogo. Aqui está: o teto de agora é o primeiro degrau acima do
-**menor nível da equipe**, e o jogo diz o nível de cada um. Um contador ao lado seria uma segunda
-verdade sobre a mesma coisa, pronta a divergir no primeiro F5 — e, pior, a ficar errada no dia em
-que você metesse um Lv 1 na equipe. Derivado, esse Lv 1 puxa o teto de volta para 165 e é ele o
-próximo aluno, que é exatamente o que se quer.
+está escrito em lugar nenhum do jogo. Aqui está: o degrau de agora sai do **menor nível da equipe**,
+e o jogo diz o nível de cada um. Um contador ao lado seria uma segunda verdade sobre a mesma coisa,
+pronta a divergir no primeiro F5 — e, pior, a ficar errada no dia em que você metesse um Lv 1 na
+equipe. Derivado, esse Lv 1 puxa a conta para baixo e é ele o próximo aluno, que é exatamente o que
+se quer.
 
-O número escrito continua sendo um teto de verdade: quem ainda está abaixo dele sobe **até ele**, e
-não até ele mais a subida. É a diferença entre este campo e o do modo de grupo, onde o número é o
-mínimo de onde se parte.
+### Um campo no meio de um rótulo não estica
 
-E com o teto a subir **não existe fim de escada**: ninguém fica formado, porque mal o último chega o
-teto sobe. Por isso o painel esconde o *"formados: ..."* enquanto houver subida, em vez de prometer
-uma coisa que não vai acontecer. A escolha fica guardada e volta assim que você apagar o campo.
+Os dois números deste par nasceram na mesma linha — *"formar em Lv [ ] e mais [ ] níveis"* —, e no
+painel do dono ela partiu-se em três: o campo esticou, o "formar em Lv" caiu para duas linhas e o "e
+mais" ficou órfão. Um `input` dentro de um flex cresce até caber o que sobra, e 248px não chegam
+para duas palavras, dois campos e mais duas palavras.
+
+São duas regras agora, com teste de guarda: todo campo de número dentro de um rótulo tem **largura
+fixa e não cresce**, e o rótulo pode **quebrar linha** em vez de empurrar as palavras para fora.
 
 ### O nível que importa é o do pokémon, não o do treinador
 
@@ -1728,6 +1736,79 @@ relatava como defeito do jogo, e que aparecia "depois de usar umas três vezes".
 
 Daí as duas regras, agora com teste de guarda: o critério é a janela **sair da tela**, nunca sair do
 DOM; e não existe segunda tentativa. Se o clique não fechou, insistir é pior do que falhar.
+
+## Arena de Defesa: os cinco ataques do dia, sozinha
+
+As cinco tentativas diárias da arena rendem pontos e acabam à meia-noite de Brasília. A ferramenta
+faz a rodada inteira dentro de uma **janela de horário** que você marca — 13h-15h, por exemplo —, num
+instante sorteado lá dentro, e aí dá os cinco ataques seguidos, com um **intervalo sorteado entre
+dois valores em segundos** que também são seus.
+
+O ciclo é o da tela, clique por clique: abre a janela da arena pela barra de cima, escolhe um rival
+da lista, carrega na tela de preparação o **ataque salvo** que você nomeou no painel (`pvp1`, ou só
+o número do slot), confirma, assiste à batalha e clica em "Voltar ao local anterior" no fim. Quando
+os rivais da lista acabam, ela **atualiza a lista de graça** e continua, que é exatamente o que você
+faria: três ataques, um refresh, mais dois.
+
+### Ela não compra nada, e isso está no código em três lugares
+
+O jogo vende entrada extra a 25 diamantes e cobra pela atualização depois das três grátis. Nada
+disso é alcançável daqui:
+
+- a **ponte não sabe atacar**. `attackPvPDefense` e `refreshPvPDefenseOpponents` existem na mesma
+  API que ela lê, e ficam de fora: uma ponte que soubesse atacar punha a ação mais cara do jogo a um
+  evento de distância de qualquer engano. Ela só lê;
+- a licença para atualizar é o `payment` da API, lido **antes** do clique — e nunca o texto do
+  botão. Ler "grátis" de uma string para decidir se uma coisa custa diamante é apostar numa tradução;
+- as entradas compradas não existem no código: a palavra `extra_` não aparece nele.
+
+Acabou o de graça, ela para e diz por quê.
+
+### Quem te vence fica de fora até a temporada virar
+
+Você pediu para pular a defesa que te ganhou e não entrar mais nela. Guarda-se o `trainer_id` — o
+nome de um treinador muda, o id não — e a lista limpa-se sozinha quando a `season.id` muda, que é o
+único momento em que o jogo recomeça de verdade (a temporada é `reset_mode: "hard"`). No painel ela
+aparece inteira, com um `×` em cada um para dar outra chance a quem você quiser, e um botão de
+limpar tudo.
+
+Quando a lista nova vem cheia de gente que já te venceu, ela atualiza outra vez — **enquanto for de
+graça**. Desistir na primeira deixaria tentativas por usar com atualizações grátis ainda na mão.
+
+### Ganhou ou perdeu, quem diz é o placar
+
+A tela traz `.pvp-result.is-win` na vitória, e seria o sinal óbvio. Mas a classe da derrota não foi
+medida, e tratar "não é `is-win`" como derrota faria uma classe renomeada barrar a lista inteira de
+rivais, uma por rodada, em silêncio. Por isso quem decide é a **diferença de pontos do perfil**,
+lida pela API antes e depois do combate: subiu, ganhou. A classe entra só como segunda opinião, para
+o caso improvável de os pontos não se mexerem.
+
+### A vez é pedida por ataque, e não pela rodada inteira
+
+A batalha joga-se sozinha — os golpes saem sem ninguém clicar e o pokémon derrotado é substituído
+sem input — mas **demora**: 30 segundos de contagem e até 210 de combate, medidos no jogo. Cinco
+ataques com os seus intervalos passam facilmente dos quinze minutos.
+
+Segurar a fila esse tempo todo pararia a Escada, o ginásio e a venda por uma coisa que não tem pressa
+nenhuma. Então ela pede a vez para **cada ataque** e solta-a antes do intervalo: entre um combate e
+outro, a fila fica livre para quem precisar.
+
+### Duas coisas medidas que não se adivinham
+
+**Entrar na tela de preparação não gasta tentativa.** Conferido com a API antes e depois: quem gasta
+é o "Atacar" de lá dentro. É o que permite à ferramenta conferir a tela — e sair pelo "Voltar" sem
+custo nenhum quando o ataque salvo que você escolheu não dá para carregar. Atacar com outra equipe
+gastaria a tentativa na mesma, e você pediu aquele time por algum motivo.
+
+**O `✕` da janela da arena não é um botão.** É um `<div>`, e `click()` nele não fecha nada — o jogo
+escuta o `pointerdown`. Nos botões o `click()` basta, e é o que se usa; só ali vai a sequência
+inteira que um rato faz.
+
+### O atalho é Alt+M, com Shift para mostrar
+
+É a única ferramenta do pacote que usa a mesma tecla para as duas coisas, e não por gosto: de A a Z
+não sobrava mais nenhum par. As outras onze levaram vinte e tantas letras, o menu tem o Alt+Q, o
+Alt+R é do próprio LionMultInstance e o Alt+Z/Alt+X esconde tudo de uma vez.
 
 ## Uma quebrada não leva as outras
 

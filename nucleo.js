@@ -242,6 +242,10 @@
     { id: 'cacadas', nome: 'Caçadas', atalhos: 'Alt+W esconde · Alt+E mostra' },
     { id: 'escada', nome: 'Escada de caçadas', atalhos: 'Alt+U esconde · Alt+I mostra' },
     { id: 'raridades', nome: 'Raridades', atalhos: 'Alt+A esconde · Alt+S mostra' },
+    // Alt+M e o unico par de teclas livre: A a Z ja' estao tomadas pelas outras onze, pelo
+    // menu (Alt+Q), pelo LionMultInstance (Alt+R) e pelo Alt+Z/Alt+X que esconde tudo. Por
+    // isso esta usa a mesma tecla com e sem Shift, e e' a unica que o faz.
+    { id: 'arena', nome: 'Arena de Defesa', atalhos: 'Alt+M esconde · Alt+Shift+M mostra' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

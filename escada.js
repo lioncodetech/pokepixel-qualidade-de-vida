@@ -133,12 +133,14 @@ PPX.modulo(
       /** O nivel em que um pokemon se forma e sai da fila. `null` = sem formatura. */
       teto: null,
       /**
-       * De quantos em quantos niveis o teto **sobe**, depois de a equipe inteira o alcancar.
-       * `null` = teto parado, que e' a escada de sempre.
+       * De quantos em quantos niveis a equipe sobe **junta**, a caminho do teto. `null` = cada um
+       * vai sozinho do nivel dele ate' o teto, que e' a escada de sempre.
        *
        * Pedido pelo dono em 12/10/2026: no modo de grupo ele ja' tinha "minimo Lv N e mais M
-       * niveis", e queria o mesmo nos degraus — sem pedra em ninguem, a equipe a subir junta e a
-       * continuar a subir quando todos chegam ao mesmo nivel. Ver `tetoDeAgora`.
+       * niveis", e queria o mesmo nos degraus — sem pedra em ninguem, todos a subir juntos. **E' um
+       * passo, e nao um teto que foge**: ele corrigiu-me no mesmo dia, ao notar que a fila de times
+       * tinha desaparecido do painel. Com o teto a fugir ninguem se formava nunca, e entao os
+       * outros times nunca chegavam a vez — que e' o oposto do que ele queria. Ver `tetoDeAgora`.
        */
       subida: null,
       /**
@@ -336,20 +338,25 @@ PPX.modulo(
     const nomeLider = () => caixaDoLider()?.nome || '';
 
     /**
-     * O teto que vale **agora** — que pode nao ser o que esta' escrito no painel.
+     * Ate' onde se sobe **agora** — que com `subida` nao e' o teto, e' o degrau seguinte.
      *
-     * Com `subida`, o teto deixa de ser uma linha de chegada e passa a ser um degrau de altura
-     * fixa: 165 e mais 2 da' 165, depois 167, depois 169. A equipe sobe junta porque o aluno e' um
-     * de cada vez — quem chega ao teto de agora forma-se, passa a vez ao seguinte, e so' quando o
-     * **ultimo** chega e' que o teto sobe outro degrau. E' a mesma ideia do "minimo Lv N e mais M
-     * niveis" do modo de grupo, pedida pelo dono para os degraus em 12/10/2026.
+     * Sem `subida`, o aluno vai do nivel dele direito ao teto e so' entao passa a vez: o primeiro
+     * da equipe chega ao 155 enquanto os outros cinco continuam no 1. Com `subida`, a equipe sobe
+     * **junta** — cada um vai ate' `menor + subida`, passa a vez ao seguinte, e quando todos
+     * chegam a conta anda outro passo. Com 145/145/145, teto 155 e passo 10, o degrau de agora e'
+     * 155; com passo 2, e' 147, depois 149, ate' 155.
+     *
+     * **O TETO CONTINUA A SER UM FIM.** O `Math.min` e' a linha que faz a fila de times existir:
+     * sem ela a conta passava do 155 para o 157 e ninguem se formava nunca, entao o fim da escada
+     * — ir a' cidade, trocar de time, continuar — nao acontecia uma unica vez. Foi assim que isto
+     * nasceu errado, e o dono apanhou-o no mesmo dia: "nao encontro onde colocar os outros times".
      *
      * **NAO HA' CONTADOR DE RODADAS AQUI, E E' DE PROPOSITO.** O modo de grupo guarda um, porque
-     * la' o alvo nao esta' escrito em parte nenhuma do jogo. Aqui esta': o teto de agora e' o
-     * primeiro multiplo acima do **menor nivel da equipe**, e o jogo diz o nivel de cada um. Um
-     * contador ao lado seria uma segunda verdade sobre a mesma coisa, pronta a divergir no
-     * primeiro F5 — e, pior, a perder-se quando o dono mete um Lv 1 na equipe. Derivado, o Lv 1
-     * puxa o teto de volta para 165 e e' ele o proximo aluno, que e' exactamente o que se quer.
+     * la' o alvo nao esta' escrito em parte nenhuma do jogo. Aqui esta': o degrau de agora sai do
+     * **menor nivel da equipe**, e o jogo diz o nivel de cada um. Um contador ao lado seria uma
+     * segunda verdade sobre a mesma coisa, pronta a divergir no primeiro F5 — e, pior, a ficar
+     * errada quando o dono mete um Lv 1 na equipe. Derivado, o Lv 1 puxa a conta para baixo e e'
+     * ele o proximo aluno, que e' exactamente o que se quer.
      */
     const tetoDeAgora = () => {
       const teto = Number(cfg.teto) || 0;
@@ -360,10 +367,8 @@ PPX.modulo(
         .filter((n) => n !== null);
       if (!niveis.length) return teto;
       const menor = Math.min(...niveis);
-      // Ainda abaixo do teto escrito: a primeira subida e' ate' ele, e nao ate' ele mais a subida.
-      // O campo chama-se "formar em Lv", entao o numero que la' esta' tem de ser um teto a serio.
-      if (menor < teto) return teto;
-      return teto + subida * Math.ceil((menor - teto + 1) / subida);
+      if (menor >= teto) return teto;
+      return Math.min(teto, menor + subida);
     };
 
     /** Formado = chegou ao teto de agora. Sem teto ninguem se forma, e a escada e' a de sempre. */
@@ -1822,12 +1827,12 @@ PPX.modulo(
         <ul data-lista></ul>
         <button type="button" class="mais" data-mais>+ degrau</button>
         <div class="fim">
-          <label class="caixa" title="O teto. Com &quot;e mais N&quot;, ele sobe N níveis sempre que a equipe inteira o alcança">
-            formar em Lv <input type="number" min="1" data-teto placeholder="—">
-            e mais <input type="number" min="1" data-subida placeholder="—"> níveis
+          <label class="caixa">formar em Lv <input type="number" min="1" data-teto placeholder="—"></label>
+          <label class="caixa" title="Vazio: cada um vai sozinho até o teto. Com um número, a equipe sobe junta de tantos em tantos níveis">
+            subindo <input type="number" min="1" data-subida placeholder="—"> níveis por vez
           </label>
-          <p class="vazio" data-sem-fim>
-            Ninguém se forma: quando todos chegam ao teto, ele sobe e eles continuam.
+          <p class="vazio" data-junta>
+            Todos sobem juntos: cada um vai até o degrau de agora e passa a vez, até o teto.
           </p>
           <select data-fim title="O que fazer quando a equipe inteira se formar">
             <option value="nada">formados: ficar onde estiver</option>
@@ -1893,8 +1898,12 @@ PPX.modulo(
       #lioncode-escada button.ligar:hover, #lioncode-escada button.mais:hover { background: #26344c; }
       #lioncode-escada button.ligar.a-correr { background: #24402f; border-color: #35613f; }
       #lioncode-escada button:disabled { opacity: .5; cursor: default; }
+      /* O flex-wrap e a largura fixa dos numeros: sem os dois, um rotulo com um campo no meio
+         esticava o campo ate' empurrar as palavras para fora do painel de 248px. Medido no painel
+         do dono em 12/10/2026, com "formar em Lv" partido em duas linhas. */
       #lioncode-escada .caixa { display: flex; align-items: center; gap: 6px; color: #9aa6b8;
-        font-size: 12px; }
+        font-size: 12px; flex-wrap: wrap; }
+      #lioncode-escada .caixa input[type="number"] { width: 58px; flex: none; }
       #lioncode-escada ul { list-style: none; margin: 0; padding: 0;
         display: flex; flex-direction: column; gap: 5px; }
       #lioncode-escada li {
@@ -2369,29 +2378,21 @@ PPX.modulo(
       campo('[data-subida]').value = cfg.subida ?? '';
       encherDatalista();
       campo('[data-fim]').value = cfg.fim || 'nada';
-      /**
-       * **COM O TETO A SUBIR NAO HA' FIM, ENTAO O PAINEL NAO O PERGUNTA.**
-       *
-       * Nao e' enfeite: com `subida`, `proximoAluno` nunca devolve vazio — mal o ultimo chega ao
-       * teto, o teto sobe e ele deixa de estar formado. Logo `fimDaEscada` nunca corre, e deixar a'
-       * vista um "formados: voltar para a cidade" que nunca vai acontecer seria o painel a
-       * prometer uma coisa que a ferramenta nao faz. A escolha dele fica **guardada**, e volta
-       * assim que ele apagar a subida.
-       */
-      const tetoSobe = Boolean(cfg.teto) && Boolean(cfg.subida);
-      campo('[data-sem-fim]').style.display = tetoSobe ? '' : 'none';
-      campo('[data-fim]').style.display = tetoSobe ? 'none' : '';
+      // A subida nao esconde o fim da escada — ela so' muda o caminho ate' la'. Esconde-lo foi o
+      // defeito de uma hora: a fila de times sumiu do painel, e com ela o unico lugar de dizer
+      // "quando estes acabarem, upa os outros".
+      campo('[data-junta]').style.display = cfg.subida ? '' : 'none';
       // Cada fim pede uma coisa diferente, ou nenhuma. Mostrar os tres campos ao mesmo tempo faria
       // o painel perguntar duas coisas que nao vao ser usadas.
       const destino = campo('[data-destino]');
-      destino.style.display = !tetoSobe && cfg.fim === 'cacada' ? '' : 'none';
-      campo('[data-times]').style.display = !tetoSobe && cfg.fim === 'time' ? '' : 'none';
+      destino.style.display = cfg.fim === 'cacada' ? '' : 'none';
+      campo('[data-times]').style.display = cfg.fim === 'time' ? '' : 'none';
       encherCacadas(destino, cfg.destino, 'escolha a caçada');
       desenharFila();
 
       // A pergunta do fim da fila: aparece quando ha' pergunta, e nao antes.
       const depois = campo('[data-depois]');
-      const perguntando = !tetoSobe && filaAcabou();
+      const perguntando = filaAcabou();
       depois.style.display = perguntando ? '' : 'none';
       depois.value = cfg.depois || '';
       painel.classList.toggle('pergunta', perguntando && !cfg.depois);
