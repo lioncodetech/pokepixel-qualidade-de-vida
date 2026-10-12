@@ -576,6 +576,16 @@
     anotar(`pedra: +1 em todos (${equipe.map((q) => `${q.nome} ${q.nivel}`).join(', ')})`);
   });
 
+  // O estado que o "teto que sobe" precisa: toda a gente no mesmo nivel. Chegar la' a clicar
+  // "+1 em todos" a partir de 1, 40 e 80 seriam oitenta cliques, e o que se quer ver e' o que
+  // acontece **depois** — o teto a subir sozinho e o aluno a voltar ao primeiro da equipe.
+  comando('pôr todos no mesmo nível', () => {
+    const maior = Math.max(...equipe.map((q) => q.nivel));
+    for (const quem of equipe) quem.nivel = maior;
+    pintarHud();
+    anotar(`todos em Lv ${maior}`);
+  });
+
   comando('outra ferramenta pega a vez', () => {
     dono = 'gym';
     anotar('fila: o Ginásio pegou a vez');

@@ -1129,6 +1129,33 @@ Como é um campo de escrever, ele aceita qualquer coisa — então uma caçada q
 órfão ficava lá escrito "(não guardada)"; é a mesma honestidade no campo que o substituiu, em vez de
 descobrir o erro de digitação só na viagem, a dizer "não achei em nenhuma aba".
 
+### O teto pode subir de N em N, e aí ninguém se forma
+
+No modo de grupo já havia *"mínimo Lv 135 e mais 2 níveis"*. Pedido pelo dono em 12/10/2026, os
+degraus passaram a ter o mesmo: ao lado de **formar em Lv** há um **e mais N níveis**, e com ele o
+teto deixa de ser uma linha de chegada e passa a ser um degrau de altura fixa — 165, depois 167,
+depois 169.
+
+O efeito é a equipe subir **junta**, sem pedra em ninguém. O aluno é um de cada vez: quem chega ao
+teto de agora forma-se e passa a vez ao seguinte, e só quando o **último** chega é que o teto sobe
+outro degrau e a volta recomeça do primeiro. Sem isso, o primeiro da equipe ia sozinho do Lv 1 ao
+165 enquanto os outros cinco esperavam.
+
+**Não há contador de rodadas, e é de propósito.** O modo de grupo guarda um, porque lá o alvo não
+está escrito em lugar nenhum do jogo. Aqui está: o teto de agora é o primeiro degrau acima do
+**menor nível da equipe**, e o jogo diz o nível de cada um. Um contador ao lado seria uma segunda
+verdade sobre a mesma coisa, pronta a divergir no primeiro F5 — e, pior, a ficar errada no dia em
+que você metesse um Lv 1 na equipe. Derivado, esse Lv 1 puxa o teto de volta para 165 e é ele o
+próximo aluno, que é exatamente o que se quer.
+
+O número escrito continua sendo um teto de verdade: quem ainda está abaixo dele sobe **até ele**, e
+não até ele mais a subida. É a diferença entre este campo e o do modo de grupo, onde o número é o
+mínimo de onde se parte.
+
+E com o teto a subir **não existe fim de escada**: ninguém fica formado, porque mal o último chega o
+teto sobe. Por isso o painel esconde o *"formados: ..."* enquanto houver subida, em vez de prometer
+uma coisa que não vai acontecer. A escolha fica guardada e volta assim que você apagar o campo.
+
 ### O nível que importa é o do pokémon, não o do treinador
 
 São dois números diferentes no mesmo HUD, e confundi-los faria a escada disparar o degrau errado

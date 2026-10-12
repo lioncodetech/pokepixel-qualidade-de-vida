@@ -133,6 +133,15 @@ PPX.modulo(
       /** O nivel em que um pokemon se forma e sai da fila. `null` = sem formatura. */
       teto: null,
       /**
+       * De quantos em quantos niveis o teto **sobe**, depois de a equipe inteira o alcancar.
+       * `null` = teto parado, que e' a escada de sempre.
+       *
+       * Pedido pelo dono em 12/10/2026: no modo de grupo ele ja' tinha "minimo Lv N e mais M
+       * niveis", e queria o mesmo nos degraus — sem pedra em ninguem, a equipe a subir junta e a
+       * continuar a subir quando todos chegam ao mesmo nivel. Ver `tetoDeAgora`.
+       */
+      subida: null,
+      /**
        * O que fazer quando a equipe inteira se formar: `'nada'`, `'cacada'`, `'time'` ou `'cidade'`.
        *
        * Eram duas saidas (ir para uma caçada, ou ficar) e passaram a quatro a pedido do dono: com a
@@ -326,8 +335,40 @@ PPX.modulo(
     const nivelLider = () => caixaDoLider()?.nivel ?? null;
     const nomeLider = () => caixaDoLider()?.nome || '';
 
-    /** Formado = chegou ao teto. Sem teto ninguem se forma, e a escada e' a de sempre. */
-    const formado = (p) => Boolean(cfg.teto) && p.nivel !== null && p.nivel >= cfg.teto;
+    /**
+     * O teto que vale **agora** — que pode nao ser o que esta' escrito no painel.
+     *
+     * Com `subida`, o teto deixa de ser uma linha de chegada e passa a ser um degrau de altura
+     * fixa: 165 e mais 2 da' 165, depois 167, depois 169. A equipe sobe junta porque o aluno e' um
+     * de cada vez — quem chega ao teto de agora forma-se, passa a vez ao seguinte, e so' quando o
+     * **ultimo** chega e' que o teto sobe outro degrau. E' a mesma ideia do "minimo Lv N e mais M
+     * niveis" do modo de grupo, pedida pelo dono para os degraus em 12/10/2026.
+     *
+     * **NAO HA' CONTADOR DE RODADAS AQUI, E E' DE PROPOSITO.** O modo de grupo guarda um, porque
+     * la' o alvo nao esta' escrito em parte nenhuma do jogo. Aqui esta': o teto de agora e' o
+     * primeiro multiplo acima do **menor nivel da equipe**, e o jogo diz o nivel de cada um. Um
+     * contador ao lado seria uma segunda verdade sobre a mesma coisa, pronta a divergir no
+     * primeiro F5 — e, pior, a perder-se quando o dono mete um Lv 1 na equipe. Derivado, o Lv 1
+     * puxa o teto de volta para 165 e e' ele o proximo aluno, que e' exactamente o que se quer.
+     */
+    const tetoDeAgora = () => {
+      const teto = Number(cfg.teto) || 0;
+      const subida = Number(cfg.subida) || 0;
+      if (!teto || !subida) return teto || null;
+      const niveis = equipe()
+        .map((p) => p.nivel)
+        .filter((n) => n !== null);
+      if (!niveis.length) return teto;
+      const menor = Math.min(...niveis);
+      // Ainda abaixo do teto escrito: a primeira subida e' ate' ele, e nao ate' ele mais a subida.
+      // O campo chama-se "formar em Lv", entao o numero que la' esta' tem de ser um teto a serio.
+      if (menor < teto) return teto;
+      return teto + subida * Math.ceil((menor - teto + 1) / subida);
+    };
+
+    /** Formado = chegou ao teto de agora. Sem teto ninguem se forma, e a escada e' a de sempre. */
+    const formado = (p, teto = tetoDeAgora()) =>
+      Boolean(teto) && p.nivel !== null && p.nivel >= teto;
 
     /**
      * Quem deveria estar a subir agora: o **primeiro da equipe que ainda nao se formou**.
@@ -335,7 +376,12 @@ PPX.modulo(
      * Em ordem de equipe, e nao o mais baixo: a lista e' a ordem que o dono montou, e pular para o
      * menor seria inventar uma prioridade que ninguem pediu.
      */
-    const proximoAluno = () => equipe().find((p) => p.nivel !== null && !formado(p)) || null;
+    const proximoAluno = () => {
+      // O teto le-se uma vez, e nao a cada bicho: `tetoDeAgora` varre a equipe toda, e perguntar
+      // por cada um seria varrer seis vezes a mesma lista para dar sempre a mesma resposta.
+      const teto = tetoDeAgora();
+      return equipe().find((p) => p.nivel !== null && !formado(p, teto)) || null;
+    };
 
     /**
      * **O ALUNO E' O SUJEITO DESTA FERRAMENTA, E NAO O LIDER.**
@@ -801,7 +847,7 @@ PPX.modulo(
       // O fim da escada vem antes do degrau: com a equipe toda no teto nao ha' aluno, e dizer em
       // que degrau ele esta' seria responder a pergunta errada.
       if (cfg.teto && equipe().length && !proximoAluno()) {
-        const todos = `A equipe toda chegou ao Lv ${cfg.teto}.`;
+        const todos = `A equipe toda chegou ao Lv ${tetoDeAgora()}.`;
         if (cfg.fim === 'cidade')
           return cfg.formados
             ? `${todos} Levei a equipe para a cidade e curei.`
@@ -1776,7 +1822,13 @@ PPX.modulo(
         <ul data-lista></ul>
         <button type="button" class="mais" data-mais>+ degrau</button>
         <div class="fim">
-          <label class="caixa">formar em Lv <input type="number" min="1" data-teto placeholder="—"></label>
+          <label class="caixa" title="O teto. Com &quot;e mais N&quot;, ele sobe N níveis sempre que a equipe inteira o alcança">
+            formar em Lv <input type="number" min="1" data-teto placeholder="—">
+            e mais <input type="number" min="1" data-subida placeholder="—"> níveis
+          </label>
+          <p class="vazio" data-sem-fim>
+            Ninguém se forma: quando todos chegam ao teto, ele sobe e eles continuam.
+          </p>
           <select data-fim title="O que fazer quando a equipe inteira se formar">
             <option value="nada">formados: ficar onde estiver</option>
             <option value="cacada">formados: ir para uma caçada</option>
@@ -2314,19 +2366,32 @@ PPX.modulo(
       }
       campo('[data-trocar]').checked = cfg.trocar !== false;
       campo('[data-teto]').value = cfg.teto ?? '';
+      campo('[data-subida]').value = cfg.subida ?? '';
       encherDatalista();
       campo('[data-fim]').value = cfg.fim || 'nada';
+      /**
+       * **COM O TETO A SUBIR NAO HA' FIM, ENTAO O PAINEL NAO O PERGUNTA.**
+       *
+       * Nao e' enfeite: com `subida`, `proximoAluno` nunca devolve vazio — mal o ultimo chega ao
+       * teto, o teto sobe e ele deixa de estar formado. Logo `fimDaEscada` nunca corre, e deixar a'
+       * vista um "formados: voltar para a cidade" que nunca vai acontecer seria o painel a
+       * prometer uma coisa que a ferramenta nao faz. A escolha dele fica **guardada**, e volta
+       * assim que ele apagar a subida.
+       */
+      const tetoSobe = Boolean(cfg.teto) && Boolean(cfg.subida);
+      campo('[data-sem-fim]').style.display = tetoSobe ? '' : 'none';
+      campo('[data-fim]').style.display = tetoSobe ? 'none' : '';
       // Cada fim pede uma coisa diferente, ou nenhuma. Mostrar os tres campos ao mesmo tempo faria
       // o painel perguntar duas coisas que nao vao ser usadas.
       const destino = campo('[data-destino]');
-      destino.style.display = cfg.fim === 'cacada' ? '' : 'none';
-      campo('[data-times]').style.display = cfg.fim === 'time' ? '' : 'none';
+      destino.style.display = !tetoSobe && cfg.fim === 'cacada' ? '' : 'none';
+      campo('[data-times]').style.display = !tetoSobe && cfg.fim === 'time' ? '' : 'none';
       encherCacadas(destino, cfg.destino, 'escolha a caçada');
       desenharFila();
 
       // A pergunta do fim da fila: aparece quando ha' pergunta, e nao antes.
       const depois = campo('[data-depois]');
-      const perguntando = filaAcabou();
+      const perguntando = !tetoSobe && filaAcabou();
       depois.style.display = perguntando ? '' : 'none';
       depois.value = cfg.depois || '';
       painel.classList.toggle('pergunta', perguntando && !cfg.depois);
@@ -2511,15 +2576,20 @@ PPX.modulo(
       if (cfg.trocar) void conferir();
     });
 
-    campo('[data-teto]').addEventListener('change', (e) => {
-      const v = Number(e.target.value);
-      cfg.teto = e.target.value === '' || !Number.isFinite(v) || v < 1 ? null : Math.round(v);
-      // Mudar o teto muda quem e' o aluno, e o degrau cumprido era do aluno anterior.
-      cfg.formados = false;
-      gravar();
-      desenhar();
-      void conferir();
-    });
+    for (const [qual, chave] of [
+      ['[data-teto]', 'teto'],
+      ['[data-subida]', 'subida'],
+    ])
+      campo(qual).addEventListener('change', (e) => {
+        const v = Number(e.target.value);
+        cfg[chave] = e.target.value === '' || !Number.isFinite(v) || v < 1 ? null : Math.round(v);
+        // Mudar o teto muda quem e' o aluno, e o degrau cumprido era do aluno anterior. A subida
+        // muda o teto, entao muda o mesmo.
+        cfg.formados = false;
+        gravar();
+        desenhar();
+        void conferir();
+      });
 
     // Mudar qualquer coisa do fim e' mudar de ideia sobre o fim: o que ja' foi cumprido deixa de
     // valer, senao a escolha nova nunca aconteceria.

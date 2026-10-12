@@ -575,7 +575,7 @@ test('nao agir e uma decisao, e e dita', () => {
     /Não ponho um aluno fraco à frente fora da caçada dele/,
     /falta pô-lo à frente/,
     /não está na equipe desta caçada/,
-    /A equipe toda chegou ao Lv \$\{cfg\.teto\}/,
+    /A equipe toda chegou ao Lv \$\{tetoDeAgora\(\)\}/,
     // Medido na banca em 11/10/2026: durante o castigo de 2 min o painel repetia "falta ir para X"
     // e não ia. Quem olhasse só a frase concluiria que a ferramenta tinha quebrado. E a frase é
     // neutra: por ela passam o castigo de uma viagem falhada **e** os 3 s que o jogo pede entre
@@ -1028,4 +1028,58 @@ test('na expedicao a escada de degraus espera, e nao tenta sair', () => {
   );
   // E o painel diz o mesmo quando perguntado, em vez de inventar o que falta.
   assert.match(codigo, /espero aqui e volto ao degrau quando ela acabar/);
+});
+
+test('o teto dos degraus pode subir de N em N, e deriva do jogo', () => {
+  // Pedido pelo dono em 12/10/2026: "na escada, no modo escada de cacadas, eu quero poder colocar
+  // que nem tem no modo grupo subindo N em N, onde eu nao vou colocar uma pedra em nenhum poke e
+  // eles vao ficar upando sempre que todos estao no mesmo level".
+  assert.match(codigo, /subida: null,/);
+  const sobe = codigo.slice(codigo.indexOf('const tetoDeAgora = ()'));
+  const corpo = sobe.slice(0, sobe.indexOf('const formado = (p, teto'));
+  // Sem subida, o teto e' o que esta' escrito: a escada de sempre nao muda de comportamento.
+  assert.match(corpo, /if \(!teto \|\| !subida\) return teto \|\| null;/);
+  // O teto escrito e' um teto a serio: quem ainda esta' abaixo dele sobe ate' ele, e nao ate' ele
+  // mais a subida. E' aqui que esta ferramenta difere do modo de grupo, onde o campo e' o MINIMO.
+  assert.match(corpo, /if \(menor < teto\) return teto;/);
+  // E o resto e' o primeiro degrau acima do MENOR nivel da equipe.
+  assert.match(corpo, /const menor = Math\.min\(\.\.\.niveis\);/);
+  assert.match(corpo, /return teto \+ subida \* Math\.ceil\(\(menor - teto \+ 1\) \/ subida\);/);
+  // NAO HA' CONTADOR DE RODADAS, ao contrario do modo de grupo: aqui o jogo diz o nivel de cada um,
+  // e um contador ao lado seria uma segunda verdade — que se perderia no primeiro F5 e, pior,
+  // ficaria errada quando o dono metesse um Lv 1 na equipe.
+  assert.ok(!corpo.includes('rodada'), 'o teto de agora deriva da equipe, nao de um contador');
+});
+
+test('quem se formou mede-se pelo teto de agora, e o teto le-se uma vez por batida', () => {
+  assert.match(codigo, /const formado = \(p, teto = tetoDeAgora\(\)\) =>\n\s+Boolean\(teto\)/);
+  // `tetoDeAgora` varre a equipe toda: perguntar por cada bicho varreria seis vezes a mesma lista
+  // para dar sempre a mesma resposta.
+  const proximo = codigo.slice(codigo.indexOf('const proximoAluno = ()'));
+  const corpo = proximo.slice(0, proximo.indexOf('};'));
+  assert.match(corpo, /const teto = tetoDeAgora\(\);/);
+  assert.match(corpo, /!formado\(p, teto\)/);
+  // E o painel nao anuncia um teto que ja' nao e' o de agora.
+  assert.match(codigo, /A equipe toda chegou ao Lv \$\{tetoDeAgora\(\)\}/);
+});
+
+test('com o teto a subir nao existe fim, e o painel nao o pergunta', () => {
+  // Com `subida`, `proximoAluno` nunca devolve vazio — mal o ultimo chega ao teto, o teto sobe e
+  // ele deixa de estar formado. Logo `fimDaEscada` nunca corre, e deixar a' vista um "formados:
+  // voltar para a cidade" seria o painel a prometer o que a ferramenta nao faz.
+  assert.match(codigo, /const tetoSobe = Boolean\(cfg\.teto\) && Boolean\(cfg\.subida\);/);
+  assert.match(codigo, /campo\('\[data-fim\]'\)\.style\.display = tetoSobe \? 'none' : '';/);
+  assert.match(codigo, /campo\('\[data-sem-fim\]'\)\.style\.display = tetoSobe \? '' : 'none';/);
+  // E tudo o que pendura do fim esconde-se com ele, em vez de ficar solto no painel.
+  assert.match(codigo, /destino\.style\.display = !tetoSobe && cfg\.fim === 'cacada'/);
+  assert.match(
+    codigo,
+    /campo\('\[data-times\]'\)\.style\.display = !tetoSobe && cfg\.fim === 'time'/,
+  );
+  assert.match(codigo, /const perguntando = !tetoSobe && filaAcabou\(\);/);
+  // A escolha do fim fica GUARDADA: esconder nao e' apagar, e ela volta quando a subida sair.
+  const ouve = codigo.slice(codigo.indexOf("['[data-subida]', 'subida'],"));
+  assert.ok(!ouve.slice(0, 400).includes('cfg.fim ='), 'a subida nao mexe na escolha do fim');
+  // Mexer no teto ou na subida muda quem e' o aluno: o cumprido era do aluno anterior.
+  assert.match(ouve.slice(0, 500), /cfg\.formados = false;/);
 });
