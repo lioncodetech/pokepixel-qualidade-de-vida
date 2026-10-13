@@ -1281,6 +1281,30 @@ PPX.modulo(
     let correndo = false;
     let parar = false;
     let agendado = 0;
+    /** O relogio que espera a expedicao acabar. Ver `naExpedicao`, no `comecar`. */
+    let esperandoExpedicao = 0;
+
+    /**
+     * Se o jogador esta' dentro da expedição diaria.
+     *
+     * **MEDIDO NO JOGO DO DONO EM 13/10/2026, em tres janelas ao mesmo tempo:** a caçada em escada
+     * passou a manha a tentar sair da expedição, e o ginasio tinha o mesmo buraco — pior, porque
+     * ele nao falha, ele consegue. O primeiro passo dele e' guardar de onde saiu e clicar em
+     * "Voltar à cidade": dentro da expedição isso guardaria a **expedição** como caçada de origem
+     * e arrastaria o dono para fora dela, que e' desfazer uma escolha que ele pagou com CAPTCHA.
+     *
+     * Quem responde e' a porta das Caçadas, pelo tipo — a expedição nao tem zona, e comparar nomes
+     * de mapa nunca da' igual.
+     */
+    const naExpedicao = () => globalThis.PPX?.cacadas?.atual?.()?.tipo === 'expedicao';
+
+    /**
+     * De quanto em quanto tempo se volta a ver se a expedição acabou.
+     *
+     * Ela dura duas horas, e o ginasio tem o dia inteiro: cinco minutos sao baratos de esperar e
+     * folgados de sobra para nao perder o dia. Mais curto so' encheria o painel de recados.
+     */
+    const ESPERA_EXPEDICAO = 300000;
 
     const travarBotoes = (sim) => {
       campo('[data-ir]').disabled = sim;
@@ -1639,6 +1663,15 @@ PPX.modulo(
      * automatico nao pode ser um segundo fluxo, com os seus proprios enganos.
      */
     const comecar = (regiao) => {
+      // **NA EXPEDIÇÃO O GINASIO ESPERA.** Nao se recusa o dia — marca-se outra tentativa: a
+      // expedição dura duas horas e o ginasio tem ate' ao reset. Perder a ocorrencia aqui seria
+      // ficar sem ginasio por causa de uma coisa que acaba sozinha.
+      if (naExpedicao()) {
+        clearTimeout(esperandoExpedicao);
+        esperandoExpedicao = setTimeout(() => void comecar(regiao), ESPERA_EXPEDICAO);
+        dizer('Você está na expedição — faço o ginásio quando ela acabar.');
+        return false;
+      }
       const times = timesDe(regiao);
       if (!times.timeGym) {
         dizer(

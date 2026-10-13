@@ -1027,11 +1027,17 @@ test('a lista das cacadas fica fresca no instante de escolher', () => {
   assert.match(codigo, /seguirALista\(campo\('\[data-destino\]'\)\);/);
 });
 
-test('na expedicao a escada de degraus espera, e nao tenta sair', () => {
+test('na expedicao a cacada espera, nos tres modos, e nao tenta sair', () => {
   // MEDIDO NO JOGO DO DONO EM 12/10/2026, com ele dentro da expedicao e o degrau de Lv 140 em
   // "Togetic": o painel repetia "Degrau 140 nao deu: cliquei em Cacar e continuei em «Expedicao
-  // Diaria Cooperativa»", batida apos batida. A expedicao ja' era respeitada, mas so' no modo de
-  // grupo, pela lista de lugares — e no modo de degraus essa lista nem e' lida.
+  // Diaria Cooperativa»", batida apos batida.
+  //
+  // **E MEDIDO OUTRA VEZ EM 13/10/2026, EM TRES JANELAS AO MESMO TEMPO, com a mesma frase.** O
+  // conserto de 12/10 ficou so' no modo de degraus, porque eu acreditei que nos outros dois a
+  // lista de lugares do grupo ja' resolvia. Nao resolve: o `lugarDoGrupo` pergunta `estouEm(nome)`
+  // por cada lugar da lista ESCRITA PELO DONO, e dentro da expedicao nenhum responde que sim —
+  // entao ele escolhe o primeiro para onde da' para ir, e viaja. So' valeria se o dono tivesse
+  // posto a expedicao na lista a mao, que ninguem tem razao nenhuma para fazer.
   assert.match(
     codigo,
     /const naExpedicao = \(\) => globalThis\.PPX\?\.cacadas\?\.atual\?\.\(\)\?\.tipo === 'expedicao';/,
@@ -1047,15 +1053,20 @@ test('na expedicao a escada de degraus espera, e nao tenta sair', () => {
     corpo.indexOf('naExpedicao()') < corpo.indexOf("if (!equipe().length) return '';"),
     'a guarda vem antes de qualquer acao da batida',
   );
-  // So' no modo de degraus: no grupo, estar na expedicao conta como estar onde o grupo fica, e
-  // isso e' uma decisao tomada a pedido do dono.
+  // **ANTES DA ESCOLHA DO MODO**, que e' o que faz a guarda valer para os tres. Esta linha e' o
+  // conserto de 13/10/2026: em baixo dela, ela valia so' para um.
   assert.ok(
-    corpo.indexOf("if (cfg.modo !== 'escada') return conferirGrupo(aviso);") <
-      corpo.indexOf('naExpedicao()'),
-    'o grupo segue o seu proprio caminho, com a lista de lugares',
+    corpo.indexOf('naExpedicao()') <
+      corpo.indexOf("if (cfg.modo !== 'escada') return conferirGrupo(aviso);"),
+    'a expedicao cala os tres modos, e nao so o de degraus',
   );
-  // E o painel diz o mesmo quando perguntado, em vez de inventar o que falta.
-  assert.match(codigo, /espero aqui e volto ao degrau quando ela acabar/);
+  // E o painel diz o mesmo quando perguntado, em vez de inventar o que falta — e diz a MESMA
+  // frase, porque a razao de esperar e' a mesma nos tres.
+  assert.match(codigo, /const NA_EXPEDICAO = 'Você está na expedição — espero aqui e continuo/);
+  const diz = codigo.slice(codigo.indexOf('function diagnostico()'));
+  const ate = diz.indexOf("if (cfg.modo !== 'escada') return diagnosticoGrupo();");
+  assert.ok(ate > 0);
+  assert.match(diz.slice(0, ate), /if \(naExpedicao\(\)\) return NA_EXPEDICAO;/);
 });
 
 test('a equipe sobe junta de N em N, e o teto continua a ser um fim', () => {

@@ -465,6 +465,9 @@ PPX.modulo(
      */
     const naExpedicao = () => globalThis.PPX?.cacadas?.atual?.()?.tipo === 'expedicao';
 
+    /** A frase da espera. Uma so': a razao de esperar e' a mesma nos tres modos. */
+    const NA_EXPEDICAO = 'Você está na expedição — espero aqui e continuo quando ela acabar.';
+
     /**
      * Se o jogador nao esta' em caçada **nenhuma** — numa cidade, tipicamente.
      *
@@ -920,14 +923,13 @@ PPX.modulo(
         return cfg.modo === 'escada'
           ? 'Pausada. Clique em Retomar quando quiser.'
           : 'Pausada. A caçada continua; eu é que não mexo em nada.';
-      // Antes dos dois modos, como no `conferir`: ceder a vez cala tudo o resto.
+      // Antes dos dois modos, como no `conferir`: ceder a vez e esperar a expedição calam tudo o
+      // resto, e calam-no igual nos tres modos.
       const outra = cedendo();
       if (outra) return `Esperando ${outra} terminar — a caçada é a última da fila.`;
+      // Dentro da expedição nao falta nada, e' so' nao ser a vez dela. Ver `conferir`.
+      if (naExpedicao()) return NA_EXPEDICAO;
       if (cfg.modo !== 'escada') return diagnosticoGrupo();
-      // Antes do castigo e antes de tudo o que falta: dentro da expedição nao falta nada, e' so'
-      // nao ser a vez dela. Ver `conferir`.
-      if (naExpedicao())
-        return 'Você está na expedição — espero aqui e volto ao degrau quando ela acabar.';
       // O castigo tem de ser dito. Medido na banca: depois de uma viagem falhada, o painel ficava
       // a repetir "falta ir para X" e nao ia — e quem olhasse so' a frase concluiria que ela tinha
       // quebrado. Esperar e' uma decisao como outra qualquer, e uma decisao diz-se.
@@ -1710,24 +1712,26 @@ PPX.modulo(
         return 'cedendo';
       }
 
-      // Os dois modos mexem na mesma equipe e na mesma caçada, entao daqui em diante sao caminhos
-      // separados — e so' um deles corre.
-      if (cfg.modo !== 'escada') return conferirGrupo(aviso);
-
       /**
-       * **NA EXPEDIÇÃO, A ESCADA DE DEGRAUS ESPERA.**
+       * **NA EXPEDIÇÃO, A CAÇADA ESPERA — NOS TRES MODOS.**
        *
        * MEDIDO NO JOGO DO DONO EM 12/10/2026, com ele dentro da expedição e o degrau de Lv 140
        * apontado para "Togetic": o painel repetia *"Degrau 140 não deu: cliquei em Caçar e
        * continuei em «Expedição Diária Cooperativa»"*, batida apos batida. Ela abria a janela das
        * caçadas, clicava em Caçar, o jogo recusava — e ela tentava outra vez.
        *
-       * A expedição ja' era respeitada, mas **so' no modo de grupo**, pela lista de lugares: la'
-       * estar na expedição conta como estar onde o grupo fica. No modo de degraus essa lista nem e'
-       * lida, e a unica regra era "o lider nao esta' na caçada do degrau" — que e' verdade dentro
-       * da expedição e leva a conclusao errada.
+       * **E MEDIDO OUTRA VEZ EM 13/10/2026, EM TRES JANELAS AO MESMO TEMPO**, com a mesma frase:
+       * o conserto de 12/10 ficou **so' no modo de degraus**. Acreditei que nos outros dois a
+       * lista de lugares do grupo ja' resolvia — "estar na expedição conta como estar onde o grupo
+       * fica" —, e nao resolve: o `lugarDoGrupo` pergunta `estouEm(nome)` por cada lugar da lista
+       * **escrita pelo dono**, e dentro da expedição nenhum deles responde que sim. Sem nenhum
+       * "aqui", ele escolhe o primeiro para onde da' para ir e viaja. So' valeria se o dono
+       * tivesse posto a expedição na lista a mao, que ninguem tem razao nenhuma para fazer.
        *
-       * Aqui ela espera, e espera **tudo**: nao viaja, nao troca de aluno, nao leva a' enfermeira.
+       * Por isso a guarda subiu para antes dos tres caminhos, ao lado da fila: dentro da expedição
+       * nao ha' decisao desta ferramenta que valha a pena tomar, qualquer que seja o modo.
+       *
+       * Ela espera, e espera **tudo**: nao viaja, nao troca de aluno, nao leva a' enfermeira.
        * A expedição dura duas horas a cada quatro, tem CAPTCHA para entrar e o jogador so' esta'
        * la' porque quis — arrasta-lo para fora e' desfazer uma escolha dele. Acabada ela, o jogo
        * devolve-o a' caçada anterior (e' o que a propria tela do fim promete) e a batida seguinte
@@ -1735,9 +1739,13 @@ PPX.modulo(
        * resto desta ferramenta.
        */
       if (naExpedicao()) {
-        aviso('Você está na expedição — espero aqui e volto ao degrau quando ela acabar.');
+        aviso(NA_EXPEDICAO);
         return 'na expedicao';
       }
+
+      // Os dois modos mexem na mesma equipe e na mesma caçada, entao daqui em diante sao caminhos
+      // separados — e so' um deles corre.
+      if (cfg.modo !== 'escada') return conferirGrupo(aviso);
 
       if (!equipe().length) return '';
 

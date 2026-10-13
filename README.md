@@ -902,23 +902,34 @@ batida. Agora ela reconhece a expedição (pelo HUD da corrida), guarda-a como a
 reconhecer, e o botão "Ir" dessa linha fica apagado — um botão que não pode funcionar não fica a
 fingir que pode.
 
-#### E no modo de degraus ela espera, em vez de insistir
+#### Na expedição ela espera — nos três modos, e o ginásio também
 
 Medido no jogo do dono em 12/10/2026, com ele **dentro** da expedição e o degrau de Lv 140 apontado
 para "Togetic": o painel repetia *"Degrau 140 não deu: cliquei em Caçar e continuei em «Expedição
 Diária Cooperativa»"*, batida após batida. Ela abria a janela das caçadas, clicava em Caçar, o jogo
 recusava — e ela tentava outra vez.
 
-A expedição já era respeitada, mas **só no modo de grupo**, pela lista de lugares: lá, estar na
-expedição conta como estar onde o grupo fica. No modo de degraus essa lista nem é lida, e a única
-regra era *"o líder não está na caçada do degrau"* — o que é verdade dentro da expedição e leva à
-conclusão errada.
+A expedição parecia já respeitada no modo de grupo, pela lista de lugares — e **não estava**. Isso
+ficou medido em **13/10/2026, em três janelas ao mesmo tempo**, com a mesma frase no painel: o
+`lugarDoGrupo` pergunta *"estou em X?"* por cada lugar da lista **que você escreveu**, e dentro da
+expedição nenhum responde que sim. Sem nenhum "aqui", ele escolhe o primeiro para onde dá para ir e
+viaja. Só valeria se você tivesse posto a expedição na lista à mão, que ninguém tem razão nenhuma
+para fazer.
 
-Agora, dentro dela, a escada de degraus **espera, e espera tudo**: não viaja, não troca de aluno,
+Por isso a guarda subiu para antes da escolha do modo, ao lado da regra da fila: dentro da
+expedição não há decisão desta ferramenta que valha a pena tomar, qualquer que seja o modo.
+
+Dentro dela a caçada **espera, e espera tudo**: não viaja, não troca de aluno,
 não leva à enfermeira. A expedição dura duas horas a cada quatro, exige um CAPTCHA para entrar, e
 você só está lá porque quis — arrastá-lo para fora é desfazer uma escolha sua. Acabada ela, o jogo
 devolve-o à caçada anterior, e a batida seguinte continua de onde parou. Nada disso fica guardado:
 o estado deriva do jogo, como em todo o resto da ferramenta.
+
+**E o Ginásio do dia espera também.** Ele tinha o mesmo buraco, e pior: ele não falha, ele
+consegue. O primeiro passo dele é guardar de onde saiu e clicar em "Voltar à cidade" — dentro da
+expedição isso guardaria a **expedição** como caçada de origem e arrastaria você para fora dela.
+Agora ele vê que você está lá e marca outra tentativa daí a cinco minutos, até ela acabar: a
+expedição dura duas horas e o ginásio tem até ao reset, então ninguém perde o dia por esperar.
 
 A tela **"Expedição concluída"** entrou na lista do que sai da frente antes de qualquer acção. É um
 painel com overlay que tapa tudo até alguém clicar em "Continuar", e o próprio jogo escreve lá: *ao

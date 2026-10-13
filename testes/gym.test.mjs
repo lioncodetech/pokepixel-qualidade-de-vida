@@ -536,3 +536,35 @@ test('o placar corrige-se a mao, e a mao nunca marca erro', () => {
   assert.match(codigo, /diz\.dataset\.marcar = regiao;/);
   assert.match(codigo, /const marca = evento\.target\.closest\?\.\('\[data-marcar\]'\);/);
 });
+
+test('na expedicao o ginasio espera, e nao arrasta ninguem para fora dela', () => {
+  // **MEDIDO NO JOGO DO DONO EM 13/10/2026, em tres janelas ao mesmo tempo.** A caçada em escada
+  // passou a manhã a tentar sair da expedição; o ginásio tinha o mesmo buraco — e pior, porque ele
+  // não falha, ele consegue: o primeiro passo dele é guardar de onde saiu e clicar em "Voltar à
+  // cidade". Dentro da expedição isso guardaria a EXPEDIÇÃO como caçada de origem e arrastaria o
+  // dono para fora dela, que é desfazer uma escolha que ele pagou com CAPTCHA.
+  assert.match(
+    codigo,
+    /const naExpedicao = \(\) => globalThis\.PPX\?\.cacadas\?\.atual\?\.\(\)\?\.tipo === 'expedicao';/,
+  );
+  // A guarda é a primeira coisa do `comecar`: antes dos times, antes de guardar a tarefa, antes de
+  // sair da caçada. Depois disso já não há como saber de onde se saiu.
+  const bloco = codigo.slice(codigo.indexOf('const comecar = (regiao) =>'));
+  const corpo = bloco.slice(0, bloco.indexOf('void continuarTarefa();'));
+  // A condição é a pergunta, e não um `false` qualquer: sem esta linha o resto do bloco continua
+  // escrito e nunca corre, que é a forma mais calada de este defeito voltar.
+  assert.match(corpo, /if \(naExpedicao\(\)\) \{/);
+  assert.ok(
+    corpo.indexOf('naExpedicao()') < corpo.indexOf('const times = timesDe(regiao);'),
+    'a expedição é conferida antes de qualquer passo',
+  );
+  // **E não se perde o dia.** A expedição dura duas horas e o ginásio tem até ao reset: marca-se
+  // outra tentativa em vez de recusar a ocorrência.
+  assert.match(corpo, /esperandoExpedicao = setTimeout\(\(\) => void comecar\(regiao\), ESPERA_EXPEDICAO\);/);
+  assert.match(corpo, /Você está na expedição/);
+  // E o relógio anterior é cancelado: dois relógios no ar fariam dois ginásios ao mesmo tempo.
+  assert.ok(
+    corpo.indexOf('clearTimeout(esperandoExpedicao)') < corpo.indexOf('esperandoExpedicao ='),
+    'um relógio de cada vez',
+  );
+});
