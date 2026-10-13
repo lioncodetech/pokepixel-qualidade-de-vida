@@ -468,10 +468,16 @@
           minha: false,
         },
       ],
+      /**
+       * Fora de caçada a porta devolve `null`, como no jogo: a cidade não tem
+       * `.platform-hunt__zone-name`, e é por esse `null` que a Escada sabe que ninguém ganha XP ali.
+       */
       atual: () =>
         naExpedicao
           ? { nome: 'Expedição Diária Cooperativa', regiao: '', modo: '', tipo: 'expedicao' }
-          : { nome: onde, regiao: '', modo: '', tipo: 'cacada' },
+          : onde
+            ? { nome: onde, regiao: '', modo: '', tipo: 'cacada' }
+            : null,
       /**
        * As duas portas que o modo de grupo usa para a lista de lugares.
        *
@@ -628,6 +634,14 @@
     location.reload();
   });
   comando('onde estou?', () => anotar(`estou em "${onde || '(cidade)'}"`));
+  // A armadilha medida na conta do dono em 13/10/2026: o ginásio, a troca de time ou a própria mão
+  // dele deixam o jogador na cidade com o degrau marcado como cumprido, e a escada ficava parada a
+  // dizer "fique à vontade" enquanto ninguém ganhava XP.
+  comando('me pôr na cidade (fora de caçada)', () => {
+    onde = '';
+    anotar('jogo: saí da caçada — estou na cidade');
+    pintarHud();
+  });
 
   pintarHud();
 

@@ -1165,7 +1165,7 @@ test('o corpo rola, e o teto e medido em vez de adivinhado', () => {
   assert.match(codigo, /max-height: calc\(100vh - 170px\);/);
   const ajuste = codigo.slice(codigo.indexOf('const ajustarAltura = ()'));
   const corpo = ajuste.slice(0, ajuste.indexOf('\n    };'));
-  assert.match(corpo, /innerHeight - topo - 12/, 'o teto sai da posição real, com um respiro');
+  assert.match(corpo, /innerHeight - caixa\.top - rodape - 12/, 'o teto sai da posição real');
   assert.match(corpo, /corpo\.style\.maxHeight = '';/, 'limpa antes de medir, senão mede-se a si');
   // Aba escondida não tem viewport: tenta-se outra vez em vez de congelar um teto errado.
   assert.match(corpo, /requestAnimationFrame\(ajustarAltura\)/);
@@ -1175,4 +1175,65 @@ test('o corpo rola, e o teto e medido em vez de adivinhado', () => {
     codigo.indexOf('const ajustarAltura = ()') < codigo.indexOf('const desenhar = ('),
     'declarada antes de desenhar, que a chama já na subida da página',
   );
+});
+
+test('o recado nao se esconde dentro da rolagem', () => {
+  // Visto na conta do dono em 13/10/2026: "Parar" aceso, nada a acontecer, e nenhuma explicação à
+  // vista — a frase que explica a espera tinha ficado abaixo da rolagem que eu mesmo criei. Ela é
+  // a única coisa que distingue uma escada à espera de uma escada quebrada.
+  const html = codigo.slice(codigo.indexOf('painel.innerHTML = `'));
+  const marcacao = html.slice(0, html.indexOf('`;'));
+  const corpo = marcacao.indexOf('<div class="corpo">');
+  const fimDoCorpo = marcacao.indexOf('</div>', marcacao.lastIndexOf('<datalist'));
+  const recado = marcacao.indexOf('<p class="estado" data-estado>');
+  assert.ok(recado > corpo, 'o recado vem depois do corpo');
+  assert.ok(recado > fimDoCorpo, 'e fora dele, para não rolar junto');
+  assert.match(codigo, /#lioncode-escada > \.estado \{/, 'tem o estilo de rodapé');
+  // Minimizada quem fala é o eco do topo: duas cópias da mesma frase é uma a mais.
+  assert.match(codigo, /#lioncode-escada\.minimizado > \.estado \{ display: none; \}/);
+  // E o teto da rolagem desconta o que ficou debaixo do corpo, senão o painel passa do rodapé.
+  const ajuste = codigo.slice(codigo.indexOf('const ajustarAltura = ()'));
+  const miolo = ajuste.slice(0, ajuste.indexOf('\n    };'));
+  assert.match(miolo, /const rodape = Math\.max\(0, painel\.getBoundingClientRect\(\)\.bottom/);
+  assert.match(miolo, /innerHeight - caixa\.top - rodape - 12/);
+});
+
+test('fora de cacada nenhuma o degrau cumprido deixa de valer', () => {
+  // Medido na conta do dono em 13/10/2026: Scizor Lv 34 na Cidade de Cerulean, degrau de Lv 30
+  // cumprido, "você saiu de Machop — fique à vontade" na tela, e nada a acontecer. Parado numa
+  // cidade ninguém ganha XP, então o Lv 40 — o degrau seguinte — nunca chegaria.
+  //
+  // Sair para outra caçada e sair para lugar nenhum não são a mesma coisa: a primeira é uma escolha
+  // a respeitar, a segunda é o ginásio, a troca de time ou a enfermeira a deixarem o jogador na
+  // cidade. É a mesma lição que a cura já tinha ensinado.
+  assert.match(
+    codigo,
+    /const emLugarNenhum = \(\) =>\s*temPorta\(\) && globalThis\.PPX\.cacadas\.atual\(\) === null;/,
+  );
+  // Sem a ferramenta das Caçadas ninguém responde — e aí não se adivinha cidade nenhuma.
+  assert.match(
+    codigo,
+    /const temPorta = \(\) => typeof globalThis\.PPX\?\.cacadas\?\.atual === 'function';/,
+  );
+  const conferir = codigo.slice(codigo.indexOf('async function conferir('));
+  const corpo = conferir.slice(0, conferir.indexOf('\n    }'));
+  assert.match(
+    corpo,
+    /if \(!chegou\(\) && cfg\.trocar === true && emLugarNenhum\(\)\) \{\s*cfg\.aplicado = null;/,
+  );
+  // E a licença de viajar continua a mandar: sem ela, ninguém arrasta ninguém para lado nenhum.
+  assert.ok(
+    corpo.indexOf('cfg.trocar === true && emLugarNenhum()') <
+      corpo.indexOf('if (cfg.trocar !== true)'),
+    'a licença é conferida na viagem, como sempre foi',
+  );
+});
+
+test('o lugar entra na assinatura do HUD, senao a escada nunca repensa', () => {
+  // A peneira só abre quando a assinatura muda, e sair da caçada não mexe em ninguém da equipe:
+  // sem isto, a escada parada na cidade não voltaria a pensar — nem para voltar, nem para falar.
+  const ass = codigo.slice(codigo.indexOf('const assinatura = () =>'));
+  const corpo = ass.slice(0, ass.indexOf(';\n'));
+  assert.match(corpo, /`\$\{local\(\)\}#`/);
+  assert.match(corpo, /p\.morto \? 'M' : ''/, 'e continua a levar o que já levava');
 });

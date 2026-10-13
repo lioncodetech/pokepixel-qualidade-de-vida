@@ -424,6 +424,27 @@ PPX.modulo(
      */
     const naExpedicao = () => globalThis.PPX?.cacadas?.atual?.()?.tipo === 'expedicao';
 
+    /**
+     * Se o jogador nao esta' em caçada **nenhuma** — numa cidade, tipicamente.
+     *
+     * **SAIR PARA OUTRA CAÇADA E SAIR PARA LUGAR NENHUM NAO SAO A MESMA COISA**, e durante muito
+     * tempo esta ferramenta tratou as duas como uma so'. "Voce' saiu de la', fique a' vontade" e'
+     * uma regra para respeitar quem escolheu outra caçada; na cidade nao ha' escolha nenhuma a
+     * respeitar — ha' uma equipe parada a ganhar zero XP, e o degrau seguinte, que so' chega com
+     * XP, nunca chega. A escada ficava parada para sempre a dizer que estava tudo bem.
+     *
+     * Medido na conta do dono em 13/10/2026: Scizor Lv 34 na Cidade de Cerulean, degrau de Lv 30
+     * cumprido, "fique a' vontade" na tela — e nada a acontecer, nem ali nem no Lv 40. Quem o tirou
+     * da caçada foi o ginasio, a troca de time ou a propria mao dele; o resultado e' o mesmo, e
+     * ficar parado nunca e' o que ele queria de uma escada ligada.
+     *
+     * A porta das Caçadas devolve `null` fora de caçada e de expedição. Sem a ferramenta das
+     * Caçadas ninguem responde — e entao nao se adivinha: `local()` vazio por falta de porta nao e'
+     * prova de cidade. Ver `temPorta`.
+     */
+    const temPorta = () => typeof globalThis.PPX?.cacadas?.atual === 'function';
+    const emLugarNenhum = () => temPorta() && globalThis.PPX.cacadas.atual() === null;
+
     const cacadasDoGrupo = () => semVazios(cfg.grupo.cacadas);
 
     /**
@@ -930,6 +951,11 @@ PPX.modulo(
             `${quem} Lv ${n} deveria estar à frente, mas você saiu de "${degrau.cacada}". ` +
             'Não ponho um aluno fraco à frente fora da caçada dele — volte lá, ou use o ▸.'
           );
+        if (emLugarNenhum())
+          return cfg.trocar === true
+            ? `${quem} Lv ${n}: fora de caçada nenhuma — vou voltar para "${degrau.cacada}".`
+            : `${quem} Lv ${n}: fora de caçada nenhuma, e aqui ninguém ganha XP. Volte para ` +
+                `"${degrau.cacada}", use o ▸, ou ligue "deixar trocar de caçada".`;
         return `${quem} Lv ${n}: degrau de Lv ${degrau.nivel} já cumprido. Você saiu de "${degrau.cacada}" — fique à vontade.`;
       }
       if (!naCacada) {
@@ -1700,6 +1726,13 @@ PPX.modulo(
       // Viaja-se com quem esta' a' frente **agora**, que e' o aluno anterior, forte. Era aqui que
       // estava o defeito: trocar primeiro poe um Lv 1 a aguentar a caçada de um Lv 230.
       const chegou = () => local() === degrau.cacada;
+      // Fora de caçada nenhuma, o degrau cumprido deixa de valer — pelo mesmo motivo que o deixa
+      // de valer depois da enfermeira: quem esta' na cidade nao esta' a cumprir degrau nenhum.
+      // Ver `emLugarNenhum`.
+      if (!chegou() && cfg.trocar === true && emLugarNenhum()) {
+        cfg.aplicado = null;
+        gravar();
+      }
       if (!chegou() && degrau.nivel !== cfg.aplicado) {
         // A licenca de viajar e' so' sobre viajar: formar o aluno e dizer em que degrau ele deveria
         // estar ja' aconteceu. O que para aqui e' o arrasto para outro mapa.
@@ -1796,6 +1829,12 @@ PPX.modulo(
      * quem esta' morto. Pontos de vida continuam de fora, que e' o que torna a peneira peneira.
      */
     const assinatura = () =>
+      // **E O LUGAR TAMBEM**, porque sair da caçada e' uma decisao nova sem mexer em ninguem da
+      // equipe. Medido na conta do dono em 13/10/2026: parado na cidade, a equipe fica igual ao que
+      // era, a peneira nunca abre e a escada nao volta a pensar — nem para voltar a' caçada, nem
+      // para dizer o que esta' a acontecer. Um nome curto, lido do mesmo HUD; a leitura ja' era
+      // feita a cada batida.
+      `${local()}#` +
       equipe()
         .map((p) => `${p.id}:${p.nivel}:${p.lider ? 'L' : ''}${p.morto ? 'M' : ''}`)
         .join('|');
@@ -1899,9 +1938,14 @@ PPX.modulo(
             e mais <input type="number" min="1" data-passo placeholder="—"> níveis
           </label>
         </div>
-        <p class="estado" data-estado></p>
         <datalist data-cacadas id="lioncode-escada-cacadas"></datalist>
-      </div>`;
+      </div>
+      <!-- **Fora do corpo, como os botoes — e pelo mesmo motivo, com uma razao a mais.** O corpo
+           rola, e esta frase e' a unica coisa que explica uma escada que parece parada. No dia em
+           que a rolagem apareceu ela foi empurrada para fora da vista junto com o resto: o dono viu
+           "Parar" aceso, nada a acontecer, e nenhuma explicacao — que era justamente o que esta
+           linha existia para evitar. Ver o diagnostico. -->
+      <p class="estado" data-estado></p>`;
 
     const estilo = document.createElement('style');
     estilo.textContent = `
@@ -1993,6 +2037,10 @@ PPX.modulo(
       #lioncode-escada.pergunta [data-depois] { border-color: #c79a3a; background: #2a2314; }
       #lioncode-escada.pergunta .estado { color: #e8c470; }
       #lioncode-escada .estado { margin: 0; color: #9aa6b8; min-height: 1.4em; font-size: 12px; }
+      /* A do rodape leva a margem que o corpo lhe dava, e um risco a separa da parte que rola. */
+      #lioncode-escada > .estado { padding: 8px 10px; border-top: 1px solid #222a38; }
+      /* Minimizada quem fala e' o eco la de cima: duas copias da mesma frase e uma a mais. */
+      #lioncode-escada.minimizado > .estado { display: none; }
       #lioncode-escada .estado.ruim { color: #ff9b9b; }
       #lioncode-escada .estado.bom { color: #7ddba0; }
       #lioncode-escada .vazio { color: #8b97a8; margin: 0; font-size: 12px; }
@@ -2416,8 +2464,12 @@ PPX.modulo(
         requestAnimationFrame(ajustarAltura);
         return;
       }
-      const topo = corpo.getBoundingClientRect().top;
-      const cabe = Math.max(140, Math.round(innerHeight - topo - 12));
+      const caixa = corpo.getBoundingClientRect();
+      // O que fica **debaixo** do corpo tambem ocupa chao: hoje e' a linha do recado, que saiu da
+      // parte que rola. Mede-se em vez de se escrever um numero — amanha pode ser outra coisa, e
+      // um numero ficaria a mentir sem ninguem dar por isso.
+      const rodape = Math.max(0, painel.getBoundingClientRect().bottom - caixa.bottom);
+      const cabe = Math.max(140, Math.round(innerHeight - caixa.top - rodape - 12));
       corpo.style.maxHeight = `${cabe}px`;
     };
 

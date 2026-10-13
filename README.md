@@ -1531,11 +1531,38 @@ A caixa **deixar trocar de caçada** separa duas perguntas que parecem uma: a es
 correndo — formando o aluno, dizendo em que degrau ele deveria estar — sem ter licença para
 arrastar você para outro mapa.
 
+### Fora de caçada nenhuma, ela volta ao degrau
+
+Sair para **outra caçada** e sair para **lugar nenhum** não são a mesma coisa, e durante muito tempo
+a Escada tratou as duas como uma só. *"Você saiu de lá, fique à vontade"* é uma regra para respeitar
+quem escolheu outra caçada; numa cidade não há escolha a respeitar — há uma equipe a ganhar zero XP,
+e o degrau seguinte, que só chega com XP, nunca chega.
+
+Visto na conta do dono em 13/10/2026: Scizor Lv 34 na Cidade de Cerulean, degrau de Lv 30 cumprido,
+*"fique à vontade"* na tela e nada a acontecer, nem ali nem no Lv 40. Quem o tirou da caçada foi o
+ginásio, uma troca de time ou a própria mão dele — o resultado é o mesmo, e ficar parado nunca é o
+que se quer de uma escada ligada. É a mesma lição que a enfermeira já tinha ensinado: quem sai para
+curar tem de voltar.
+
+Agora, fora de caçada nenhuma, o degrau cumprido deixa de valer e ela volta. **A licença continua a
+mandar**: sem *deixar trocar de caçada*, ela não arrasta ninguém — diz que você está fora de caçada,
+que ali ninguém ganha XP, e oferece o `▸`. E se você estiver noutra caçada, nada muda: essa escolha
+continua a ser respeitada.
+
+Isto exigiu uma terceira coisa, menos visível: **o lugar entrou na assinatura do HUD**. O gatilho da
+Escada é o HUD mudar, e sair da caçada não mexe em ninguém da equipe — sem isso ela nunca voltaria a
+pensar, nem para voltar nem para falar.
+
 ### O painel rola
 
 Com nove degraus, dois times na fila e o bloco do fim, este painel passa da altura da tela e o
 `+ time` fica abaixo do rodapé do monitor. O **corpo** rola; o título, o resumo e os botões de
 comando ficam parados, onde a mão já os procura.
+
+A **linha do recado fica fora da rolagem**, colada no rodapé do painel. No dia em que a rolagem
+apareceu ela foi empurrada para baixo com o resto, e o dono viu exatamente o que ela existia para
+evitar: `Parar` aceso, nada a acontecer e nenhuma explicação à vista. O teto da rolagem desconta o
+que está debaixo do corpo, medido e não escrito — amanhã pode ser outra coisa ali.
 
 O teto escrito no CSS é só o chão — ele supõe o painel no lugar de sempre. Quem manda é uma medida
 feita de onde o corpo **está** na tela, refeita a cada desenho, a cada arrasto e a cada mudança de
