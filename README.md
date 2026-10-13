@@ -1954,6 +1954,27 @@ limpar tudo.
 Quando a lista nova vem cheia de gente que já te venceu, ela atualiza outra vez — **enquanto for de
 graça**. Desistir na primeira deixaria tentativas por usar com atualizações grátis ainda na mão.
 
+### Quem diz que o ataque aconteceu é a arena, e não a tela
+
+Pedido pelo dono em **13/10/2026**: *"ele tá dizendo que atacou as 5 vezes sendo que só uma vez foi
+bem sucedida"*. Até aí a prova de que houve batalha era a tela — apareceu o `.pokeidle-pvp-battle`,
+apareceu o `.pvp-result` —, e tela é o que mais mente: um resultado da batalha anterior que não se
+fechou responde "sim" ao primeiro olhar, e daí em diante cada volta do laço marca um ataque que não
+aconteceu.
+
+O contador de tentativas da própria arena não tem como mentir: ele só anda quando o jogo gasta uma.
+Então, acabada a batalha, ela compara o contador com o de antes do clique. Não andou, não houve
+ataque: não se marca vitória nem derrota, **não se barra o rival** — que ficaria de fora até a
+temporada virar por causa de uma derrota que nunca houve — e a rodada para dizendo exatamente isso,
+com os números à vista: *"a arena não registrou este ataque — as tentativas continuam em 1 de 5"*.
+
+Não conseguindo ler o estado, ela não inventa: cai no caminho de sempre, que já decide pela classe
+da tela quando os pontos não se mexem.
+
+E o resultado da batalha anterior **sai da frente antes de começar a seguinte**. Ele já se fechava no
+fim de cada batalha, mas um clique perdido ali deixava-o na tela. Fechá-lo é barato; confundir os
+dois custa uma vitória marcada como derrota e um rival barrado por uma temporada inteira.
+
 ### Ganhou ou perdeu, quem diz é o placar
 
 A tela traz `.pvp-result.is-win` na vitória, e seria o sinal óbvio. Mas a classe da derrota não foi

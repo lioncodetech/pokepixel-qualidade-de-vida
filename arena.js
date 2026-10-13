@@ -404,7 +404,20 @@ PPX.modulo(
      * A ordem e' a da tela, e cada passo so' avança depois de o anterior aparecer: a preparação
      * demora a desenhar os seis Pokemon, e clicar no "Atacar" antes disso clica no nada.
      */
-    const atacar = async (alvo, pontosAntes, aviso) => {
+    const fecharResultado = async () => {
+      const aberto = document.querySelector('.pvp-result');
+      if (!aberto) return true;
+      aberto.querySelector('.pvp-result__button')?.click();
+      return Boolean(await ate(() => !document.querySelector('.pvp-result'), 10000));
+    };
+
+    const atacar = async (alvo, pontosAntes, feitasAntes, aviso) => {
+      // **O RESULTADO DA BATALHA ANTERIOR SAI DA FRENTE ANTES DE COMEÇAR ESTA.** Ele ja' se fecha
+      // no fim de cada batalha, mas um clique perdido ali deixaria-o na tela — e entao a espera
+      // pelo `.pvp-result` desta batalha responderia "sim" no primeiro instante, com o resultado
+      // da outra. Fechar aqui e' barato; confundir as duas custa uma vitoria marcada como derrota
+      // e um rival barrado ate' a temporada virar.
+      await fecharResultado();
       // **O CARTAO ESPERA-SE.** Ate' a 1.18.3 quem esperava era o `abrirJanela`, que so' dava a
       // janela por aberta quando havia ao menos um rival na tela; tirada essa espera (lista vazia
       // nao e' janela fechada), ficou esta linha a exigir o cartao no primeiro instante — e entre
@@ -451,15 +464,38 @@ PPX.modulo(
 
       // Quem decide e' o placar do perfil, nao a classe. Ver o cabeçalho.
       const depois = await pedirEstado();
+
+      /**
+       * **A ARENA DIZ SE O ATAQUE CONTOU, E ELA E' A UNICA QUE SABE.**
+       *
+       * Pedido pelo dono em 13/10/2026: *"ele ta dizendo que atacou as 5 vezes sendo que so' uma
+       * vez foi bem sucedida"*. Ate' aqui a prova de que houve batalha era a tela — apareceu o
+       * `.pokeidle-pvp-battle`, apareceu o `.pvp-result` — e tela e' o que mais mente: um resultado
+       * da batalha anterior que nao se fechou responde "sim" ao primeiro olhar, e dai' em diante
+       * cada volta do laço marca um ataque que nao aconteceu.
+       *
+       * O contador de tentativas da propria arena nao tem como mentir: ele so' anda quando o jogo
+       * gasta uma. Se ele nao andou, nao houve ataque — e entao nao se marca vitoria nem derrota, e
+       * sobretudo **nao se barra o rival**, que ficaria de fora ate' a temporada virar por causa de
+       * uma derrota que nunca houve.
+       *
+       * Nao se conseguindo ler o estado, nao se inventa: cai-se no caminho de sempre, que ja'
+       * decide pela classe da tela quando os pontos nao se mexem.
+       */
+      if (depois?.ok && depois.tentativas.feitas <= feitasAntes)
+        return {
+          erro:
+            `a arena não registrou este ataque — as tentativas continuam em ` +
+            `${depois.tentativas.feitas} de ${depois.tentativas.limite}`,
+        };
+
       const pontosDepois = depois?.ok ? depois.pontos : null;
       const ganhou =
         pontosDepois === null || pontosDepois === pontosAntes
           ? classeDizVitoria
           : pontosDepois > pontosAntes;
 
-      const voltar = fim.querySelector('.pvp-result__button');
-      if (voltar) voltar.click();
-      await ate(() => !document.querySelector('.pvp-result'), 10000);
+      await fecharResultado();
       // **O jogo larga-a no "Histórico".** Medido em 13/10/2026: fechada a batalha, a aba aberta e'
       // a do historico, e o ataque seguinte procuraria os rivais numa tela que nao os tem. Volta-se
       // ja', e nao so' no proximo ataque, para o painel nao ficar a dever uma tela ao dono.
@@ -618,7 +654,7 @@ PPX.modulo(
               aviso('Não consegui abrir a janela da Arena de Defesa.', true);
               return;
             }
-            r = await atacar(alvo, estado.pontos, aviso);
+            r = await atacar(alvo, estado.pontos, estado.tentativas.feitas, aviso);
           } finally {
             if (soltar) soltar();
           }

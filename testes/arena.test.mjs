@@ -296,7 +296,7 @@ test('a janela tem quatro abas, e so uma delas tem rivais', () => {
   const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
   const corpoAtacar = atacar.slice(0, atacar.indexOf('\n    };'));
   assert.ok(
-    corpoAtacar.indexOf('.pvp-result__button') < corpoAtacar.indexOf('await irParaAtacar()'),
+    corpoAtacar.indexOf('await fecharResultado();') < corpoAtacar.indexOf('await irParaAtacar()'),
     'primeiro fecha-se o resultado, depois volta-se à aba',
   );
 });
@@ -348,5 +348,37 @@ test('uma preparacao que ficou aberta nao e a lista, e sai-se dela pelo Voltar',
   assert.match(
     atacar.slice(0, 200),
     /const botao = await ate\(\(\) => botaoDe\(alvo\.id\), ESPERA_JANELA\);/,
+  );
+});
+
+test('quem diz que o ataque aconteceu e a arena, e nao a tela', () => {
+  // Pedido pelo dono em 13/10/2026: "ele ta dizendo que atacou as 5 vezes sendo que so uma vez foi
+  // bem sucedida". Até aqui a prova de que houve batalha era a tela — apareceu o
+  // `.pokeidle-pvp-battle`, apareceu o `.pvp-result` —, e tela é o que mais mente: um resultado da
+  // batalha anterior que não se fechou responde "sim" ao primeiro olhar, e daí em diante cada volta
+  // do laço marca um ataque que não aconteceu.
+  //
+  // O contador de tentativas da própria arena não tem como mentir: ele só anda quando o jogo gasta
+  // uma. Não tendo andado, não houve ataque — e então não se marca vitória nem derrota, e sobretudo
+  // NÃO SE BARRA O RIVAL, que ficaria de fora até a temporada virar por uma derrota que nunca houve.
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  const corpo = atacar.slice(0, atacar.indexOf('\n    };'));
+  assert.match(corpo, /const atacar = async \(alvo, pontosAntes, feitasAntes, aviso\) =>/);
+  assert.match(corpo, /if \(depois\?\.ok && depois\.tentativas\.feitas <= feitasAntes\)/);
+  assert.match(corpo, /a arena não registrou este ataque/);
+  // E quem chama passa a contagem de ANTES, lida no mesmo estado que escolheu o alvo.
+  assert.match(
+    codigo,
+    /r = await atacar\(alvo, estado\.pontos, estado\.tentativas\.feitas, aviso\);/,
+  );
+  // Não se conseguindo ler o estado, não se inventa: cai no caminho de sempre, que já decide pela
+  // classe da tela quando os pontos não se mexem.
+  assert.match(corpo, /depois\?\.ok && /);
+
+  // E o resultado da batalha anterior sai da frente ANTES de começar esta: fechá-lo é barato,
+  // confundir os dois custa uma vitória marcada como derrota e um rival barrado por uma temporada.
+  assert.ok(
+    corpo.indexOf('await fecharResultado();') < corpo.indexOf('const botao = await ate('),
+    'fecha-se o resultado velho antes de procurar o cartao',
   );
 });

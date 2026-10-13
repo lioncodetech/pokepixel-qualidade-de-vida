@@ -21,7 +21,9 @@
     margin: 0;
     background: #0b0f16;
     color: #e7edf6;
-    font: 14px/1.5 system-ui, sans-serif;
+    font:
+      14px/1.5 system-ui,
+      sans-serif;
     min-height: 100vh;
   }
   .nota {
@@ -53,7 +55,9 @@
     border: 1px solid #33405a;
     border-radius: 6px;
     padding: 5px 9px;
-    font: 12px system-ui, sans-serif;
+    font:
+      12px system-ui,
+      sans-serif;
     cursor: pointer;
   }
   .pokeidle-top-toolbar {
@@ -410,19 +414,25 @@
       });
       slots.append(slot);
     });
-    janela
-      .querySelector('.defense-primary')
-      .addEventListener('click', () => void batalhar(rival));
+    janela.querySelector('.defense-primary').addEventListener('click', () => void batalhar(rival));
   };
+
+  let naoContar = false;
 
   const batalhar = async (rival) => {
     if (estado.tentativas.remaining <= 0) {
       anotar('❌ jogo: ATACOU SEM TENTATIVA');
       return;
     }
-    estado.tentativas.remaining -= 1;
-    estado.tentativas.used += 1;
-    rival.used = true;
+    // A armadilha de 13/10/2026: a tela faz tudo o que faria — batalha, resultado — e o contador
+    // da arena nao anda. Quem acreditasse so' na tela marcaria um ataque que nao aconteceu.
+    if (naoContar) {
+      anotar('jogo: a tela mostra a batalha, mas a tentativa NAO foi gasta');
+    } else {
+      estado.tentativas.remaining -= 1;
+      estado.tentativas.used += 1;
+      rival.used = true;
+    }
     anotar(
       `jogo: batalha contra ${rival.name} começou (equipe: ${timeCarregado || 'a que estava'})`,
     );
@@ -563,6 +573,12 @@
     if (!alvo) return anotar('jogo: nao ha rival livre para preparar');
     if (!janela) abrirJanela();
     prepararAtaque(alvo);
+  });
+
+  comando('o jogo não conta as tentativas: não', (b) => {
+    naoContar = !naoContar;
+    b.textContent = `o jogo não conta as tentativas: ${naoContar ? 'sim' : 'não'}`;
+    anotar(`jogo: as tentativas ${naoContar ? 'deixam de ser gastas' : 'voltam a ser gastas'}`);
   });
 
   comando('a lista de rivais vem vazia', () => {
