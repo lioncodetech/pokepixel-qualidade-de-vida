@@ -605,6 +605,30 @@
     filaMexeu();
   });
 
+  comando('a equipe desnivelada do dono (1 · 100 · 151)', () => {
+    // A medida de 13/10/2026: varios no 151 e dois atrasados. Com teto 140 e passo 2, a escada dava
+    // a equipe por formada assim que os dois chegassem ao 140 — com onze niveis por nivelar.
+    const niveis = [1, 100, 151];
+    equipe.forEach((p, i) => {
+      p.nivel = niveis[i] ?? 151;
+      p.morto = false;
+    });
+    anotar('jogo: equipe em 1 · 100 · 151');
+    pintarHud();
+  });
+
+  comando('os atrasados chegaram ao teto (140 · 140 · 151)', () => {
+    // O instante exacto do defeito: toda a equipe em 140 ou acima, com o teto escrito em 140 — e
+    // onze niveis ainda por nivelar. Antes de 13/10/2026 a escada parava aqui.
+    const niveis = [140, 140, 151];
+    equipe.forEach((p, i) => {
+      p.nivel = niveis[i] ?? 151;
+      p.morto = false;
+    });
+    anotar('jogo: equipe em 140 · 140 · 151');
+    pintarHud();
+  });
+
   comando('matar o líder', () => {
     const l = equipe.find((p) => p.lider);
     l.morto = true;

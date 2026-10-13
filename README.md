@@ -1158,6 +1158,25 @@ times entram. A primeira versão disto deixou o degrau fugir para sempre; ningu�
 fim da escada não acontecia uma única vez, e a fila de times sumiu do painel. Durou uma hora, e foi
 o dono quem a apanhou: *"não encontro onde colocar os outros times"*.
 
+#### O teto nunca fica abaixo de onde a equipe já está
+
+Medido na conta do dono em **13/10/2026**: equipe com vários no Lv 151 e dois atrasados (Lv 1 e
+Lv 100), teto 140, passo 2. Os dois subiram de 2 em 2 até ao 140 — e aí a escada deu a equipe inteira
+por formada e parou, porque toda ela estava em 140 ou acima. Só que a equipe não estava nivelada:
+faltavam onze níveis para os atrasados alcançarem os outros, que é a coisa para que este modo existe.
+
+Então o fim da volta é o **maior** entre o teto que você escreveu e o nível mais alto da equipe. Com
+os outros no 151, os atrasados sobem até ao 151; quando os seis empatam, a equipe forma-se e a fila
+de times entra. Um teto escrito mais baixo do que a equipe já está não é um fim: é um número velho, e
+parar nele é parar por causa do passado.
+
+#### O passo vale sozinho: sem teto, ela nivela para sempre
+
+Preencher **só** o *subindo N níveis por vez*, sem *formar em Lv*, quer dizer: mantenha a equipe
+nivelada, de N em N, enquanto eu estiver ligada. Quem está mais abaixo vai à frente até alcançar o
+seguinte, e daí em diante eles revezam-se de N em N. Ninguém se forma — o fim da escada pede um teto
+—, então a fila de times não é chamada, que é exatamente o que "sem fim" quer dizer.
+
 **Não há contador de rodadas, e é de propósito.** O modo de grupo guarda um, porque lá o alvo não
 está escrito em lugar nenhum do jogo. Aqui está: o degrau de agora sai do **menor nível da equipe**,
 e o jogo diz o nível de cada um. Um contador ao lado seria uma segunda verdade sobre a mesma coisa,
@@ -1464,6 +1483,9 @@ a fila, aparece uma listbox no painel com as quatro respostas que ela sabe cumpr
 | recomeço a fila de times | monta o primeiro time da fila, e a escada segue daí sozinha |
 | paro a escada | desliga-se; o ▸ de cada degrau continua a funcionar |
 
+E, ao lado da listbox, uma caixinha: **"e daqui em diante, sem perguntar"**. Marcada, a resposta
+escolhida vale para todas as voltas seguintes e a pergunta não volta a aparecer.
+
 Por que não é uma quinta opção do "formados:"? Porque as outras quatro escolhem-se **antes**, de
 noite, para ela cumprir sozinha. Esta faz-se **depois**, com a equipe toda formada na tela — e nessa
 hora o que você quer depende do que aconteceu.
@@ -1472,10 +1494,31 @@ Três detalhes que custaram uma medição cada:
 
 - **Quem age é a resposta, não a batida.** Uma acção guardada para "a próxima batida" seria refeita
   em cada batida, e voltar para a cidade três vezes não é voltar uma vez.
-- **A pergunta é nova a cada volta.** Guardar a resposta de ontem seria responder por você.
+- **A pergunta é nova a cada volta** — a não ser que você diga o contrário. Guardar a resposta de
+  ontem por conta própria seria responder por você; guardá-la porque você mandou é outra coisa.
 - **O painel minimizado abre-se, uma vez.** Minimizado, o corpo do painel está escondido e a
   listbox com ele: ficaria a dizer "escolha aí embaixo" sem haver embaixo. Abre uma vez por
   pergunta; minimize outra vez à vontade, que ela não insiste.
+
+##### "e daqui em diante, sem perguntar"
+
+Pedido em **13/10/2026**, com a pergunta na tela pela enésima vez. A caixinha fica **ao lado** da
+listbox: escolha a resposta, marque a caixinha, e daí em diante ela faz aquilo sozinha — acabou a
+fila, recomeça a fila, e a volta seguinte começa sem nada na tela à sua espera. Desmarque e a
+pergunta volta.
+
+A caixinha **não se marca sozinha e não guarda o vazio**: marcar sem ter escolhido uma resposta
+seria exactamente "pergunte outra vez", com a caixinha marcada a prometer o contrário. E trocar a
+resposta na listbox com ela marcada troca também a guardada — senão você mudaria de ideia na tela e a
+volta seguinte faria a de ontem, sem nada a dizer por quê.
+
+Um padrão escolhido por mim seria decidir a única coisa que esta ferramenta de propósito não decide.
+Por isso a caixinha nasce desmarcada: a primeira resposta é sempre sua.
+
+A recusa do laço vale igual aqui, e vale mais: se algum degrau tem caçada que monta time próprio,
+recomeçar a fila apagaria o time recém-montado e a volta repetir-se-ia para sempre. Na mão você veria
+isso e pararia; guardada, ela não veria nada — então ela **recusa antes de agir** e diz qual degrau é
+o problema.
 
 #### Um "já cumpri" de ontem não trava a fila
 

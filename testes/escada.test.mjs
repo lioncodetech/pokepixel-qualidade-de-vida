@@ -1066,14 +1066,23 @@ test('a equipe sobe junta de N em N, e o teto continua a ser um fim', () => {
   const sobe = codigo.slice(codigo.indexOf('const tetoDeAgora = ()'));
   const corpo = sobe.slice(0, sobe.indexOf('const formado = (p, teto'));
   // Sem subida, o teto e' o que esta' escrito: a escada de sempre nao muda de comportamento.
-  assert.match(corpo, /if \(!teto \|\| !subida\) return teto \|\| null;/);
+  assert.match(corpo, /if \(!subida\) return teto \|\| null;/);
   // O degrau de agora sai do MENOR nivel da equipe — e' o que faz a equipe subir junta.
   assert.match(corpo, /const menor = Math\.min\(\.\.\.niveis\);/);
   // **A LINHA QUE FAZ A FILA DE TIMES EXISTIR.** Sem o `Math.min`, a conta passa do teto e ninguem
   // se forma nunca: `fimDaEscada` deixa de correr e os outros times nao chegam a ter vez. Foi o
   // defeito de uma hora, apanhado pelo dono: "nao encontro onde colocar os outros times".
-  assert.match(corpo, /if \(menor >= teto\) return teto;/);
-  assert.match(corpo, /return Math\.min\(teto, menor \+ subida\);/);
+  assert.match(corpo, /if \(fim && menor >= fim\) return fim;/);
+  assert.match(corpo, /return fim \? Math\.min\(fim, passo\) : passo;/);
+  // **E O FIM NUNCA FICA ABAIXO DE ONDE A EQUIPE JA ESTA.** Medido na conta do dono em 13/10/2026:
+  // equipe com vários no 151 e dois atrasados (Lv 1 e Lv 100), teto 140, passo 2. Chegados os dois
+  // ao 140, a equipe inteira estava em 140 ou acima e a escada deu-a por formada — com onze níveis
+  // por nivelar, que é a coisa para que este modo existe. Um teto escrito mais baixo do que a
+  // equipe já está não é um fim: é um número velho.
+  assert.match(corpo, /const fim = teto \? Math\.max\(teto, \.\.\.niveis\) : 0;/);
+  // E o passo vale sozinho: só ele preenchido quer dizer "mantenha a equipe nivelada, para sempre".
+  // Ninguém se forma — o fim da escada pede `cfg.teto` —, então a fila de times não é chamada.
+  assert.match(codigo, /if \(cfg\.teto && !proximoAluno\(\)\) return fimDaEscada\(aviso\);/);
   // NAO HA' CONTADOR DE RODADAS, ao contrario do modo de grupo: aqui o jogo diz o nivel de cada um,
   // e um contador ao lado seria uma segunda verdade — que se perderia no primeiro F5 e, pior,
   // ficaria errada quando o dono metesse um Lv 1 na equipe.
@@ -1264,4 +1273,49 @@ test('o lugar entra na assinatura do HUD, senao a escada nunca repensa', () => {
   const corpo = ass.slice(0, ass.indexOf(';\n'));
   assert.match(corpo, /`\$\{local\(\)\}#`/);
   assert.match(corpo, /p\.morto \? 'M' : ''/, 'e continua a levar o que já levava');
+});
+
+test('a resposta do fim da fila pode ficar guardada, e entao nao se pergunta mais', () => {
+  // Pedido em 13/10/2026, com a pergunta na tela pela enésima vez: "sempre vai aparecer essa
+  // pergunta?". A pergunta nasceu certa — acabada a fila, o que ele quer depende do que aconteceu —
+  // mas quem roda a mesma volta todas as noites já sabe a resposta antes de ela ser feita.
+  //
+  // A caixinha fica AO LADO da pergunta, e não no lugar dela: marcar é responder "e daqui em
+  // diante também". Escolher um padrão por ele seria decidir a única coisa que esta ferramenta de
+  // propósito não decide.
+  assert.match(codigo, /sempre: '',/, 'a resposta guardada mora na config');
+  assert.match(codigo, /<input type="checkbox" data-sempre>/);
+
+  // Com resposta guardada, a batida responde sozinha — e pelo mesmo caminho do clique, para não
+  // haver duas maneiras de fazer a mesma coisa, uma delas sem as recusas da outra.
+  const espera = codigo.slice(codigo.indexOf('function fimDaFila'));
+  const dentro = espera.slice(0, espera.indexOf('\n    }'));
+  assert.match(dentro, /if \(!cfg\.depois && cfg\.sempre\) \{/);
+  assert.match(dentro, /void responder\(cfg\.sempre\);/);
+  // E a recusa do laço vale igual: a mão veria o time a ser remontado e pararia; a resposta
+  // guardada não vê nada e refaria a volta para sempre.
+  assert.match(dentro, /cfg\.sempre === 'time' \? degrauComTime\(\) : null/);
+  assert.ok(
+    dentro.indexOf('degrauComTime()') < dentro.indexOf('void responder(cfg.sempre);'),
+    'recusa-se antes de agir, e não depois',
+  );
+
+  // Marcar sem ter respondido guardaria o vazio, que é exactamente "pergunte outra vez": a caixinha
+  // ficaria marcada a prometer o contrário do que faz.
+  const caixa = codigo.slice(codigo.indexOf("campo('[data-sempre]').addEventListener"));
+  const corpo = caixa.slice(0, caixa.indexOf('\n    });'));
+  assert.match(corpo, /e\.target\.checked = false;/);
+  assert.match(corpo, /Escolha primeiro o que eu faço/);
+  // E desmarcar devolve a pergunta, em vez de deixar a escolha presa.
+  assert.match(corpo, /cfg\.sempre = '';/);
+
+  // A caixinha aparece com a pergunta **e** com a resposta já guardada: escondida, ela guardaria
+  // uma escolha sem lugar para a desfazer.
+  assert.match(codigo, /perguntando \|\| cfg\.sempre \? 'flex' : 'none'/);
+  assert.match(codigo, /checked = Boolean\(cfg\.sempre\)/);
+
+  // Os dois tempos são duas listas: "Recomecei a fila" dito antes de recomeçar é uma mentira
+  // pequena, e seria dita todas as noites.
+  assert.match(codigo, /const O_QUE_FAREI = \{/);
+  assert.match(codigo, /Daqui em diante, quando a fila acabar:/);
 });

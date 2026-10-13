@@ -234,6 +234,20 @@ PPX.modulo(
        * para esta vez — comeca uma volta nova, a pergunta e' nova (ver `conferir`).
        */
       depois: '',
+      /**
+       * A mesma resposta, mas **guardada**: `''` pergunta todas as vezes, e qualquer uma das
+       * outras quatro responde sozinha e nao pergunta mais.
+       *
+       * Pedido em 13/10/2026, com a pergunta na tela pela enesima vez: "sempre vai aparecer essa
+       * pergunta?". A pergunta nasceu certa — acabada a fila, o que ele quer depende do que
+       * aconteceu — mas quem roda a mesma volta todas as noites ja' sabe a resposta antes de ela
+       * ser feita, e um painel que pergunta o que ja' foi respondido e' um painel que espera.
+       *
+       * Fica **ao lado** da pergunta, e nao no lugar dela: marcar a caixinha e' responder "e daqui
+       * em diante tambem". Desmarcar devolve a pergunta. Um padrao escolhido por mim seria decidir
+       * por ele a coisa que esta ferramenta de proposito nao decide.
+       */
+      sempre: '',
       /** Ja' cumpriu o fim da escada. Serve para nao arrastar a equipe de volta. */
       formados: false,
       /** De quem e' esta escada. Trocar de aluno recomeça a contagem do degrau cumprido. */
@@ -353,10 +367,27 @@ PPX.modulo(
      * chegam a conta anda outro passo. Com 145/145/145, teto 155 e passo 10, o degrau de agora e'
      * 155; com passo 2, e' 147, depois 149, ate' 155.
      *
-     * **O TETO CONTINUA A SER UM FIM.** O `Math.min` e' a linha que faz a fila de times existir:
-     * sem ela a conta passava do 155 para o 157 e ninguem se formava nunca, entao o fim da escada
-     * — ir a' cidade, trocar de time, continuar — nao acontecia uma unica vez. Foi assim que isto
-     * nasceu errado, e o dono apanhou-o no mesmo dia: "nao encontro onde colocar os outros times".
+     * **O TETO NUNCA FICA ABAIXO DE ONDE A EQUIPE JA' ESTA'.** Medido na conta do dono em
+     * 13/10/2026: equipe com varios no 151 e dois atrasados (Lv 1 e Lv 100), teto 140, passo 2. Os
+     * dois subiram de 2 em 2 ate' ao 140 — e ai' a escada deu a equipe inteira por formada e parou,
+     * porque toda ela estava em 140 ou acima. So' que a equipe nao estava nivelada: faltavam onze
+     * niveis para os atrasados alcançarem os outros, que e' a coisa para que este modo existe.
+     *
+     * Entao o fim da volta e' `max(teto, maior da equipe)`. Com os outros no 151, os atrasados
+     * sobem ate' ao 151, e so' quando os seis empatam e' que a equipe se forma e a fila de times
+     * entra. Um teto escrito mais baixo do que a equipe ja' esta' nao e' um fim: e' um numero
+     * velho, e parar nele e' parar por causa do passado.
+     *
+     * **O TETO CONTINUA A SER UM FIM** quando ele esta' a' frente da equipe. O `Math.min` e' a
+     * linha que faz a fila de times existir: sem ela a conta passava do 155 para o 157 e ninguem se
+     * formava nunca, entao o fim da escada — ir a' cidade, trocar de time, continuar — nao
+     * acontecia uma unica vez. Foi assim que isto nasceu errado, e o dono apanhou-o no mesmo dia:
+     * "nao encontro onde colocar os outros times".
+     *
+     * **E O PASSO VALE SOZINHO, SEM TETO NENHUM.** Pedido em 13/10/2026: so' o passo preenchido
+     * quer dizer "mantenha a equipe nivelada, de tantos em tantos niveis, para sempre". Ninguem se
+     * forma (o fim da escada pede `cfg.teto`), e entao a fila de times nao e' chamada — que e'
+     * exactamente o que "sem fim" quer dizer.
      *
      * **NAO HA' CONTADOR DE RODADAS AQUI, E E' DE PROPOSITO.** O modo de grupo guarda um, porque
      * la' o alvo nao esta' escrito em parte nenhuma do jogo. Aqui esta': o degrau de agora sai do
@@ -368,14 +399,17 @@ PPX.modulo(
     const tetoDeAgora = () => {
       const teto = Number(cfg.teto) || 0;
       const subida = Number(cfg.subida) || 0;
-      if (!teto || !subida) return teto || null;
+      if (!subida) return teto || null;
       const niveis = equipe()
         .map((p) => p.nivel)
         .filter((n) => n !== null);
-      if (!niveis.length) return teto;
+      if (!niveis.length) return teto || null;
       const menor = Math.min(...niveis);
-      if (menor >= teto) return teto;
-      return Math.min(teto, menor + subida);
+      // Sem teto nao ha' fim: a equipe sobe nivelada enquanto a escada estiver ligada.
+      const fim = teto ? Math.max(teto, ...niveis) : 0;
+      if (fim && menor >= fim) return fim;
+      const passo = menor + subida;
+      return fim ? Math.min(fim, passo) : passo;
     };
 
     /** Formado = chegou ao teto de agora. Sem teto ninguem se forma, e a escada e' a de sempre. */
@@ -531,6 +565,20 @@ PPX.modulo(
         posicao: i + 2,
         quantos: lista.length,
       };
+    };
+
+    /**
+     * A mesma lista, no futuro: e' o que a resposta guardada **vai** fazer.
+     *
+     * Sao duas listas porque sao dois tempos. "Recomecei a fila de times" dito antes de recomecar
+     * e' uma mentira pequena, e e' dita todas as noites: a resposta guardada anuncia-se antes de
+     * agir, e o painel que repete uma accao ja' feita usa a outra.
+     */
+    const O_QUE_FAREI = {
+      nada: 'fico aqui, caçando',
+      cidade: 'volto para a cidade e curo',
+      time: 'recomeço a fila de times',
+      parar: 'paro a escada',
     };
 
     /** O que cada resposta da pergunta do fim da fila quer dizer, para o painel repetir. */
@@ -915,8 +963,9 @@ PPX.modulo(
             );
           if (!vez.nome) {
             const fim = `A fila de times acabou — "${vez.montado}" era o último dos ${vez.quantos}.`;
-            if (!cfg.depois) return `${todos} ${fim} O que faço agora? Escolha aí embaixo.`;
-            return `${todos} ${fim} ${COMO_DEPOIS[cfg.depois] || ''}`.trim();
+            if (!cfg.depois && !cfg.sempre)
+              return `${todos} ${fim} O que faço agora? Escolha aí embaixo.`;
+            return `${todos} ${fim} ${COMO_DEPOIS[cfg.depois || cfg.sempre] || ''}`.trim();
           }
           const quem = `"${vez.nome}" (${vez.posicao}º de ${vez.quantos})`;
           return `${todos} Falta ir para a cidade e montar o time ${quem}.`;
@@ -1160,6 +1209,30 @@ PPX.modulo(
         gravar();
       }
       desenhar(false);
+
+      // **RESPOSTA GUARDADA NAO SE PERGUNTA OUTRA VEZ.** Quem roda a mesma volta todas as noites ja'
+      // sabe a resposta antes de ela ser feita, e marcar a caixinha e' dizer "e daqui em diante
+      // tambem". Age-se aqui, pelo mesmo caminho do clique — `responder` — para nao haver duas
+      // maneiras de fazer a mesma coisa, uma delas sem as recusas da outra.
+      if (!cfg.depois && cfg.sempre) {
+        // A recusa do laço vale igual, e aqui vale mais: a mao veria o time a ser remontado e
+        // pararia; a resposta guardada nao ve nada e refaria a volta para sempre. Ver o `tropeco`
+        // la' em cima, no caminho de quem ainda tem time seguinte.
+        const tropeco = cfg.sempre === 'time' ? degrauComTime() : null;
+        if (tropeco) {
+          aviso(
+            `A fila acabou, e eu ia recomeçá-la — mas a caçada "${tropeco.cacada}" do degrau de ` +
+              `Lv ${tropeco.nivel} monta o time "${tropeco.time}" ao chegar e apagaria o meu. ` +
+              `Tire o time dessa caçada nas Caçadas, ou desmarque "e daqui em diante".`,
+            true,
+          );
+          return 'tropeco';
+        }
+        aviso(`A fila de times acabou — ${O_QUE_FAREI[cfg.sempre] || cfg.sempre}.`);
+        void responder(cfg.sempre);
+        return 'guardado';
+      }
+
       // Uma pergunta que nao se ve nao e' uma pergunta: minimizada, o `.corpo` esta' escondido e a
       // listbox com ele — ficaria a dizer "escolha aí embaixo" sem haver embaixo. Abre-se uma vez,
       // e quem quiser volta a minimizar.
@@ -1912,11 +1985,12 @@ PPX.modulo(
         <button type="button" class="mais" data-mais>+ degrau</button>
         <div class="fim">
           <label class="caixa">formar em Lv <input type="number" min="1" data-teto placeholder="—"></label>
-          <label class="caixa" title="Vazio: cada um vai sozinho até o teto. Com um número, a equipe sobe junta de tantos em tantos níveis">
+          <label class="caixa" title="Vazio: cada um vai sozinho até o teto. Com um número, a equipe sobe junta de tantos em tantos níveis — e sozinho, sem teto, ela sobe junta sem fim">
             subindo <input type="number" min="1" data-subida placeholder="—"> níveis por vez
           </label>
           <p class="vazio" data-junta>
-            Todos sobem juntos: cada um vai até o degrau de agora e passa a vez, até o teto.
+            Todos sobem juntos: cada um vai até o degrau de agora e passa a vez. Sem "formar em Lv",
+            isso continua para sempre; com ele, até lá — e nunca abaixo do nível que a equipe já tem.
           </p>
           <select data-fim title="O que fazer quando a equipe inteira se formar">
             <option value="nada">formados: ficar onde estiver</option>
@@ -1937,6 +2011,10 @@ PPX.modulo(
             <option value="time">recomeço a fila de times</option>
             <option value="parar">paro a escada</option>
           </select>
+          <label class="sempre" data-sempre-linha
+                 title="Responder sempre assim, sem perguntar outra vez">
+            <input type="checkbox" data-sempre> e daqui em diante, sem perguntar
+          </label>
         </div>
         </div>
         <div class="fim" data-grupo>
@@ -2051,6 +2129,12 @@ PPX.modulo(
          se quiser, o outro esta' a' espera de resposta agora. */
       #lioncode-escada [data-depois] { border-color: #6b5a2a; }
       #lioncode-escada.pergunta [data-depois] { border-color: #c79a3a; background: #2a2314; }
+      /* A caixinha de guardar a resposta anda colada a pergunta: longe dela seria outra coisa. */
+      #lioncode-escada .sempre {
+        display: flex; align-items: center; gap: 6px;
+        margin: -1px 0 0 2px; color: #9aa6b8; font-size: 12px; cursor: pointer;
+      }
+      #lioncode-escada .sempre input { margin: 0; cursor: pointer; }
       #lioncode-escada.pergunta .estado { color: #e8c470; }
       #lioncode-escada .estado { margin: 0; color: #9aa6b8; min-height: 1.4em; font-size: 12px; }
       /* A do rodape leva a margem que o corpo lhe dava, e um risco a separa da parte que rola. */
@@ -2535,8 +2619,14 @@ PPX.modulo(
       const depois = campo('[data-depois]');
       const perguntando = filaAcabou();
       depois.style.display = perguntando ? '' : 'none';
-      depois.value = cfg.depois || '';
-      painel.classList.toggle('pergunta', perguntando && !cfg.depois);
+      // Com a resposta guardada, a listbox mostra-a: ela deixou de ser uma pergunta e passou a ser
+      // uma configuracao, e uma configuracao que nao mostra o proprio valor nao se pode conferir.
+      depois.value = cfg.depois || cfg.sempre || '';
+      painel.classList.toggle('pergunta', perguntando && !cfg.depois && !cfg.sempre);
+      // A caixinha aparece com a pergunta — **e tambem com a resposta guardada**, que e' a unica
+      // maneira de a desmarcar depois. Escondida, ela guardaria uma escolha sem lugar para desfazer.
+      campo('[data-sempre-linha]').style.display = perguntando || cfg.sempre ? 'flex' : 'none';
+      campo('[data-sempre]').checked = Boolean(cfg.sempre);
 
       const n = nivelLider();
       const emCurso = degrauPara(n);
@@ -2845,7 +2935,36 @@ PPX.modulo(
       }
     }
 
-    campo('[data-depois]').addEventListener('change', (e) => void responder(e.target.value));
+    campo('[data-depois]').addEventListener('change', (e) => {
+      // Com a caixinha marcada, trocar a resposta troca a guardada: senao ele mudaria de ideia na
+      // listbox e a volta seguinte faria a de ontem, sem nada na tela a dizer porque'.
+      if (cfg.sempre) {
+        cfg.sempre = e.target.value;
+        gravar();
+      }
+      void responder(e.target.value);
+    });
+
+    // A caixinha guarda a resposta que esta' escolhida — e **so'** se houver uma. Marcar sem ter
+    // respondido guardaria o vazio, que e' exactamente "pergunte outra vez": a caixinha ficaria
+    // marcada a prometer o contrario do que faz.
+    campo('[data-sempre]').addEventListener('change', (e) => {
+      if (!e.target.checked) {
+        cfg.sempre = '';
+        gravar();
+        desenhar(false);
+        return diz('Volto a perguntar quando a fila de times acabar.');
+      }
+      const escolha = cfg.depois || campo('[data-depois]').value;
+      if (!escolha) {
+        e.target.checked = false;
+        return diz('Escolha primeiro o que eu faço — depois marque para eu fazer sempre.', true);
+      }
+      cfg.sempre = escolha;
+      gravar();
+      desenhar(false);
+      diz(`Daqui em diante, quando a fila acabar: ${O_QUE_FAREI[escolha] || escolha}.`);
+    });
 
     campo('[data-mais-time]').addEventListener('click', () => {
       cfg.times.push('');
