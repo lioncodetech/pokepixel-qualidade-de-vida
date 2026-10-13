@@ -1390,15 +1390,22 @@ rotina de equipar, pela API da página, divergiria dela no primeiro mês.
 O nível de quem **não** está na equipe vem da API do jogo (`getCreatures`), pela ponte — 223 Pokémon
 na conta real, sem abrir janela nenhuma. Abrir janelas é a operação que mais falha no jogo.
 
-#### Pausar não é parar, e este modo é sempre o último da fila
+#### Pausar não é parar, e a caçada é sempre a última da fila
 
 **Parar** esquece o que ia fazer. **Pausar** guarda o lugar: a rodada, a fila e o degrau cumprido
 ficam, a caçada continua a correr, e ela é que não mexe em nada. São dois botões porque são duas
 coisas, e quem pausa a noite inteira não quer perder a rodada por clicar no errado.
 
-E o modo de grupo **cede a vez a qualquer outra ferramenta**: se alguém está com a vez — ou só à
-espera dela — ele para e diz por quem espera. Não entra na fila, porque entrar na fila é disputar: o
-Ginásio do dia ficaria atrás de uma troca de equipe de 30 segundos que ninguém tinha pressa de fazer.
+E a caçada **cede a vez a qualquer outra ferramenta, nos dois modos**: se alguém está com a vez — ou
+só à espera dela — ela para onde está, diz por quem espera e volta sozinha quando a fila esvazia.
+Não entra na fila, porque entrar na fila é disputar: o Ginásio do dia ficaria atrás de uma troca de
+equipe de 30 segundos que ninguém tinha pressa de fazer.
+
+Caçar é o que o jogo faz sozinho o dia inteiro; ginásio, arena, venda e compra são coisas que você
+mandou fazer agora, e qualquer uma delas vale mais do que um degrau que pode subir daqui a dois
+minutos. Até a 1.18.3 esta regra valia só no modo de grupo, e deu exactamente no que se esperava: o
+Ginásio do dia não chegava a entrar, porque quem bate a cada mudança do HUD bate muito mais vezes do
+que quem roda uma vez por dia. Uma prioridade que vale só num dos modos não é uma prioridade.
 
 Quem cede tem de ser acordado, e isso custou um defeito em cada ferramenta desta família: o gatilho
 normal é o HUD mudar, e quem está a ceder não mexe no HUD — a ferramenta à frente pode nem mexer. Por

@@ -39,8 +39,11 @@ test('nivel nao lido e null, e null nunca vira zero', () => {
   // Um HUD que ainda não carregou não é um líder de nível 1. Tratar os dois como a mesma coisa
   // faria a escada disparar o degrau mais baixo a cada recarga da página.
   assert.match(codigo, /return n \? Number\(n\[1\]\) : null;/);
+  // Cedo no `conferir`: antes de tudo o que se faz com o nivel do aluno. A janela cresceu de 900
+  // para 1100 em 13/10/2026, quando o portao de ceder a vez entrou ali acima — ele vem **antes**
+  // desta leitura de proposito, e o teste dele e' o "a cacada e a ultima da fila".
   const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
-  assert.match(bloco.slice(0, 900), /if \(!aluno \|\| aluno\.nivel === null\) return '';/);
+  assert.match(bloco.slice(0, 1100), /if \(!aluno \|\| aluno\.nivel === null\) return '';/);
 });
 
 test('a espera do jogo e espera, e nao falha', () => {
@@ -589,7 +592,7 @@ test('nao agir e uma decisao, e e dita', () => {
     /scolha os times de onde vêm os que rodam/,
     // E, com mais de uma pedra no rodízio, o impasse diz de qual delas se trata.
     /Escolha quem tem a pedra e os times que ela vai upar/,
-    /neste modo eu sou a última da fila/,
+    /a caçada é a última da fila/,
     /apagaria o grupo/,
     /o Pokémon fixo não está mais na coleção/,
     /Ainda não li a coleção/,
@@ -687,9 +690,14 @@ test('os dois modos de upar nunca correm juntos', () => {
   assert.match(codigo, /campo\('\[data-grupo\]'\)\.style\.display = noGrupo \? '' : 'none';/);
 });
 
-test('o modo de grupo e sempre o ultimo da fila, e quem cede e acordado', () => {
-  // Pedido assim: a caça de grupo roda a noite inteira, e qualquer outra coisa vale mais do que ela.
-  // Então ela não disputa a vez — se alguém está com ela OU à espera dela, este modo para.
+test('a cacada e sempre a ultima da fila, nos dois modos, e quem cede e acordado', () => {
+  // Medido pelo dono em 13/10/2026: com a escada de degraus a andar, o ginásio do dia não chegava a
+  // entrar. Só o modo de grupo cedia; o de degraus disputava a vez de igual para igual — e quem
+  // bate a cada mudança de HUD bate muito mais vezes do que quem roda uma vez por dia. Uma
+  // prioridade que vale só num dos modos não é uma prioridade.
+  //
+  // Caçar é o que o jogo faz sozinho o dia inteiro; ginásio, arena, venda e compra são coisas que o
+  // dono mandou fazer agora. Se alguém está com a vez OU à espera dela, a caçada para.
   const bloco = codigo.slice(codigo.indexOf('const cedendo = () =>'));
   const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
   assert.match(corpo, /dono\.id !== 'escada'/, 'cede a quem está com a vez');
@@ -700,10 +708,30 @@ test('o modo de grupo e sempre o ultimo da fila, e quem cede e acordado', () => 
   const acorda = codigo.slice(codigo.indexOf('PPX?.vez?.aoMudar?.('));
   assert.match(acorda.slice(0, 400), /if \(cedendo\(\)\) \{/);
   assert.match(acorda.slice(0, 400), /retomar\(\);/);
-  // E a batida do grupo cede antes de qualquer acção, não no meio de uma.
-  const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
-  const dentro = batida.slice(0, batida.indexOf('// ------'));
-  assert.ok(dentro.includes('const outra = cedendo();'), 'cede antes de agir');
+  // E acorda nos dois modos: o `cfg.modo === 'escada'` que saía daqui deixava a escada de degraus
+  // a disputar a vez, que é exactamente o defeito que o dono viu.
+  assert.ok(
+    !/if \(!cfg\.ligada \|\| cfg\.pausada \|\| cfg\.modo === 'escada'\) return;/.test(acorda),
+    'quem cede é a caçada, e não um dos modos dela',
+  );
+
+  // E a batida cede antes de qualquer acção, não no meio de uma — e antes de escolher o modo, que
+  // é o que faz a regra valer para os dois.
+  const batida = codigo.slice(codigo.indexOf('async function conferir(aviso'));
+  const corte = batida.indexOf("if (cfg.modo !== 'escada') return conferirGrupo(aviso);");
+  assert.ok(corte > 0);
+  assert.ok(
+    batida.slice(0, corte).includes('const outra = cedendo();'),
+    'cede antes de escolher o modo, e portanto nos dois',
+  );
+  assert.match(batida.slice(0, corte), /return 'cedendo';/);
+
+  // O mesmo no diagnóstico: um painel que cala a razão de estar parado é indistinguível de um
+  // painel quebrado, e esta é a razão mais fácil de confundir com "travou".
+  const diz = codigo.slice(codigo.indexOf('function diagnostico()'));
+  const ate = diz.indexOf("if (cfg.modo !== 'escada') return diagnosticoGrupo();");
+  assert.ok(ate > 0);
+  assert.match(diz.slice(0, ate), /a caçada é a última da fila/);
 });
 
 test('o grupo e uma composicao para agora, e nao uma fila de entradas e saidas', () => {

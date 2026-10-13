@@ -43,6 +43,13 @@
 // espera dela. A vez e' pedida so' para o clique no HUD, que e' a unica acao que esta ferramenta
 // faz no jogo com as proprias maos.
 //
+// E ELA E' A ULTIMA DA FILA, SEMPRE. Caçar e' o que o jogo faz sozinho o dia inteiro; ginasio,
+// arena, venda e compra sao coisas que o dono mandou fazer agora, e qualquer uma delas vale mais
+// do que um degrau que pode subir daqui a dois minutos. Entao, com alguem a segurar a vez **ou a'
+// espera dela**, a caçada para onde esta' e volta sozinha quando a fila esvaziar — ver `cedendo`.
+// Nao e' delicadeza: ela bate a cada mudança de HUD, e disputar a vez de igual para igual com quem
+// roda uma vez por dia e' ganhar sempre.
+//
 // O QUE ELA NAO FAZ, E PORQUE. No pacote do Poke Idle World cada degrau pode escolher um time. Aqui
 // nao: `PPX.cacadas.ir(nome)` monta sempre o time guardado **na propria caçada**, e nao aceita
 // outro. Duas formas de escolher o time para a mesma viagem seriam duas verdades a divergir no
@@ -683,13 +690,19 @@ PPX.modulo(
     };
 
     /**
-     * Quem esta' a' frente desta ferramenta na fila — **e neste modo ela e' sempre a ultima**.
+     * Quem esta' a' frente desta ferramenta na fila — **e ela e' sempre a ultima, nos dois modos**.
      *
-     * Pedido assim em 12/10/2026: a caça de grupo roda a noite inteira, e qualquer outra coisa que
-     * o dono mande fazer vale mais do que ela. Entao ela nao disputa a vez: se alguem esta' com ela
-     * **ou a' espera dela**, este modo para e volta quando a fila esvaziar. Esperar na fila seria
-     * igualmente correcto e muito pior — o ginasio pediria a vez e ficaria atras de uma troca de
-     * equipe de 30 segundos que ninguem tinha pressa de fazer.
+     * Pedido assim em 12/10/2026 para o modo de grupo, e alargado aos dois em 13/10/2026: a caçada
+     * roda o dia inteiro e qualquer outra coisa que o dono mande fazer vale mais do que ela. Entao
+     * ela nao disputa a vez: se alguem esta' com ela **ou a' espera dela**, a caçada para e volta
+     * quando a fila esvaziar. Esperar na fila seria igualmente correcto e muito pior — o ginasio
+     * pediria a vez e ficaria atras de uma troca de equipe de 30 segundos que ninguem tinha pressa
+     * de fazer.
+     *
+     * **MEDIDO PELO DONO EM 13/10/2026:** com a escada de degraus a andar, o ginasio do dia nao
+     * chegava a entrar. So' o modo de grupo cedia; o de degraus disputava a vez de igual para
+     * igual, e quem bate a cada mudança de HUD bate muito mais vezes do que quem roda uma vez por
+     * dia. Uma prioridade que vale so' num dos modos nao e' uma prioridade.
      *
      * Quem a acorda e' `PPX.vez.aoMudar`, la' em baixo: sem isso ela cederia e nunca voltaria.
      */
@@ -804,8 +817,6 @@ PPX.modulo(
     const diagnosticoGrupo = () => {
       const falta = faltaNoGrupo();
       if (falta) return falta;
-      const outra = cedendo();
-      if (outra) return `Esperando ${outra} terminar — neste modo eu sou a última da fila.`;
       const faltam = Math.ceil((esperaAte - Date.now()) / 1000);
       if (faltam > 0) return `Esperando ${faltam}s para tentar de novo.`;
       const alvo = alvoDoGrupo();
@@ -861,6 +872,9 @@ PPX.modulo(
         return cfg.modo === 'escada'
           ? 'Pausada. Clique em Retomar quando quiser.'
           : 'Pausada. A caçada continua; eu é que não mexo em nada.';
+      // Antes dos dois modos, como no `conferir`: ceder a vez cala tudo o resto.
+      const outra = cedendo();
+      if (outra) return `Esperando ${outra} terminar — a caçada é a última da fila.`;
       if (cfg.modo !== 'escada') return diagnosticoGrupo();
       // Antes do castigo e antes de tudo o que falta: dentro da expedição nao falta nada, e' so'
       // nao ser a vez dela. Ver `conferir`.
@@ -1422,14 +1436,6 @@ PPX.modulo(
         return 'sem fim';
       }
 
-      // **A ultima da fila.** Se alguem esta' com a vez ou a' espera dela, este modo para aqui —
-      // sem pedir nada, para nao se por a' frente de ninguem. Ver `cedendo`.
-      const outra = cedendo();
-      if (outra) {
-        aviso(`Esperando ${outra} terminar — neste modo eu sou a última da fila.`);
-        return 'cedendo';
-      }
-
       if (Date.now() < esperaAte) {
         aviso(diagnostico());
         return 'esperando';
@@ -1620,6 +1626,16 @@ PPX.modulo(
       // Aba oculta: o jogo nao desenha, as janelas dele nao abrem e a viagem nao tem por onde
       // passar. O nivel tambem nao sobe, entao nao ha' o que perder em esperar a aba voltar.
       if (document.visibilityState !== 'visible') return '';
+
+      // **A ULTIMA DA FILA, NOS DOIS MODOS.** Se alguem esta' com a vez ou a' espera dela, a caçada
+      // para aqui — sem pedir nada, para nao se por a' frente de ninguem. Vem antes dos dois
+      // caminhos de proposito: enquanto outra ferramenta corre, nao ha' decisao desta que valha a
+      // pena tomar, e tomar uma seria disputar o jogo com ela. Ver `cedendo`.
+      const outra = cedendo();
+      if (outra) {
+        aviso(`Esperando ${outra} terminar — a caçada é a última da fila.`);
+        return 'cedendo';
+      }
 
       // Os dois modos mexem na mesma equipe e na mesma caçada, entao daqui em diante sao caminhos
       // separados — e so' um deles corre.
@@ -2928,11 +2944,12 @@ PPX.modulo(
       }
     });
 
-    // **O MODO DE GRUPO CEDE A VEZ A QUALQUER OUTRA FERRAMENTA, E QUEM CEDE TEM DE SER ACORDADO.**
+    // **A CAÇADA CEDE A VEZ A QUALQUER OUTRA FERRAMENTA, E QUEM CEDE TEM DE SER ACORDADO.**
     // O gatilho normal e' o HUD mudar — mas quem esta' a ceder nao mexe no HUD, e a ferramenta que
     // esta' a' frente pode nem mexer. Sem isto, ela cederia a vez e ficava a' espera para sempre.
+    // Vale para os dois modos desde 13/10/2026, pelo mesmo motivo que o `cedendo` vale.
     globalThis.PPX?.vez?.aoMudar?.(() => {
-      if (!cfg.ligada || cfg.pausada || cfg.modo === 'escada') return;
+      if (!cfg.ligada || cfg.pausada) return;
       if (cedendo()) {
         diz(diagnostico());
         return;
