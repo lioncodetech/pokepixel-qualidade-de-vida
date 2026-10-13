@@ -239,6 +239,11 @@ PPX.modulo(
         document.querySelector('.pokeidle-top-toolbar__btn[data-menu-id="events"]')?.click();
     };
 
+    const abaAtacar = () =>
+      janela()?.querySelector('.pvp-defense-nav [data-defense-view="opponents"]') || null;
+
+    const naAbaAtacar = () => Boolean(abaAtacar()?.classList.contains('is-active'));
+
     /**
      * Poe a janela na aba **Atacar**, que e' a unica onde ha' rivais.
      *
@@ -251,14 +256,19 @@ PPX.modulo(
      * A aba escolhe-se pelo endereço dela (`data-defense-view`) e nao pelo texto do botao: "Atacar"
      * e' tambem o que diz o botao que gasta a tentativa na tela de preparação.
      *
-     * Noutras telas — preparação, batalha — nao ha' barra de abas, e entao nao ha' nada a fazer:
-     * devolve-se se os rivais estao a' vista, que e' a pergunta que o chamador faz.
+     * **A pergunta e' a aba, e nao a lista.** Ate' a 1.18.2 isto esperava oito segundos por um
+     * cartao de rival e devolvia `false` quando nenhum aparecia — e o chamador anunciava "Não
+     * consegui abrir a janela da Arena de Defesa" com a janela aberta na frente do dono. Lista
+     * vazia nao e' janela fechada: e' uma rodada sem rival a' vista, e quem sabe dizer isso e' o
+     * `proximoAlvo`, que le' a arena pela API e ainda tem as atualizações de graça na mao.
      */
     const irParaAtacar = async () => {
-      const aba = janela()?.querySelector('.pvp-defense-nav [data-defense-view="opponents"]');
-      if (!aba) return naLista();
+      const aba = abaAtacar();
+      // Sem barra de abas nao ha' aba para escolher: a janela esta' aberta noutra tela sua —
+      // preparação, batalha. Ela abriu, que e' a pergunta; quem vier a seguir dira' o que falta.
+      if (!aba) return Boolean(janela());
       if (!aba.classList.contains('is-active')) aba.click();
-      return Boolean(await ate(naLista, ESPERA_JANELA));
+      return Boolean(await ate(naAbaAtacar, ESPERA_JANELA));
     };
 
     /**

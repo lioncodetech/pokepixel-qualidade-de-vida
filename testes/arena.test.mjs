@@ -277,10 +277,12 @@ test('a janela tem quatro abas, e so uma delas tem rivais', () => {
   const corpo = ir.slice(0, ir.indexOf('\n    };'));
   // A aba escolhe-se pelo endereço, e não pelo texto: "Atacar" é também o botão que gasta a
   // tentativa na tela de preparação.
-  assert.match(corpo, /\[data-defense-view="opponents"\]/);
-  assert.ok(!/textContent/.test(corpo), 'a aba não se escolhe pelo texto do botão');
-  // Sem barra de abas (preparação, batalha) não há o que trocar: responde-se o que o chamador quer.
-  assert.match(corpo, /if \(!aba\) return naLista\(\);/);
+  const achaAba = codigo.slice(codigo.indexOf('const abaAtacar = ()'));
+  assert.match(achaAba.slice(0, 200), /\[data-defense-view="opponents"\]/);
+  assert.ok(!/textContent/.test(achaAba.slice(0, 200)), 'a aba não se escolhe pelo texto do botão');
+  // Sem barra de abas (preparação, batalha) não há o que trocar: a janela está aberta, e é isso
+  // que o chamador pergunta.
+  assert.match(corpo, /if \(!aba\) return Boolean\(janela\(\)\);/);
   assert.match(corpo, /if \(!aba\.classList\.contains\('is-active'\)\) aba\.click\(\);/);
 
   // Aberta noutra aba é aberta: um segundo clique no menu de cima fecharia a janela que já estava lá.
@@ -297,4 +299,24 @@ test('a janela tem quatro abas, e so uma delas tem rivais', () => {
     corpoAtacar.indexOf('.pvp-result__button') < corpoAtacar.indexOf('await irParaAtacar()'),
     'primeiro fecha-se o resultado, depois volta-se à aba',
   );
+});
+
+test('lista vazia nao e janela fechada', () => {
+  // Medido pelo dono em 13/10/2026: o painel disse "Não consegui abrir a janela da Arena de
+  // Defesa" com a janela aberta na frente dele. A culpa era desta função: ela esperava oito
+  // segundos por um `.pvp-defense-opponent` e devolvia `false` quando nenhum aparecia — e quem a
+  // chamava só sabia dizer uma coisa quando ela dizia `false`.
+  const ir = codigo.slice(codigo.indexOf('const irParaAtacar = async ()'));
+  const corpo = ir.slice(0, ir.indexOf('\n    };'));
+  assert.ok(!/naLista/.test(corpo), 'a espera é pela aba, não pelos rivais');
+  assert.match(corpo, /await ate\(naAbaAtacar, ESPERA_JANELA\)/);
+  assert.match(
+    codigo,
+    /const naAbaAtacar = \(\) => Boolean\(abaAtacar\(\)\?\.classList\.contains\('is-active'\)\);/,
+  );
+
+  // Quem sabe dizer "não há rival" é o `proximoAlvo`, que lê a arena pela API e ainda tem as
+  // atualizações de graça na mão. E quem sabe dizer "o cartão sumiu" é o `atacar`.
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  assert.match(atacar.slice(0, 300), /sumiu da lista/);
 });

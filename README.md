@@ -1858,6 +1858,19 @@ disso é alcançável daqui:
 
 Acabou o de graça, ela para e diz por quê.
 
+### A janela tem quatro abas, e lista vazia não é janela fechada
+
+A janela da arena tem quatro abas, e o jogo deixa-a no "Histórico" assim que uma batalha acaba. Fora
+da aba "Atacar" não existe um único cartão de rival no DOM — então a ferramenta volta para lá antes
+de cada ataque e logo depois de cada resultado, escolhendo a aba pelo endereço dela e não pelo texto
+do botão ("Atacar" é também o botão que gasta a tentativa na tela de preparação).
+
+O que ela confere depois de trocar de aba é **a aba**, e não a lista. Até a 1.18.2 ela esperava oito
+segundos por um cartão de rival e, não vindo nenhum, o painel anunciava "Não consegui abrir a janela
+da Arena de Defesa" — com a janela aberta na sua frente. Lista vazia não é janela fechada: é uma
+rodada sem rival à vista, e quem sabe dizer isso é quem lê a arena pela API, ainda com as
+atualizações de graça na mão.
+
 ### Quem te vence fica de fora até a temporada virar
 
 Você pediu para pular a defesa que te ganhou e não entrar mais nela. Guarda-se o `trainer_id` — o

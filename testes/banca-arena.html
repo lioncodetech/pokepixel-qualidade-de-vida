@@ -555,6 +555,14 @@
     anotar('jogo: acabaram as atualizações grátis — a próxima custa 25 💎');
     if (janela) desenharLista();
   });
+  comando('a lista de rivais vem vazia', () => {
+    // A armadilha da 1.18.2: lista vazia nao e' janela fechada. Antes disto a ferramenta esperava
+    // oito segundos por um cartao e anunciava "Nao consegui abrir a janela da Arena de Defesa"
+    // com a janela aberta na frente do dono.
+    estado.oponentes = [];
+    anotar('jogo: a lista de rivais ficou vazia');
+    if (janela) desenharLista();
+  });
   comando('virar a temporada', () => {
     estado.temporada += 1;
     anotar(`jogo: começou a Temporada ${estado.temporada}`);
