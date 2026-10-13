@@ -555,6 +555,16 @@
     anotar('jogo: acabaram as atualizações grátis — a próxima custa 25 💎');
     if (janela) desenharLista();
   });
+  comando('deixar a janela na tela de preparação', () => {
+    // O defeito de 13/10/2026: a janela ficou parada na preparação de uma tentativa anterior. La'
+    // nao ha' barra de abas, entao nao havia aba para clicar — e o painel anunciava "o botao de
+    // atacar <rival> sumiu da lista", com o rival ali na lista, atras daquela tela.
+    const alvo = estado.oponentes.find((o) => !o.used);
+    if (!alvo) return anotar('jogo: nao ha rival livre para preparar');
+    if (!janela) abrirJanela();
+    prepararAtaque(alvo);
+  });
+
   comando('a lista de rivais vem vazia', () => {
     // A armadilha da 1.18.2: lista vazia nao e' janela fechada. Antes disto a ferramenta esperava
     // oito segundos por um cartao e anunciava "Nao consegui abrir a janela da Arena de Defesa"

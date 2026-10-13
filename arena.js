@@ -245,6 +245,20 @@ PPX.modulo(
     const naAbaAtacar = () => Boolean(abaAtacar()?.classList.contains('is-active'));
 
     /**
+     * O "Voltar" da tela de preparação, que devolve a janela a' lista de rivais.
+     *
+     * Ele nao gasta tentativa nenhuma — quem gasta e' o `.defense-primary` ao lado dele. Sair por
+     * aqui e' a unica maneira honesta de desfazer uma preparação que ficou aberta.
+     */
+    const voltarDaPreparacao = () => {
+      const voltar = [...(janela()?.querySelectorAll('button') || [])].find(
+        (b) => b.textContent.trim() === 'Voltar',
+      );
+      voltar?.click();
+      return Boolean(voltar);
+    };
+
+    /**
      * Poe a janela na aba **Atacar**, que e' a unica onde ha' rivais.
      *
      * **ISTO E' A CORRECCAO DE UM DEFEITO, medido no jogo em 13/10/2026.** A janela tem quatro
@@ -263,9 +277,15 @@ PPX.modulo(
      * `proximoAlvo`, que le' a arena pela API e ainda tem as atualizações de graça na mao.
      */
     const irParaAtacar = async () => {
+      // **UMA PREPARAÇÃO QUE FICOU ABERTA NAO E' A LISTA, E SAI-SE DELA PELO "VOLTAR".** Medido no
+      // jogo do dono em 13/10/2026: o painel dizia "o botão de atacar n4th sumiu da lista" — e nao
+      // tinha sumido nada, a janela e' que estava parada na tela de preparação de uma tentativa
+      // anterior. La' nao ha' barra de abas, entao nao havia o que clicar, e a lista nunca voltava.
+      if (!abaAtacar() && naPreparacao() && voltarDaPreparacao())
+        await ate(abaAtacar, ESPERA_JANELA);
       const aba = abaAtacar();
-      // Sem barra de abas nao ha' aba para escolher: a janela esta' aberta noutra tela sua —
-      // preparação, batalha. Ela abriu, que e' a pergunta; quem vier a seguir dira' o que falta.
+      // Ainda sem barra de abas: a janela esta' noutra tela sua — uma batalha a correr, por
+      // exemplo. Ela abriu, que e' a pergunta; quem vier a seguir dira' o que falta.
       if (!aba) return Boolean(janela());
       if (!aba.classList.contains('is-active')) aba.click();
       return Boolean(await ate(naAbaAtacar, ESPERA_JANELA));
@@ -385,7 +405,12 @@ PPX.modulo(
      * demora a desenhar os seis Pokemon, e clicar no "Atacar" antes disso clica no nada.
      */
     const atacar = async (alvo, pontosAntes, aviso) => {
-      const botao = botaoDe(alvo.id);
+      // **O CARTAO ESPERA-SE.** Ate' a 1.18.3 quem esperava era o `abrirJanela`, que so' dava a
+      // janela por aberta quando havia ao menos um rival na tela; tirada essa espera (lista vazia
+      // nao e' janela fechada), ficou esta linha a exigir o cartao no primeiro instante — e entre
+      // trocar de aba e a lista pintar ha' um intervalo. Medido no jogo do dono em 13/10/2026:
+      // "o botão de atacar n4th sumiu da lista", com o rival a aparecer logo a seguir.
+      const botao = await ate(() => botaoDe(alvo.id), ESPERA_JANELA);
       if (!botao) return { erro: `o botão de atacar ${alvo.nome} sumiu da lista` };
       aviso(`Atacando ${alvo.nome} (vitória +${alvo.ganha} · derrota −${alvo.perde})…`);
       botao.click();
@@ -396,10 +421,7 @@ PPX.modulo(
       if (!time.ok) {
         // Sair e' melhor do que atacar com a equipe errada: a tentativa gasta-se na mesma, e o
         // dono pediu um time em especial justamente por isto.
-        const voltar = [...(janela()?.querySelectorAll('button') || [])].find(
-          (b) => b.textContent.trim() === 'Voltar',
-        );
-        voltar?.click();
+        voltarDaPreparacao();
         return { erro: time.diz };
       }
 

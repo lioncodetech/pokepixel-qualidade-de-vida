@@ -1926,6 +1926,17 @@ da aba "Atacar" não existe um único cartão de rival no DOM — então a ferra
 de cada ataque e logo depois de cada resultado, escolhendo a aba pelo endereço dela e não pelo texto
 do botão ("Atacar" é também o botão que gasta a tentativa na tela de preparação).
 
+E **uma preparação que ficou aberta não é a lista**. Medido no jogo do dono em 13/10/2026: o painel
+dizia *"n4th: o botão de atacar n4th sumiu da lista"* — e não tinha sumido nada. A janela estava
+parada na tela de preparação de uma tentativa anterior; lá não existe barra de abas, então não havia
+aba para clicar e a lista nunca voltava. Agora ela sai de lá pelo "Voltar" (que não gasta tentativa
+nenhuma — quem gasta é o botão ao lado) e só então procura a aba.
+
+E o cartão do rival **espera-se**, em vez de ser exigido no primeiro instante: entre trocar de aba e
+a lista pintar há um intervalo, e ele não é zero. Até a 1.18.3 quem esperava era a abertura da
+janela, que só a dava por aberta quando houvesse ao menos um rival na tela; tirada essa espera — por
+boas razões, lista vazia não é janela fechada — faltava pôr a paciência onde ela faz falta.
+
 O que ela confere depois de trocar de aba é **a aba**, e não a lista. Até a 1.18.2 ela esperava oito
 segundos por um cartão de rival e, não vindo nenhum, o painel anunciava "Não consegui abrir a janela
 da Arena de Defesa" — com a janela aberta na sua frente. Lista vazia não é janela fechada: é uma

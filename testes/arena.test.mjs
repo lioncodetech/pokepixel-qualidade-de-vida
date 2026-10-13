@@ -156,7 +156,7 @@ test('o ataque salvo e carregado antes do Atacar, e sem ele nao se ataca a esmo'
   // Não conseguir carregar o time pedido é sair pela porta, e não atacar com outra equipe: a
   // tentativa gasta-se na mesma, e foi por isso que ele pediu um time em especial.
   assert.match(corpo, /if \(!time\.ok\) \{/);
-  assert.match(corpo, /voltar\?\.click\(\);\n\s+return \{ erro: time\.diz \};/);
+  assert.match(corpo, /voltarDaPreparacao\(\);\n\s+return \{ erro: time\.diz \};/);
   // Um slot vazio tem o "Carregar" desativado, e isso não é um slot para carregar.
   assert.match(codigo, /b\.textContent\.trim\(\) === 'Carregar' && !b\.disabled/);
 });
@@ -319,4 +319,34 @@ test('lista vazia nao e janela fechada', () => {
   // atualizações de graça na mão. E quem sabe dizer "o cartão sumiu" é o `atacar`.
   const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
   assert.match(atacar.slice(0, 300), /sumiu da lista/);
+});
+
+test('uma preparacao que ficou aberta nao e a lista, e sai-se dela pelo Voltar', () => {
+  // **MEDIDO NO JOGO DO DONO EM 13/10/2026:** o painel dizia "n4th: o botão de atacar n4th sumiu da
+  // lista" — e não tinha sumido nada. A janela estava parada na tela de preparação de uma tentativa
+  // anterior: lá não há barra de abas, então não havia aba para clicar, e a lista nunca voltava.
+  //
+  // São dois buracos que a 1.18.3 abriu ao trocar a espera da lista pela espera da aba, e os dois
+  // se fecham aqui: sair da preparação, e depois esperar o cartão em vez de o exigir no primeiro
+  // instante. Entre trocar de aba e a lista pintar há um intervalo, e ele não é zero.
+  const ir = codigo.slice(codigo.indexOf('const irParaAtacar = async ()'));
+  const corpo = ir.slice(0, ir.indexOf('\n    };'));
+  assert.match(corpo, /if \(!abaAtacar\(\) && naPreparacao\(\) && voltarDaPreparacao\(\)\)/);
+  assert.ok(
+    corpo.indexOf('voltarDaPreparacao()') < corpo.indexOf('const aba = abaAtacar();'),
+    'volta-se da preparacao antes de procurar a aba',
+  );
+
+  // O "Voltar" não gasta tentativa — quem gasta é o `.defense-primary` ao lado dele.
+  const sair = codigo.slice(codigo.indexOf('const voltarDaPreparacao = ()'));
+  const dentro = sair.slice(0, sair.indexOf('\n    };'));
+  assert.match(dentro, /b\.textContent\.trim\(\) === 'Voltar'/);
+  assert.ok(!/defense-primary/.test(dentro), 'sair nao e atacar');
+
+  // E o cartão espera-se, com o mesmo prazo das outras esperas da janela.
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  assert.match(
+    atacar.slice(0, 200),
+    /const botao = await ate\(\(\) => botaoDe\(alvo\.id\), ESPERA_JANELA\);/,
+  );
 });
