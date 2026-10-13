@@ -2041,6 +2041,7 @@ PPX.modulo(
           </label>
         </div>
         <datalist data-cacadas id="lioncode-escada-cacadas"></datalist>
+        <div data-config></div>
       </div>
       <!-- **Fora do corpo, como os botoes — e pelo mesmo motivo, com uma razao a mais.** O corpo
            rola, e esta frase e' a unica coisa que explica uma escada que parece parada. No dia em
@@ -2062,6 +2063,9 @@ PPX.modulo(
         border-bottom: 1px solid #2a3244; cursor: move;
       }
       #lioncode-escada header strong { flex: 1; font-size: 13px; }
+      /* Exportar e importar moram no fim do corpo: sao a ultima coisa que se faz, e so' quem
+         abriu o painel as procura. */
+      #lioncode-escada [data-config] { margin-top: 8px; }
       #lioncode-escada header button {
         background: none; border: 0; color: #8b97a8; font-size: 16px; cursor: pointer; padding: 0 2px;
       }
@@ -2987,6 +2991,112 @@ PPX.modulo(
       gravar();
       desenhar();
     });
+
+    /**
+     * Levar esta escada para outra janela.
+     *
+     * O MESMO JOGO CORRE NUMA JANELA POR CONTA, e montar nove degraus, os turnos da pedra e a fila
+     * de times a' mao em cada uma e' trabalho que ninguem quer repetir — e em que se erra. Quem
+     * empacota e' o `PPX.config`; aqui so' se diz o que e' escolha e o que e' estado.
+     *
+     * O QUE NAO VAI, E PORQUE.
+     *   - `ligada` e `pausada`: importar uma escada ligada poria a outra janela a andar sem
+     *     ninguem ter mandado. Quem liga e' quem esta' na janela.
+     *   - `aplicado`: e' "ja' te levei ao degrau N" **nesta** conta. Levado para outra, ela acharia
+     *     que ja' tinha viajado e ficaria parada no primeiro degrau que importasse.
+     *   - `grupo.rodada`: as rodadas de passo ja' fechadas sao do relogio desta conta.
+     *   - `depois`: a resposta de **hoje** a' pergunta do fim da fila. A permanente (`sempre`) vai.
+     *   - `turnos[].fixo`: **a pedra e' um bicho desta conta**, guardada pelo `data-creature-id`.
+     *     Noutra conta esse id nao existe — ou, pior, existe e e' outro bicho. Os turnos viajam
+     *     com os times e sem a pedra, e o painel pede-a a quem importou.
+     */
+    const limparTexto = (v, teto) =>
+      String(v ?? '')
+        .trim()
+        .slice(0, teto);
+    const limparNivel = (v) => {
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) && n > 0 ? Math.min(n, 9999) : null;
+    };
+
+    const botoesConfig = globalThis.PPX?.config?.montarBotoes({
+      id: 'escada',
+      nome: 'Escada de caçadas',
+      coletar: () => ({
+        degraus: cfg.degraus.map((d) => ({ nivel: d.nivel, cacada: d.cacada })),
+        trocar: cfg.trocar !== false,
+        teto: cfg.teto,
+        subida: cfg.subida,
+        modo: cfg.modo,
+        fim: cfg.fim,
+        destino: cfg.destino,
+        times: cfg.times,
+        sempre: cfg.sempre,
+        grupo: {
+          cacadas: cfg.grupo.cacadas,
+          turnos: cfg.grupo.turnos.map((t) => ({ times: t.times })),
+          alvo: cfg.grupo.alvo,
+          minimo: cfg.grupo.minimo,
+          passo: cfg.grupo.passo,
+        },
+      }),
+      aplicar: (dados) => {
+        // Importar com ela a correr trocaria os degraus debaixo de uma viagem a meio.
+        if (cfg.ligada) throw new Error('pare a escada antes de importar');
+        const lista = (v) => (Array.isArray(v) ? v : []);
+        const grupo = dados?.grupo && typeof dados.grupo === 'object' ? dados.grupo : {};
+        cfg.degraus = lista(dados?.degraus)
+          .slice(0, 100)
+          .map((d) => ({ nivel: limparNivel(d?.nivel), cacada: limparTexto(d?.cacada, 80) }))
+          .filter((d) => d.nivel !== null);
+        ordenar();
+        cfg.trocar = dados?.trocar !== false;
+        cfg.teto = limparNivel(dados?.teto);
+        cfg.subida = limparNivel(dados?.subida);
+        cfg.modo = ['escada', 'grupo', 'passo'].includes(dados?.modo) ? dados.modo : 'escada';
+        cfg.fim = ['nada', 'cacada', 'time', 'cidade'].includes(dados?.fim) ? dados.fim : 'nada';
+        cfg.destino = limparTexto(dados?.destino, 80);
+        cfg.times = lista(dados?.times)
+          .slice(0, 50)
+          .map((t) => limparTexto(t, 60));
+        cfg.sempre = ['nada', 'cidade', 'time', 'parar'].includes(dados?.sempre)
+          ? dados.sempre
+          : '';
+        cfg.grupo.cacadas = lista(grupo.cacadas)
+          .slice(0, 50)
+          .map((c) => limparTexto(c, 80));
+        cfg.grupo.turnos = lista(grupo.turnos)
+          .slice(0, 20)
+          .map((t) => ({
+            fixo: '',
+            times: lista(t?.times)
+              .slice(0, 50)
+              .map((n) => limparTexto(n, 60)),
+          }));
+        cfg.grupo.alvo = limparNivel(grupo.alvo);
+        cfg.grupo.minimo = limparNivel(grupo.minimo);
+        cfg.grupo.passo = limparNivel(grupo.passo);
+        // Estado desta janela, e nao configuracao: a escada importada comeca parada e sem
+        // degrau aplicado, que e' o unico comeco honesto numa conta que nao e' a de origem.
+        cfg.ligada = false;
+        cfg.pausada = false;
+        cfg.aplicado = null;
+        cfg.depois = '';
+        cfg.formados = false;
+        cfg.grupo.rodada = 0;
+        gravar();
+        desenhar(false);
+        // Dizer o que **nao** veio e' parte de importar: uma pedra em falta e' calada no painel
+        // de quem nao sabe que ela nao viaja.
+        const pedras = cfg.grupo.turnos.length;
+        if (!pedras) return 'Escada importada.';
+        return pedras === 1
+          ? 'Escada importada. A pedra veio sem o Pokémon: escolha quem a tem nesta conta.'
+          : `Escada importada. As ${pedras} pedras vieram sem o Pokémon: escolha quem as tem aqui.`;
+      },
+      avisar: diz,
+    });
+    if (botoesConfig) campo('[data-config]').append(botoesConfig.el);
 
     // ------------------------------------------------------------- mostrar e esconder
 

@@ -1776,7 +1776,8 @@ meio da recarga.
 
 ## Levar a configuração para outra conta
 
-A venda, a compra, a Arena e as **Caçadas** têm **Exportar** e **Importar** no rodapé. O mesmo jogo corre em várias
+A venda, a compra, a Arena, as **Caçadas** e a **Escada** têm **Exportar** e **Importar** no
+rodapé. O mesmo jogo corre em várias
 janelas do LionMultInstance, uma por conta, e cada janela tem o seu próprio armazenamento: deixar a
 venda do jeito certo numa conta e repetir a mão em todas as outras — raridades, teto, lote, horários,
 dias — é trabalho que ninguém quer fazer duas vezes, e é trabalho em que se erra. Exporta de uma,
@@ -1798,6 +1799,27 @@ mostrar números que não são dela. A próxima atualização da mochila os refa
 E fica o carimbo da última rodada. Ele é estado do relógio, não configuração: importá-lo faria a
 janela de hoje passar por já usada, e a rodada de hoje simplesmente não aconteceria — sem erro
 nenhum na tela.
+
+### A escada, e as duas coisas dela que não viajam
+
+Da escada viajam os degraus, o "formar em Lv", a subida de N em N, o modo, o que fazer com a
+equipe toda formada (com o destino ou a fila de times), a resposta guardada do fim da fila e, no
+modo de grupo, as caçadas em ordem, os turnos e os níveis.
+
+Ela chega **parada** na janela nova. Importar uma escada ligada poria a outra conta a andar sem
+ninguém ter mandado, e o "degrau já aplicado" faria a janela nova achar que já tinha viajado —
+ficaria parada no primeiro degrau, calada e com razão.
+
+**A pedra da XP não viaja.** Quem tem a pedra é guardado pelo `data-creature-id` de um Pokémon
+*daquela* conta: noutra janela esse id não existe — ou, pior, existe e é outro bicho. Os turnos
+chegam com os times e sem a pedra, e o painel diz isso ao importar, em vez de apontar calado para
+o Pokémon errado.
+
+**Os times guardados também não viajam, e não é esquecimento:** um time guardado é uma lista de
+ids de Pokémon da conta onde foi guardado, e levá-la para outra conta seria levar bichos que não
+existem lá. O que a escada leva são os **nomes** dos times na fila — guarde times com os mesmos
+nomes na janela nova e a fila volta a fazer sentido. A escada já recusa um nome que não exista
+nesta conta, e diz qual é.
 
 ### Nas Caçadas, o que viaja são os atalhos
 

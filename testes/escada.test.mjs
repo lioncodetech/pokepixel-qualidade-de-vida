@@ -1330,3 +1330,57 @@ test('a resposta do fim da fila pode ficar guardada, e entao nao se pergunta mai
   assert.match(codigo, /const O_QUE_FAREI = \{/);
   assert.match(codigo, /Daqui em diante, quando a fila acabar:/);
 });
+
+test('a escada viaja para outra janela, e o estado dela nao', () => {
+  // Montar nove degraus, os turnos da pedra e a fila de times à mão em cada janela é trabalho
+  // repetido — e é onde se erra. O que viaja é o que a pessoa escolheu.
+  const bloco = codigo.slice(codigo.indexOf("id: 'escada',"));
+  const coletar = bloco.slice(bloco.indexOf('coletar:'), bloco.indexOf('aplicar:'));
+  for (const campo of ['degraus', 'teto', 'subida', 'modo', 'fim', 'destino', 'times', 'sempre'])
+    assert.match(coletar, new RegExp(`${campo}:`), `${campo} viaja`);
+  // E o que é estado desta janela fica: uma escada importada ligada poria a outra conta a andar
+  // sozinha, e um degrau "já aplicado" faria a nova janela achar que já tinha viajado.
+  for (const estado of ['ligada:', 'pausada:', 'aplicado:', 'rodada:', 'depois:'])
+    assert.ok(!coletar.includes(estado), `${estado} não viaja`);
+  const aplicar = bloco.slice(bloco.indexOf('aplicar:'), bloco.indexOf('avisar: diz'));
+  // Os degraus chegam na ordem em que estavam no arquivo, e a escada lê-os por nível: sem
+  // ordenar, o primeiro degrau da lista podia ser o mais alto.
+  assert.match(aplicar, /ordenar\(\);/);
+  assert.match(aplicar, /cfg\.ligada = false;/);
+  assert.match(aplicar, /cfg\.pausada = false;/);
+  assert.match(aplicar, /cfg\.aplicado = null;/);
+  assert.match(aplicar, /cfg\.grupo\.rodada = 0;/);
+  // A resposta de **hoje** ao fim da fila também fica: a permanente (`sempre`) é que viaja.
+  assert.match(aplicar, /cfg\.depois = '';/);
+  // Importar no meio de uma viagem trocaria os degraus debaixo dela.
+  assert.match(aplicar, /if \(cfg\.ligada\) throw new Error\('pare a escada antes de importar'\)/);
+});
+
+test('a pedra nao viaja: ela e um bicho desta conta', () => {
+  // `turno.fixo` é um `data-creature-id` — noutra conta esse id não existe, ou existe e é outro
+  // bicho. Levá-lo seria apontar para o Pokémon errado sem dizer nada.
+  const bloco = codigo.slice(codigo.indexOf("id: 'escada',"));
+  const coletar = bloco.slice(bloco.indexOf('coletar:'), bloco.indexOf('aplicar:'));
+  assert.match(coletar, /turnos: cfg\.grupo\.turnos\.map\(\(t\) => \(\{ times: t\.times \}\)\)/);
+  assert.ok(!/fixo/.test(coletar), 'a pedra não entra no pacote');
+  const aplicar = bloco.slice(bloco.indexOf('aplicar:'), bloco.indexOf('avisar: diz'));
+  assert.match(aplicar, /fixo: '',/, 'a pedra chega vazia, e não com o id de outra conta');
+  // E diz-se: uma pedra em falta é calada no painel de quem não sabe que ela não viaja.
+  assert.match(aplicar, /vieram sem o Pokémon/);
+});
+
+test('o exportar e importar da escada esta no painel, e e o do config.js', () => {
+  const html = codigo.slice(codigo.indexOf('painel.innerHTML = `'));
+  const marcacao = html.slice(0, html.indexOf('`;'));
+  assert.match(marcacao, /<div data-config><\/div>/);
+  // Dentro do corpo: é o que o minimizar esconde, e exportar não é comando do dia a dia.
+  assert.ok(
+    marcacao.indexOf('<div class="corpo">') < marcacao.indexOf('data-config'),
+    'os botões de arquivo ficam dentro do corpo',
+  );
+  assert.match(codigo, /globalThis\.PPX\?\.config\?\.montarBotoes\(\{/);
+  assert.match(
+    codigo,
+    /if \(botoesConfig\) campo\('\[data-config\]'\)\.append\(botoesConfig\.el\);/,
+  );
+});

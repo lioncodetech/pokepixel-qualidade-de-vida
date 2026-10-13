@@ -101,7 +101,9 @@
     border: 1px solid #33405a;
     border-radius: 6px;
     padding: 5px 9px;
-    font: 12px system-ui, sans-serif;
+    font:
+      12px system-ui,
+      sans-serif;
     cursor: pointer;
   }
 </style>
@@ -117,8 +119,8 @@
   </p>
   <p>
     <code>a caçada mata o fraco</code> é a armadilha que importa: com ela ligada, um aluno posto à
-    frente numa caçada acima do nível dele morre em 2 s. Com a ordem certa — viajar primeiro,
-    trocar depois — ele não chega a ser posto à frente no lugar errado.
+    frente numa caçada acima do nível dele morre em 2 s. Com a ordem certa — viajar primeiro, trocar
+    depois — ele não chega a ser posto à frente no lugar errado.
   </p>
   <p>
     Há três times guardados de mentira. Em <code>formados: ir à cidade e trocar de time</code> eles
@@ -401,7 +403,12 @@
         for (const quem of [...equipe])
           if (!quero.includes(quem.id)) {
             equipe.splice(equipe.indexOf(quem), 1);
-            MOCHILA.push({ id: quem.id, nome: quem.nome, especie: quem.especie, nivel: quem.nivel });
+            MOCHILA.push({
+              id: quem.id,
+              nome: quem.nome,
+              especie: quem.especie,
+              nivel: quem.nivel,
+            });
           }
         for (const id of quero) {
           if (equipe.some((q) => q.id === id)) continue;
@@ -533,7 +540,9 @@
           })),
           ...MOCHILA.map((b) => ({ ...b, onde: 'inventory' })),
         ];
-        dispatchEvent(new CustomEvent('lioncode:escada:resposta', { detail: { eco, ok: true, bichos } }));
+        dispatchEvent(
+          new CustomEvent('lioncode:escada:resposta', { detail: { eco, ok: true, bichos } }),
+        );
         return;
       }
       if (acao !== 'cidade') {
@@ -667,9 +676,64 @@
     pintarHud();
   });
 
+  // Levar a escada de uma janela para outra. O que chega aqui e' um pacote como o que o Exportar
+  // escreve — e de proposito com o que **nao** pode viajar: a escada ligada, o degrau ja' aplicado,
+  // as rodadas fechadas e a pedra (um bicho da conta de origem).
+  comando('importar uma escada de outra janela', () => {
+    const pacote = {
+      pacote: 'pokepixel-qualidade-de-vida',
+      formato: 1,
+      ferramenta: 'escada',
+      nome: 'Escada de caçadas',
+      quando: new Date().toISOString(),
+      dados: {
+        degraus: [
+          { nivel: 30, cacada: 'Caça de Ralts' },
+          { nivel: 5, cacada: 'Caça de Togepi' },
+        ],
+        trocar: true,
+        teto: 140,
+        subida: 2,
+        modo: 'escada',
+        fim: 'time',
+        destino: '',
+        times: ['teste', 'segundo'],
+        sempre: 'time',
+        ligada: true,
+        pausada: true,
+        aplicado: 30,
+        depois: 'parar',
+        grupo: {
+          cacadas: ['Caça de Togepi'],
+          turnos: [{ fixo: 'bicho-da-outra-conta', times: ['teste'] }],
+          alvo: 60,
+          minimo: 10,
+          passo: 2,
+          rodada: 7,
+        },
+      },
+    };
+    const entrada = document.querySelector('input[data-cfg-arquivo="escada"]');
+    if (!entrada) return anotar('banca: o Importar não está no painel (falta o config.js?)');
+    const dados = new DataTransfer();
+    dados.items.add(
+      new File([JSON.stringify(pacote)], 'escada-config.json', {
+        type: 'application/json',
+      }),
+    );
+    entrada.files = dados.files;
+    entrada.dispatchEvent(new Event('change'));
+    anotar('banca: entreguei ao painel uma escada exportada noutra janela');
+  });
+
   pintarHud();
 
-  const script = document.createElement('script');
-  script.src = `../escada.js?t=${Date.now()}`;
-  document.head.append(script);
+  // O `config.js` entra antes: e' ele que poe o Exportar/Importar no painel, e sem ele a banca
+  // nao exercita a parte que mais pode partir — a importação de um arquivo de outra conta.
+  for (const nome of ['config', 'escada']) {
+    const script = document.createElement('script');
+    script.src = `../${nome}.js?t=${Date.now()}`;
+    script.async = false;
+    document.head.append(script);
+  }
 </script>
