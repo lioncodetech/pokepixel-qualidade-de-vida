@@ -111,6 +111,17 @@ A regra que sobra: **onde o jogo mostra o número ao vivo, é o vivo que manda**
 instante em que o vivo discordar dele, que é o único instante em que a releitura paga o que custa.
 Um cache que só se relê "quando está vazio" está a apostar que nada muda, e aqui tudo muda.
 
+## Meça antes de embarcar dados do jogo
+
+Em **14/10/2026** ia embarcar uma tabela de tipos de mil espécies para a Escada poder escolher a
+caçada. Fui medir primeiro, e **estava tudo na API do jogo** — caçadas com tipos e nível, golpes com
+elemento e poder, e a progressão de cada espécie. O que sobrou para copiar foram 18 linhas de tabela
+de eficácia, e mesmo essas foram conferidas casa a casa contra o código do jogo (324 de 324).
+
+A regra: antes de trazer para cá uma cópia de dados que são do jogo, procure-os no jogo. Uma cópia é
+uma segunda verdade — e esta extensão corre sobre um fan game, que pode divergir da tabela canónica
+sem avisar ninguém.
+
 ## O resto
 
 - Reproduza antes de consertar. Uma banca construída sobre a suposição só confirma a suposição.

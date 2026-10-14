@@ -121,6 +121,8 @@ const FORA = {
   'agenda.js': 'calendário puro: diz quando, nunca age',
   'config.js': 'exporta e importa configuração; não toca no jogo, só no armazenamento',
   'senha.js': 'só preenche campos quando a pessoa clica',
+  'tipos.js':
+    'conta pura: recebe números e devolve qual caçada serve — não lê o jogo, não viaja, não clica',
   'sem-grafico.js': 'esconde o desenho do jogo, não interage com ele',
   'ocultar-popups.js': 'fecha popups, não abre janela nem clica em ação do jogo',
   'layout-padrao.js': 'arruma as janelinhas, a pedido',

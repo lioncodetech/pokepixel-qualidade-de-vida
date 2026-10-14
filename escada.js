@@ -192,6 +192,22 @@ PPX.modulo(
        */
       piscina: false,
       /**
+       * A escada escolhe a caçada sozinha, pelo tipo do aluno, em vez de seguir os degraus.
+       *
+       * Pedido em 14/10/2026: *"tem como eu colocar um level target de mudar de hunt e ir para uma
+       * hunt que melhor cabe naquele pokemon que ta upando (...) que ele nao tome 2x ou 4x e que
+       * ele tenha vantagem no ataque"*. A conta esta' em `tipos.js`; aqui mora so' a decisao de a
+       * usar, e o que fazer quando ela nao acha nada.
+       *
+       * **OS DEGRAUS NAO DESAPARECEM — VIRAM A REDE.** Quando nenhuma caçada da janela passa no
+       * filtro, cai-se no degrau escrito por ele. E' a diferenca entre uma escada que as vezes
+       * escolhe melhor e uma escada que as vezes para: o automatico nunca o deixa pior do que ele
+       * ja' estava.
+       */
+      auto: false,
+      /** De quantos niveis para cada lado se procura caçada. O `5` do pedido e' so' o padrao. */
+      janela: 5,
+      /**
        * Como ela upa: `'escada'` (um aluno de cada vez, viajando os degraus), `'grupo'` (um fixo
        * com a pedra e os outros a rodar, ate' um nivel) ou `'passo'` (o mesmo, subindo o alvo de
        * N em N).
@@ -732,6 +748,87 @@ PPX.modulo(
      */
     let colecao = new Map();
 
+    /**
+     * O mundo como o jogo o conhece: as caçadas com nivel e tipos, os golpes, e os tipos das
+     * especies que ja' se perguntaram. Vem da ponte, em `escada-main.js`.
+     *
+     * **NAO SE RELE' A CADA BATIDA, E NAO PRECISA.** As 377 caçadas e os 617 golpes sao do jogo, nao
+     * da conta: nao mudam enquanto a pagina estiver aberta. O que muda — o nivel do aluno — e' lido
+     * do HUD, e e' a lição que a piscina ja' custou (ver `piscinaDaFila`). As especies entram uma
+     * vez cada: perguntar outra vez pelos tipos do Charizard daria sempre fogo e voador.
+     */
+    let mundo = { cacadas: [], golpes: new Map(), especies: new Map() };
+    let pedindoMundo = false;
+
+    /**
+     * Pede a' ponte o que falta do mundo: as caçadas e os golpes na primeira vez, e os tipos de
+     * quem ainda nao se perguntou.
+     *
+     * Devolve `true` quando ha' com que decidir. Nunca atira: sem mundo, o automatico recusa-se e
+     * diz porque', e a escada segue pelos degraus.
+     */
+    const garantirMundo = async (especies = []) => {
+      const faltam = especies.filter((e) => e && !mundo.especies.has(e));
+      if (mundo.cacadas.length && !faltam.length) return true;
+      if (pedindoMundo) return mundo.cacadas.length > 0;
+      pedindoMundo = true;
+      try {
+        const lido = await pedirPonte({ acao: 'mundo', especies: faltam });
+        if (!lido || lido.erro || !lido.ok) return mundo.cacadas.length > 0;
+        if (Array.isArray(lido.cacadas) && lido.cacadas.length) mundo.cacadas = lido.cacadas;
+        if (Array.isArray(lido.golpes) && lido.golpes.length)
+          mundo.golpes = new Map(lido.golpes.map((g) => [g.id, g]));
+        for (const [slug, dados] of Object.entries(lido.especies || {}))
+          mundo.especies.set(slug, dados);
+        // Uma especie pedida que o jogo nao conhece fica marcada como **perguntada e vazia**, ou a
+        // batida seguinte pergunta outra vez, para sempre, por causa da mesma ausencia.
+        for (const slug of faltam) if (!mundo.especies.has(slug)) mundo.especies.set(slug, null);
+        return mundo.cacadas.length > 0;
+      } finally {
+        pedindoMundo = false;
+      }
+    };
+
+    /**
+     * A caçada que o automatico escolhe para este aluno, ou `null`.
+     *
+     * Devolve um **degrau**, da mesma forma que os escritos a' mao: quem o recebe la' em baixo nao
+     * precisa de saber de onde ele veio, e e' por isso que o automatico cabe no motor sem o abrir.
+     */
+    const degrauAutomatico = (aluno) => {
+      const conta = globalThis.PPX?.tipos;
+      if (!conta || !cfg.auto || !aluno || aluno.nivel === null) return null;
+      const especie = aluno.especie || colecao.get(aluno.id)?.especie || '';
+      const ficha = especie ? mundo.especies.get(especie) : null;
+      if (!ficha) return null;
+      const quem = {
+        tipos: ficha.tipos,
+        golpes: conta.golpesDe(ficha.progressao, aluno.nivel, mundo.golpes),
+        nivel: aluno.nivel,
+      };
+      const boas = conta.escolher(quem, mundo.cacadas, { janela: Number(cfg.janela) || 0 });
+      if (!boas.length) return null;
+      const escolhida = boas[0];
+      return {
+        nivel: aluno.nivel,
+        cacada: escolhida.cacada,
+        auto: true,
+        leva: escolhida.leva,
+        da: escolhida.da,
+        quantas: boas.length,
+      };
+    };
+
+    /**
+     * O degrau que vale agora: o automatico, se ele achou alguma; senao o escrito a' mao.
+     *
+     * **A REDE E' A PARTE QUE IMPORTA.** Com janela de cinco niveis e dois filtros de tipo, ha'
+     * niveis em que nenhuma caçada passa — e uma escada que parasse ali seria pior do que a de
+     * ontem. Entao nao para: usa o degrau que ele escreveu, e o painel diz que foi isso que fez.
+     */
+    const degrauDoAluno = (aluno) =>
+      degrauAutomatico(aluno) || (aluno ? degrauPara(aluno.nivel) : null);
+
     // ------------------------------------------ a piscina (os times da fila como um conjunto so')
 
     /**
@@ -884,6 +981,20 @@ PPX.modulo(
       if (!quero.length) return true;
       const tenho = equipe().map((p) => p.id);
       return quero.length === tenho.length && quero.every((id) => tenho.includes(id));
+    };
+
+    /**
+     * O que falta ao automatico para poder escolher, ou `''` quando esta' pronto.
+     *
+     * Serve ao diagnostico, e distingue **"ainda nao li"** de **"li e nenhuma serve"**. Sao duas
+     * coisas muito diferentes para quem olha para o painel: a primeira passa, a segunda e' uma
+     * configuracao a rever.
+     */
+    const semMundo = () => {
+      if (!globalThis.PPX?.tipos) return 'a conta de tipos não carregou (recarregue a extensão)';
+      if (!Number(cfg.janela)) return 'falta dizer de quantos níveis é a janela';
+      if (!mundo.cacadas.length) return 'ainda não li as caçadas do jogo';
+      return '';
     };
 
     /** O que falta escolher para a piscina poder correr, ou `''`. */
@@ -1228,7 +1339,18 @@ PPX.modulo(
       // jogo recusa calado o clique na caixa dele.
       if (aluno.morto) return `${quem} está derrotado. Falta levá-lo à enfermeira, na cidade.`;
 
-      const degrau = degrauPara(n);
+      const degrau = degrauDoAluno(aluno);
+      // A rede entrou em acao: ele ligou o automatico e esta' a seguir um degrau escrito a' mao.
+      // Sem esta frase, o painel diria "como manda o degrau de Lv 50" e ele passaria a tarde a
+      // perguntar-se porque' e' que o automatico nao estava a fazer nada.
+      if (degrau && !degrau.auto && cfg.auto) {
+        const porque =
+          semMundo() || `nenhuma das caçadas a ±${Number(cfg.janela) || 0} níveis serve`;
+        return (
+          `${quem} Lv ${n}: ${porque} — vou pelo degrau de Lv ${degrau.nivel}, ` +
+          `em "${degrau.cacada}".`
+        );
+      }
       if (!degrau) {
         const base = primeiroDegrau();
         return (
@@ -1238,7 +1360,7 @@ PPX.modulo(
       }
       if (!degrau.cacada)
         return `Lv ${n}: o degrau de Lv ${degrau.nivel} não tem caçada escolhida.`;
-      if (cfg.aplicado !== null && degrau.nivel < cfg.aplicado)
+      if (!degrau.auto && cfg.aplicado !== null && degrau.nivel < cfg.aplicado)
         return (
           `${quem} Lv ${n}: o degrau de Lv ${degrau.nivel} está abaixo do de Lv ${cfg.aplicado}, ` +
           'que já cumpri com ele. Não desço com o mesmo aluno.'
@@ -1270,7 +1392,10 @@ PPX.modulo(
         return `${quem} Lv ${n}: em "${degrau.cacada}" — falta montar a equipe da piscina.`;
       if ((cfg.teto || naPiscina()) && !aluno.lider)
         return `${quem} Lv ${n}: em "${degrau.cacada}" — falta pô-lo à frente.`;
-      const comoManda = `${quem} Lv ${n}: em "${degrau.cacada}", como manda o degrau de Lv ${degrau.nivel}.`;
+      const comoManda = degrau.auto
+        ? `${quem} Lv ${n}: em "${degrau.cacada}" — escolhi eu: ele dá ${degrau.da}x e leva ` +
+          `${degrau.leva}x (${degrau.quantas} serviam).`
+        : `${quem} Lv ${n}: em "${degrau.cacada}", como manda o degrau de Lv ${degrau.nivel}.`;
       if (!naPiscina()) return comoManda;
       const alvo = alvoDaPiscina();
       const atrasados = piscinaDaFila().filter((b) => b.nivel < alvo).length;
@@ -2041,6 +2166,18 @@ PPX.modulo(
       const aluno = alunoDeAgora();
       if (!aluno || aluno.nivel === null) return '';
 
+      // **O automatico precisa do mundo, e e' a batida que o vai buscar.** O diagnostico e'
+      // sincrono e nunca pede nada; sem isto o painel diria "ainda nao li as caçadas" para sempre.
+      // As 377 caçadas e os 617 golpes vem uma vez; os tipos de cada especie, uma vez cada.
+      if (cfg.auto) {
+        if (!colecao.size && !pedindoBichos) {
+          const lido = await pedirBichos();
+          if (lido?.bichos?.length) colecao = new Map(lido.bichos.map((b) => [b.id, b]));
+        }
+        const especie = aluno.especie || colecao.get(aluno.id)?.especie || '';
+        if (especie) await garantirMundo([especie]);
+      }
+
       // De quem e' esta escada. Primeira leitura nao e' troca: so' se apaga o degrau cumprido
       // quando havia um aluno antes e ele mudou — senao cada F5 seria uma troca de aluno, e a
       // escada recomeçaria a viajar a cada recarga da pagina.
@@ -2083,11 +2220,17 @@ PPX.modulo(
         return 'curado';
       }
 
-      const degrau = degrauPara(n);
+      const degrau = degrauDoAluno(aluno);
       // Ela nunca desce com o mesmo aluno. Um degrau ABAIXO do ja' cumprido com ESTE aluno nao e'
       // progresso: e' um nivel mal lido, um degrau editado, ou o jogo a por outra caixa como
       // lider — e o castigo e' arrastar um Lv 19 para a caçada dos Lv 1.
-      if (degrau && cfg.aplicado !== null && degrau.nivel < cfg.aplicado) {
+      // **O "nao desço" nao vale para o automatico, e e' de proposito.** Ele existe para apanhar um
+      // nivel mal lido ou um degrau editado a arrastar um Lv 19 para a caçada dos Lv 1 — um degrau
+      // escrito a' mao pode estar em qualquer sitio. O automatico nao pode: ele sai do nivel do
+      // proprio aluno, com a janela a limita-lo aos cinco niveis a' volta. Descer ali e' a regra a
+      // funcionar, e nao um acidente — e recusar seria travar a escada no primeiro aluno que
+      // acabasse de se formar.
+      if (degrau && !degrau.auto && cfg.aplicado !== null && degrau.nivel < cfg.aplicado) {
         aviso(diagnostico());
         return 'nao desco';
       }
@@ -2315,6 +2458,17 @@ PPX.modulo(
         </select>
         <label class="caixa"><input type="checkbox" data-trocar> deixar trocar de caçada</label>
         <div data-escada>
+        <label class="caixa" title="Em vez de seguir os degraus, escolho a caçada pelo tipo do aluno: nível próximo, sem desvantagem, e com vantagem no ataque">
+          <input type="checkbox" data-auto> escolher a caçada sozinha
+        </label>
+        <label class="caixa" data-janela-linha title="De quantos níveis para cada lado procuro caçada">
+          dentro de <input type="number" min="1" data-janela placeholder="5"> níveis
+        </label>
+        <p class="vazio" data-auto-diz>
+          Escolho entre as caçadas desse intervalo a que ele <b>não</b> leva 2x ou 4x e onde os
+          golpes que ele já tem batem 2x ou mais. Se nenhuma passar, uso o degrau que você escreveu
+          — por isso vale a pena mantê-los. As Ilhas Lendárias ficam de fora.
+        </p>
         <ul data-lista></ul>
         <button type="button" class="mais" data-mais>+ degrau</button>
         <div class="fim">
@@ -2953,6 +3107,10 @@ PPX.modulo(
       // defeito de uma hora: a fila de times sumiu do painel, e com ela o unico lugar de dizer
       // "quando estes acabarem, upa os outros".
       campo('[data-junta]').style.display = cfg.subida && !cfg.piscina ? '' : 'none';
+      campo('[data-auto]').checked = cfg.auto === true;
+      campo('[data-janela]').value = cfg.janela ?? '';
+      campo('[data-janela-linha]').style.display = cfg.auto ? '' : 'none';
+      campo('[data-auto-diz]').style.display = cfg.auto ? '' : 'none';
       campo('[data-piscina]').checked = cfg.piscina === true;
       campo('[data-piscina-diz]').style.display = cfg.piscina ? '' : 'none';
       // Com a piscina ligada a colecao e' precisa ja' no painel: sem os niveis dos Pokemon dos
@@ -3162,6 +3320,24 @@ PPX.modulo(
       gravar();
       desenhar();
       if (cfg.trocar) void conferir();
+    });
+
+    campo('[data-auto]').addEventListener('change', (e) => {
+      cfg.auto = e.target.checked;
+      // Trocar quem escolhe a caçada muda para onde se vai, e o degrau cumprido era da outra regra.
+      cfg.aplicado = null;
+      gravar();
+      desenhar();
+      void conferir();
+    });
+
+    campo('[data-janela]').addEventListener('change', (e) => {
+      const v = Number(e.target.value);
+      cfg.janela = e.target.value === '' || !Number.isFinite(v) || v < 1 ? null : Math.round(v);
+      cfg.aplicado = null;
+      gravar();
+      desenhar();
+      void conferir();
     });
 
     campo('[data-piscina]').addEventListener('change', (e) => {
@@ -3388,6 +3564,8 @@ PPX.modulo(
         destino: cfg.destino,
         times: cfg.times,
         piscina: cfg.piscina === true,
+        auto: cfg.auto === true,
+        janela: cfg.janela,
         sempre: cfg.sempre,
         grupo: {
           cacadas: cfg.grupo.cacadas,
@@ -3417,6 +3595,8 @@ PPX.modulo(
           .slice(0, 50)
           .map((t) => limparTexto(t, 60));
         cfg.piscina = dados?.piscina === true;
+        cfg.auto = dados?.auto === true;
+        cfg.janela = limparNivel(dados?.janela);
         cfg.sempre = ['nada', 'cidade', 'time', 'parar'].includes(dados?.sempre)
           ? dados.sempre
           : '';

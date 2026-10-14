@@ -1264,6 +1264,62 @@ ele saía de novo. Equipes montadas para sempre, sem ninguém subir um nível. O
 está velha é o próprio HUD discordar dela, e é exatamente aí que vale a pena pagar a releitura: uma
 por nível ganho, e nenhuma enquanto nada muda.
 
+### A Escada escolhe a caçada sozinha, pelo tipo do aluno
+
+Pedido em **14/10/2026**: *"to upando um charizard e qdo chega no lvl 80 vai para uma hunt de lvl 75
+até 85 sendo que vai pegar um target que ele nao tome 2x ou 4x e que ele tenha vantagem no ataque"*.
+
+Marcada a caixinha **escolher a caçada sozinha**, a Escada deixa de seguir os degraus e escolhe, de
+entre as caçadas dentro da janela (±5 níveis por omissão, num campo que você muda), a que cumpre as
+duas condições que você escreveu: **ele não leva 2x ou mais** e **os golpes que ele já tem batem 2x
+ou mais**. As duas, e não uma — uma caçada onde ele arrasa e apanha na mesma não é o que foi pedido.
+
+Com o Charizard Lv 80 (Fogo/Voador) do seu exemplo, medido na sua conta: das 16 caçadas entre 75 e
+85, três passam — Victreebel (76), Hitmonlee (78) e Vileplume (84) —, e o Golem (79) fica de fora
+porque Pedra bate **4x** num Fogo/Voador. Com o Blastoise Lv 90, a melhor é o Golem (94), onde a água
+bate 4x e ele leva 1x. Quando for a vez de outro Pokémon, a conta refaz-se para ele.
+
+#### Os degraus não desaparecem: viram a rede
+
+Com uma janela de cinco níveis e dois filtros de tipo, há níveis em que **nenhuma** caçada passa. Uma
+escada que parasse ali seria pior do que a de ontem. Então ela não para: usa o degrau que você
+escreveu, e diz na cara que foi isso que fez — *"Rattata Lv 20: nenhuma das caçadas a ±5 níveis serve
+— vou pelo degrau de Lv 1, em «Dunsparce»"*. Sem essa frase você veria "como manda o degrau de Lv 1"
+com o automático ligado e passaria a tarde a perguntar-se o que ele estava a fazer.
+
+É também por isso que vale a pena manter os degraus escritos mesmo com o automático ligado.
+
+#### Nada disto é adivinhado: está tudo na API do próprio jogo
+
+Fui medir de onde viriam os tipos a contar ter de embarcar uma tabela de mil espécies. Não é preciso:
+
+| o que | de onde | o que dá |
+|---|---|---|
+| as caçadas | `Api.getZones()` | 377, com nível, `elements` e a espécie |
+| os golpes | `Api.getMoves()` | 617, com `element` e `power` |
+| os tipos e os golpes de cada espécie | `Species.get(slug)` | `elements` e `move_progression` |
+
+Três consequências boas:
+
+- **as 377 caçadas têm exatamente uma espécie e os tipos preenchidos** — não há exceção a tratar nem
+  nome para interpretar;
+- **o nível de uma caçada é um número só**: nas 377, `min_level`, `max_level` e `recommended_level`
+  são iguais, então a janela de ±5 não esconde nenhuma escolha sobre qual número comparar;
+- **não se supõe STAB.** Sabe-se que golpes o Pokémon já desbloqueou naquele nível, e os de estado
+  (que não causam dano) não contam como vantagem.
+
+A única coisa copiada é a tabela de eficácia, e foi copiada do `EncyclopediaScene.js` do próprio
+jogo, não de memória — e conferida casa a casa contra ele: **324 de 324 iguais**. Tem ainda uma
+segunda testemunha de graça: a janela de caçadas do jogo mostra uma coluna *"GOLPES RECOMENDADOS"*
+com os multiplicadores, e a nossa conta bate com ela.
+
+#### A conta mora sozinha, num arquivo à parte
+
+Está em `tipos.js`, e não dentro da Escada. Ela decide **quando** trocar de caçada; para onde é uma
+conta pura — não lê DOM, não fala com o jogo, não guarda nada — e por isso é a única parte desta
+extensão exercitada com números de verdade em vez de linhas de código. As Ilhas Lendárias ficam de
+fora por omissão: são 19 das 377, e não é sítio para onde mandar um Pokémon sozinho e sem aviso.
+
 ### Um campo no meio de um rótulo não estica
 
 Os dois números deste par nasceram na mesma linha — *"formar em Lv [ ] e mais [ ] níveis"* —, e no

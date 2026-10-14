@@ -242,6 +242,10 @@
     { id: 'b4', nome: 'Kabutops', especie: 'kabutops', nivel: 100 },
     { id: 'b5', nome: 'Omastar', especie: 'omastar', nivel: 100 },
     { id: 'b6', nome: 'Onix', especie: 'onix', nivel: 100 },
+    // O exemplo do dono, para o automatico: "to upando um charizard e qdo chega no lvl 80...".
+    { id: 'c1', nome: 'Charizard', especie: 'charizard', nivel: 80 },
+    // E um para quem nenhuma caçada serve: o automatico tem de cair no degrau, e dizer que caiu.
+    { id: 'c2', nome: 'Rattata', especie: 'rattata', nivel: 20 },
   ];
 
   const hud = document.querySelector('.hud');
@@ -560,6 +564,56 @@
     const acao = evento?.detail?.acao;
     anotar(`ponte: pedido "${acao}"`);
     setTimeout(() => {
+      if (acao === 'mundo') {
+        // O mundo do jogo, encolhido ao que a decisao usa — e com os numeros **medidos na conta
+        // real em 14/10/2026**, para a banca nao provar uma aritmetica que o jogo nao tem.
+        const cacadas = [
+          { nome: 'Victreebel', nivel: 76, elementos: ['grass', 'poison'], mundo: 'kanto' },
+          { nome: 'Hitmonlee', nivel: 78, elementos: ['fighting'], mundo: 'kanto' },
+          { nome: 'Golem', nivel: 79, elementos: ['rock', 'ground'], mundo: 'kanto' },
+          { nome: 'Vileplume', nivel: 84, elementos: ['grass', 'poison'], mundo: 'kanto' },
+          // Fora da janela de +-5 do Lv 80: tem de ficar de fora, por melhor que fosse.
+          { nome: 'Exeggcute', nivel: 90, elementos: ['grass', 'psychic'], mundo: 'kanto' },
+          // Lendaria: fica de fora por omissao, mesmo dentro da janela.
+          { nome: 'Ilha Lendária de Entei', nivel: 80, elementos: ['grass'], mundo: 'legendary' },
+          // Para o aluno sem caçada nenhuma que sirva: so' normal a' volta do Lv 20.
+          { nome: 'Dunsparce', nivel: 20, elementos: ['normal'], mundo: 'johto' },
+        ];
+        const golpes = [
+          { id: 'brasa', elemento: 'fire', poder: 40 },
+          { id: 'lanca-chamas', elemento: 'fire', poder: 90 },
+          { id: 'as-dos-ares', elemento: 'flying', poder: 60 },
+          { id: 'encarar', elemento: 'normal', poder: 1 },
+          { id: 'investida', elemento: 'normal', poder: 40 },
+        ];
+        const fichas = {
+          charizard: {
+            nome: 'Charizard',
+            tipos: ['fire', 'flying'],
+            progressao: [
+              { id: 'brasa', unlock_level: 1 },
+              { id: 'as-dos-ares', unlock_level: 10 },
+              { id: 'encarar', unlock_level: 20 },
+              { id: 'lanca-chamas', unlock_level: 60 },
+            ],
+          },
+          rattata: {
+            nome: 'Rattata',
+            tipos: ['normal'],
+            progressao: [{ id: 'investida', unlock_level: 1 }],
+          },
+        };
+        const pediu = Array.isArray(evento?.detail?.especies) ? evento.detail.especies : [];
+        const especies = {};
+        for (const slug of pediu) if (fichas[slug]) especies[slug] = fichas[slug];
+        anotar(`ponte: mundo (${cacadas.length} caçadas, espécies: ${pediu.join(', ') || '—'})`);
+        dispatchEvent(
+          new CustomEvent('lioncode:escada:resposta', {
+            detail: { eco, ok: true, cacadas, golpes, especies },
+          }),
+        );
+        return;
+      }
       if (acao === 'bichos') {
         // Como `getCreatures` no jogo: a conta toda, com nivel, sem abrir janela nenhuma.
         const bichos = [
@@ -840,11 +894,76 @@
     anotar(`banca: os doze da piscina estão em Lv ${maior} — o alvo tem de passar a ${maior + 2}`);
   });
 
+  // ------------------------------------------------------------ a caçada automatica
+
+  /** Poe um bicho da mochila a' frente da equipe, que e' o que faz dele o aluno. */
+  const porAFrente = (id) => {
+    const bicho = MOCHILA.find((b) => b.id === id);
+    if (!bicho) return anotar(`banca: não tenho "${id}"`);
+    equipe.length = 0;
+    equipe.push({ ...bicho, lider: true, morto: false });
+    pintarHud();
+    anotar(`banca: ${bicho.nome} Lv ${bicho.nivel} está à frente, sozinho`);
+  };
+
+  /**
+   * Liga o automatico: janela de 5, com dois degraus a' mao como rede.
+   *
+   * Os degraus sao de proposito **maus** para o Charizard — a caçada do Lv 50 e' uma qualquer — para
+   * se ver a diferenca entre "escolhi eu" e "caí no degrau que voce escreveu".
+   */
+  comando('ligar a caçada automática (±5)', () => {
+    const pacote = {
+      pacote: 'pokepixel-qualidade-de-vida',
+      formato: 1,
+      ferramenta: 'escada',
+      nome: 'Escada de caçadas',
+      quando: new Date().toISOString(),
+      dados: {
+        degraus: [
+          { nivel: 1, cacada: 'Dunsparce' },
+          { nivel: 50, cacada: 'Vileplume' },
+        ],
+        trocar: true,
+        teto: null,
+        subida: null,
+        modo: 'escada',
+        fim: 'nada',
+        destino: '',
+        times: [],
+        piscina: false,
+        auto: true,
+        janela: 5,
+        sempre: '',
+        grupo: { cacadas: [], turnos: [], alvo: null, minimo: null, passo: null },
+      },
+    };
+    const entrada = document.querySelector('input[data-cfg-arquivo="escada"]');
+    if (!entrada) return anotar('banca: o Importar não está no painel (falta o config.js?)');
+    const dados = new DataTransfer();
+    dados.items.add(
+      new File([JSON.stringify(pacote)], 'escada-config.json', { type: 'application/json' }),
+    );
+    entrada.files = dados.files;
+    entrada.dispatchEvent(new Event('change'));
+    anotar('banca: automático ligado, janela ±5, com dois degraus de rede');
+  });
+
+  comando('o Charizard Lv 80 à frente', () => porAFrente('c1'));
+  comando('o Rattata Lv 20 à frente (nada serve)', () => porAFrente('c2'));
+  comando('subir o líder +5', () => {
+    const l = equipe.find((p) => p.lider);
+    l.nivel += 5;
+    const na = MOCHILA.find((b) => b.id === l.id);
+    if (na) na.nivel = l.nivel;
+    pintarHud();
+  });
+
   pintarHud();
 
   // O `config.js` entra antes: e' ele que poe o Exportar/Importar no painel, e sem ele a banca
   // nao exercita a parte que mais pode partir — a importação de um arquivo de outra conta.
-  for (const nome of ['config', 'escada']) {
+  for (const nome of ['config', 'tipos', 'escada']) {
     const script = document.createElement('script');
     script.src = `../${nome}.js?t=${Date.now()}`;
     script.async = false;

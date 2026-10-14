@@ -76,7 +76,13 @@ test('quem diz que trocou e o HUD, pelo id, e nunca o clique', () => {
 test('ela nunca desce com o mesmo aluno', () => {
   // Um degrau abaixo do já cumprido com ESTE aluno não é progresso: é um nível mal lido ou um
   // degrau editado, e o castigo é arrastar um Lv 19 para a caçada dos Lv 1.
-  assert.match(codigo, /if \(degrau && cfg\.aplicado !== null && degrau\.nivel < cfg\.aplicado\)/);
+  // E desde 14/10/2026 a regra traz uma excecao escrita: ela nao vale para a caçada que a propria
+  // escada escolheu. Um degrau a' mao pode estar em qualquer sitio; o automatico sai do nivel do
+  // aluno, limitado a' janela, e descer ali e' a regra a funcionar.
+  assert.match(
+    codigo,
+    /if \(degrau && !degrau\.auto && cfg\.aplicado !== null && degrau\.nivel < cfg\.aplicado\)/,
+  );
   // E o caso oposto: aluno novo apaga o degrau cumprido, que era do anterior.
   const bloco = codigo.slice(codigo.indexOf('if (cfg.aluno !== aluno.id)'));
   assert.match(bloco.slice(0, 200), /if \(cfg\.aluno\) cfg\.aplicado = null;/);
@@ -176,7 +182,7 @@ test('o morto vai a enfermeira antes de qualquer outra coisa', () => {
   assert.match(codigo, /morto: el\.classList\?\.contains\?\.\('is-fainted'\) === true/);
   const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
   const cura = bloco.indexOf('if (aluno.morto)');
-  const degrau = bloco.indexOf('const degrau = degrauPara(n)');
+  const degrau = bloco.indexOf('const degrau = degrauDoAluno(aluno)');
   assert.ok(cura >= 0 && cura < degrau, 'a enfermeira vem antes do degrau');
   // E quem diz que a cura pegou é o HUD, não a resposta do servidor: a caçada guarda o próprio
   // estado de combate, e a cura só aparece depois de sair dela.
@@ -502,7 +508,9 @@ test('a ponte do mundo da pagina faz duas coisas, e as duas tem motivo', () => {
   // botão direito, com as três regras do jogo medidas lá — e uma segunda rotina de equipar, por
   // API, divergiria dessa no primeiro mês.
   const ponte = semComentarios(ler('escada-main.js'));
-  assert.match(ponte, /const FAZ = \{ cidade: irParaCidadeECurar, bichos \};/);
+  // E desde 14/10/2026 uma terceira, `mundo`: as caçadas, os golpes e os tipos das especies. E'
+  // leitura pura, como a `bichos` — nao clica, nao entra em caçada, nao mexe na equipe.
+  assert.match(ponte, /const FAZ = \{ cidade: irParaCidadeECurar, bichos, mundo \};/);
   assert.doesNotMatch(ponte, /setTeamLeader|addTeamMember|removeTeamMember|reviveHunt/);
   // Só os quatro campos que o modo de grupo usa atravessam, e não o registro todo do jogador.
   const lista = ponte.slice(ponte.indexOf('const bichos'));
@@ -1610,5 +1618,106 @@ test('a colecao relê-se quando o HUD discorda dela, e so entao', () => {
   assert.ok(
     bloco.indexOf('const velha = equipe()') < bloco.indexOf('const falta = faltaNaPiscina();'),
     'relê-se a coleção antes de escolher o aluno',
+  );
+});
+
+// ------------------------------------------------------- a caçada escolhida pela escada
+
+test('os degraus viram a rede do automatico, e nunca desaparecem', () => {
+  // **A decisao que separa uma escada que as vezes escolhe melhor de uma que as vezes para.** Com
+  // janela de cinco niveis e dois filtros de tipo ha niveis em que nenhuma caçada passa; cair no
+  // degrau escrito a mao deixa o automatico ser um ganho sem ser um risco.
+  assert.match(
+    codigo,
+    /const degrauDoAluno = \(aluno\) =>\s*degrauAutomatico\(aluno\) \|\| \(aluno \? degrauPara\(aluno\.nivel\) : null\);/,
+  );
+  // E o painel diz **porque** caiu na rede. Sem isto ele veria "como manda o degrau de Lv 50" com o
+  // automatico ligado, e passaria a tarde a perguntar-se o que e que ele estava a fazer.
+  assert.match(codigo, /if \(degrau && !degrau\.auto && cfg\.auto\) \{/);
+  assert.match(codigo, /vou pelo degrau de Lv/);
+});
+
+test('o automatico recusa-se em vez de adivinhar', () => {
+  // Tres recusas, e as tres distinguem "ainda nao li" de "li e nenhuma serve" — que para quem olha
+  // o painel sao coisas muito diferentes: a primeira passa sozinha, a segunda e configuracao.
+  const bloco = codigo.slice(codigo.indexOf('const semMundo ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /if \(!globalThis\.PPX\?\.tipos\)/);
+  assert.match(corpo, /if \(!Number\(cfg\.janela\)\)/);
+  assert.match(corpo, /if \(!mundo\.cacadas\.length\)/);
+  // E sem ficha da especie o automatico devolve null — e nao um palpite.
+  const auto = codigo.slice(codigo.indexOf('const degrauAutomatico ='));
+  assert.match(auto.slice(0, 700), /if \(!ficha\) return null;/);
+  assert.match(auto.slice(0, 900), /if \(!boas\.length\) return null;/);
+});
+
+test('quem faz a conta de tipos e o tipos.js, e nao a escada', () => {
+  // A escada decide **quando** trocar de caçada; para onde e conta pura, e mora sozinha para poder
+  // ser exercitada sozinha. A escada nao conhece um unico multiplicador.
+  assert.match(codigo, /const conta = globalThis\.PPX\?\.tipos;/);
+  assert.match(
+    codigo,
+    /conta\.escolher\(quem, mundo\.cacadas, \{ janela: Number\(cfg\.janela\) \|\| 0 \}\)/,
+  );
+  assert.match(codigo, /conta\.golpesDe\(ficha\.progressao, aluno\.nivel, mundo\.golpes\)/);
+  // Nenhuma tabela de tipos aqui dentro: duas copias divergiriam no primeiro mes.
+  assert.doesNotMatch(codigo, /fighting:\s*\{|TABELA\s*=/);
+});
+
+test('o mundo le-se uma vez, e as especies uma vez cada', () => {
+  // As 377 caçadas e os 617 golpes sao do **jogo**, nao da conta: nao mudam com a pagina aberta. O
+  // que muda e o nivel do aluno, e esse vem do HUD — a licao que a piscina ja custou.
+  const bloco = codigo.slice(codigo.indexOf('const garantirMundo ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /if \(mundo\.cacadas\.length && !faltam\.length\) return true;/);
+  assert.match(
+    corpo,
+    /const faltam = especies\.filter\(\(e\) => e && !mundo\.especies\.has\(e\)\);/,
+  );
+  // **Uma especie que o jogo nao conhece fica marcada como perguntada.** Sem isto, a batida
+  // seguinte perguntaria outra vez, para sempre, por causa da mesma ausencia.
+  assert.match(
+    corpo,
+    /for \(const slug of faltam\) if \(!mundo\.especies\.has\(slug\)\) mundo\.especies\.set\(slug, null\);/,
+  );
+  // E o pedido nao se sobrepoe a si proprio.
+  assert.match(corpo, /if \(pedindoMundo\)/);
+});
+
+test('mudar quem escolhe a cacada esquece o degrau cumprido', () => {
+  // O cumprido era da outra regra. Deixa-lo guardado faria a escada recusar-se a ir para onde a
+  // regra nova manda, com o "nao desço" de um degrau que ja nao e o dela.
+  for (const qual of ["campo('[data-auto]')", "campo('[data-janela]')"]) {
+    const bloco = codigo.slice(codigo.indexOf(qual + '.addEventListener'));
+    const corpo = bloco.slice(0, bloco.indexOf('\n    });'));
+    assert.match(corpo, /cfg\.aplicado = null;/, qual);
+  }
+});
+
+test('a ponte do mundo le, e so le', () => {
+  const ponte = semComentarios(ler('escada-main.js'));
+  const bloco = ponte.slice(ponte.indexOf('const mundo ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n  };'));
+  assert.match(corpo, /api\.getZones\(\)/);
+  assert.match(corpo, /api\.getMoves\(\)/);
+  assert.match(corpo, /Species\.get\(String\(slug\)\)/);
+  // Nada que aja: nem entrar em caçada, nem preparar, nem parar.
+  assert.doesNotMatch(corpo, /prepareHunt|startHunt|stopHunt|setTeamLeader/);
+  // So os campos que a decisao usa atravessam. Os registos crus trazem sprites, drops e evolucoes,
+  // e seriam centenas de kilobytes a passar para serem deitados fora do outro lado.
+  assert.doesNotMatch(corpo, /sprite_url|drops|evolves_to|base_stats/);
+  // E so as caçadas de verdade: a expedição e o resto nao sao sitio para mandar ninguem.
+  assert.match(corpo, /z\.type === 'hunt'/);
+});
+
+test('a janela e a do dono, e o padrao nao e uma decisao escondida', () => {
+  // Cinco e o numero que ele escreveu — "uma variação de 5 lvl pra baixo e 5 pra cima" —, e fica
+  // num campo para ele mudar. Um padrao que nao se ve nem se muda seria eu a decidir por ele.
+  assert.match(codigo, /janela: 5,/);
+  assert.match(codigo, /data-janela/);
+  // E a conta, do outro lado, tambem nao inventa janela nenhuma quando ela falta.
+  assert.match(
+    semComentarios(ler('tipos.js')),
+    /const janela = Number\(opcoes\.janela\) \|\| 0;[\s\S]{0,120}if \(!janela/,
   );
 });

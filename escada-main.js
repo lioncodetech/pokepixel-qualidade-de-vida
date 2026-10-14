@@ -142,7 +142,83 @@
     };
   };
 
-  const FAZ = { cidade: irParaCidadeECurar, bichos };
+  /**
+   * O mundo como o jogo o conhece: as caçadas, os golpes e os tipos das especies pedidas.
+   *
+   * A TERCEIRA ACAO, e a que nasceu de uma surpresa boa. Em 14/10/2026 o dono pediu que a escada
+   * escolhesse a caçada sozinha — nivel proximo, sem desvantagem de tipo, com vantagem no ataque —
+   * e eu fui medir de onde viriam os tipos, a contar ter de embarcar uma tabela de mil especies.
+   * Nao e' preciso: **esta tudo na API do proprio jogo**, e a extensao so' tem de pedir.
+   *
+   *   `Api.getZones()`    377 caçadas. Medido: nas 377, `min_level`, `max_level` e
+   *                       `recommended_level` sao **iguais** — o nivel de uma caçada e' um numero
+   *                       so'. E todas tem `elements` preenchido e **exactamente uma** especie em
+   *                       `encounters`: nao ha' excepcao a tratar, nem nome para interpretar.
+   *   `Api.getMoves()`    617 golpes, com `element` e `power`.
+   *   `Species.get(slug)` `elements` e `move_progression`. **E' por isto que nao se supoe STAB**:
+   *                       sabe-se que golpes o bicho ja' tem naquele nivel.
+   *
+   * ATRAVESSAM TRES CAMPOS DE CADA COISA, E NAO O REGISTO TODO — a mesma regra do `bichos`, e aqui
+   * ela pesa mais: os registos crus trazem sprites, drops, evolucoes e estatisticas base, e seriam
+   * centenas de kilobytes a atravessar para serem deitados fora do outro lado.
+   *
+   * As especies vem **por pedido**, e nao todas: quem decide precisa dos tipos de um punhado de
+   * Pokemon — os da equipe, os da piscina —, e nao do bestiario inteiro.
+   */
+  const mundo = async (pedido) => {
+    const api = globalThis.PokeIdle?.Api;
+    const Species = globalThis.PokeIdle?.Species;
+    if (typeof api?.getZones !== 'function' || typeof api?.getMoves !== 'function')
+      return { erro: 'o jogo ainda não publicou a API — espere a tela carregar' };
+
+    let zonas = null;
+    let golpes = null;
+    try {
+      [zonas, golpes] = await Promise.all([api.getZones(), api.getMoves()]);
+    } catch (e) {
+      return { erro: `não consegui ler o mundo do jogo: ${String(e?.message || e)}` };
+    }
+    const comoLista = (r) => (Array.isArray(r) ? r : r?.data || r?.zones || r?.moves || []);
+
+    const cacadas = comoLista(zonas)
+      .filter((z) => z && z.type === 'hunt' && z.name)
+      .map((z) => ({
+        nome: String(z.name),
+        // Um numero so', medido: os tres niveis sao iguais nas 377. Guardar os tres seria convidar
+        // quem vier a seguir a escolher entre eles — e a escolha nao existe.
+        nivel: Number(z.recommended_level) || 0,
+        elementos: Array.isArray(z.elements) ? z.elements.map(String) : [],
+        mundo: String(z.world || ''),
+        // A especie serve para dizer o nome na tela ("vai para a caçada do Golem"), e nao para a
+        // conta: quem decide sao os tipos da zona.
+        especie: String(z.encounters?.[0]?.species_id || ''),
+      }));
+
+    const lista = comoLista(golpes)
+      .filter((m) => m && m.id)
+      .map((m) => ({
+        id: String(m.id),
+        elemento: String(m.element || ''),
+        poder: Number(m.power) || 0,
+      }));
+
+    const especies = {};
+    for (const slug of Array.isArray(pedido?.especies) ? pedido.especies : []) {
+      const r = typeof Species?.get === 'function' ? Species.get(String(slug)) : null;
+      if (!r) continue;
+      especies[String(slug)] = {
+        nome: String(r.name || slug),
+        tipos: Array.isArray(r.elements) ? r.elements.map(String) : [],
+        progressao: (Array.isArray(r.move_progression) ? r.move_progression : [])
+          .filter((m) => m && m.id)
+          .map((m) => ({ id: String(m.id), unlock_level: Number(m.unlock_level) || 1 })),
+      };
+    }
+
+    return { ok: true, cacadas, golpes: lista, especies };
+  };
+
+  const FAZ = { cidade: irParaCidadeECurar, bichos, mundo };
 
   addEventListener(PEDIDO, (evento) => {
     const eco = evento?.detail?.eco;
@@ -155,7 +231,9 @@
       responder({ erro: `não sei fazer "${acao}"` });
       return;
     }
-    faz()
+    // O pedido inteiro atravessa, e nao so' a acao: o `mundo` precisa de saber **que** especies lhe
+    // interessam, e mandar o bestiario todo para ser deitado fora do outro lado seria pior.
+    faz(evento?.detail || {})
       .then(responder)
       .catch((erro) => responder({ erro: String(erro?.message || erro || 'falhou') }));
   });
