@@ -40,10 +40,11 @@ test('nivel nao lido e null, e null nunca vira zero', () => {
   // faria a escada disparar o degrau mais baixo a cada recarga da página.
   assert.match(codigo, /return n \? Number\(n\[1\]\) : null;/);
   // Cedo no `conferir`: antes de tudo o que se faz com o nivel do aluno. A janela cresceu de 900
-  // para 1100 em 13/10/2026, quando o portao de ceder a vez entrou ali acima — ele vem **antes**
-  // desta leitura de proposito, e o teste dele e' o "a cacada e a ultima da fila".
+  // para 1100 em 13/10/2026 (o portao de ceder a vez), e de 1100 para 1900 em 14/10/2026 (a
+  // leitura da colecao, que a piscina precisa). Os dois vem **antes** desta leitura de proposito,
+  // e cada um tem o seu proprio teste. O que este guarda e' que ela continua a vir cedo.
   const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
-  assert.match(bloco.slice(0, 1100), /if \(!aluno \|\| aluno\.nivel === null\) return '';/);
+  assert.match(bloco.slice(0, 1900), /if \(!aluno \|\| aluno\.nivel === null\) return '';/);
 });
 
 test('a espera do jogo e espera, e nao falha', () => {
@@ -122,9 +123,11 @@ test('o degrau e do aluno, e nao de quem esta a frente', () => {
   // **A raiz do defeito da ordem.** Com o degrau escolhido pelo nível de quem está à frente, a
   // escada era obrigada a trocar primeiro para só depois saber para onde ir. Com o degrau escolhido
   // pelo nível do aluno, sabe-se o destino antes de trocar — e a ordem certa cai por si.
+  // Sao tres caminhos desde 14/10/2026 — a piscina entrou a' frente —, mas a regra que este teste
+  // guarda e' a mesma: quem escolhe o degrau e' o **aluno**, e nunca quem calha estar a' frente.
   assert.match(
     codigo,
-    /const alunoDeAgora = \(\) => \(cfg\.teto \? proximoAluno\(\) : caixaDoLider\(\)\);/,
+    /const alunoDeAgora = \(\) =>\s*naPiscina\(\) \? alunoDaPiscinaNoHud\(\) : cfg\.teto \? proximoAluno\(\) : caixaDoLider\(\);/,
   );
   const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
   const corpo = bloco.slice(0, bloco.indexOf('\n    }'));
@@ -278,7 +281,8 @@ test('trocar de time recusa quando a cacada do degrau monta time', () => {
   // guardado na própria caçada. A saída não é esta ferramenta passar a mandar no time também — é
   // recusar antes de agir, porque dá para saber antes, e dizer qual é o conflito.
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   const recusa = corpo.indexOf('const tropeco = degrauComTime();');
   const monta = corpo.indexOf('await times.usar(vez.nome)');
@@ -299,7 +303,8 @@ test('trocar de time passa pela cidade, e so la troca', () => {
   // dentro de uma caçada é pôr três recém-nascidos no lugar de quem acabou de se formar, no mesmo
   // combate. Primeiro o lugar seguro, depois a troca: a cidade é o lugar seguro.
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   const cidade = corpo.indexOf('await pedirCidade()');
   const monta = corpo.indexOf('await times.usar(vez.nome)');
@@ -345,7 +350,8 @@ test('a fila acabada nao decide: pergunta, e com uma listbox', () => {
   // outras quatro escolhem-se ANTES, de noite, para ela cumprir sozinha — esta faz-se DEPOIS, com
   // a equipe toda formada na tela, que é quando ele sabe o que quer.
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   assert.match(corpo, /if \(!vez\.nome\) return fimDaFila\(aviso\);/);
   assert.ok(
@@ -375,7 +381,8 @@ test('um ja-cumpri de ontem nao trava a fila de times', () => {
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
   assert.match(bloco, /if \(cfg\.formados && cfg\.fim !== 'time'\) \{/);
   // E o passo do meio da fila não cumpre o fim: não passa por `feito`.
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   assert.ok(!/feito\(\)/.test(corpo), 'montar um time do meio da fila não é cumprir o fim');
   assert.match(corpo, /return 'trocado';/);
@@ -413,7 +420,8 @@ test('a escada confere se o time foi montado mesmo', () => {
   // só). Aqui isso seria pior do que um aviso errado: a fila anda pelo time que está montado, então
   // um time meio montado faria a escada perder o lugar na fila e remontar o mesmo para sempre.
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   assert.match(corpo, /const montado = globalThis\.PPX\?\.times\?\.qual\?\.\(\);/);
   assert.match(corpo, /if \(montado !== vez\.nome\)/);
@@ -471,7 +479,8 @@ test('trocar de time esquece o aluno e o degrau', () => {
   // Trocar de time troca a equipe inteira: o aluno de agora é outro, e o degrau cumprido era do
   // anterior. Guardá-los mandaria um bicho novo de Lv 1 para a caçada do Lv 200 que saiu.
   const bloco = codigo.slice(codigo.indexOf('async function fimDaEscada'));
-  const time = bloco.slice(bloco.indexOf("cfg.fim === 'time'"));
+  // Com a chaveta: a recusa da piscina, logo acima, tambem cita `cfg.fim === 'time'`.
+  const time = bloco.slice(bloco.indexOf("if (cfg.fim === 'time') {"));
   const corpo = time.slice(0, time.indexOf('if (!cfg.destino)'));
   assert.match(corpo, /cfg\.aplicado = null;/);
   assert.match(corpo, /cfg\.aluno = '';/);
@@ -607,10 +616,10 @@ test('nao agir e uma decisao, e e dita', () => {
   );
   // Nenhum caminho do castigo sai calado: os três `esperaAte` dizem por que estão parados.
   assert.doesNotMatch(codigo, /if \(Date\.now\(\) < esperaAte\) return/);
-  // Cinco caminhos esperam o castigo — o fim da escada, a enfermeira, a viagem, a troca e a batida
-  // do grupo — e os cinco dizem por que estão parados. O número cresce com a ferramenta; o que não
-  // pode crescer é o número de caminhos calados, que é zero.
-  assert.equal((codigo.match(/if \(Date\.now\(\) < esperaAte\) \{/g) || []).length, 5);
+  // Seis caminhos esperam o castigo — o fim da escada, a enfermeira, a viagem, a troca, a batida
+  // do grupo e a montagem da equipe da piscina — e os seis dizem por que estão parados. O número
+  // cresce com a ferramenta; o que não pode crescer é o número de caminhos calados, que é zero.
+  assert.equal((codigo.match(/if \(Date\.now\(\) < esperaAte\) \{/g) || []).length, 6);
 });
 
 test('a licenca de trocar de cacada e so sobre viajar', () => {
@@ -945,9 +954,11 @@ test('a pedra de um turno escolhe-se entre a equipe e os times dele', () => {
   // E a coleção lê-se quando o painel precisa dela: configurar faz-se com a escada PARADA, que é
   // justamente quando a batida não a leria.
   assert.match(codigo, /const garantirColecao = \(\) => \{/);
+  // E desde 14/10/2026 ela tambem se le' no modo de degraus **com a piscina ligada**: a piscina e'
+  // feita de ids, e sem os niveis deles nao ha' como saber quem esta' mais atrasado.
   assert.match(
     codigo,
-    /if \(colecao\.size \|\| pedindoBichos \|\| cfg\.modo === 'escada'\) return;/,
+    /if \(colecao\.size \|\| pedindoBichos \|\| \(cfg\.modo === 'escada' && !cfg\.piscina\)\) return;/,
   );
 });
 
@@ -1093,7 +1104,14 @@ test('a equipe sobe junta de N em N, e o teto continua a ser um fim', () => {
   assert.match(corpo, /const fim = teto \? Math\.max\(teto, \.\.\.niveis\) : 0;/);
   // E o passo vale sozinho: só ele preenchido quer dizer "mantenha a equipe nivelada, para sempre".
   // Ninguém se forma — o fim da escada pede `cfg.teto` —, então a fila de times não é chamada.
-  assert.match(codigo, /if \(cfg\.teto && !proximoAluno\(\)\) return fimDaEscada\(aviso\);/);
+  assert.match(codigo, /if \(voltaAcabou\(\)\) return fimDaEscada\(aviso\);/);
+  // E o `voltaAcabou` continua a pedir o teto neste caminho: so' o passo preenchido quer dizer
+  // "mantenha a equipe nivelada, para sempre", e sem teto ninguem se forma.
+  const fim = codigo.slice(codigo.indexOf('const voltaAcabou ='));
+  assert.match(
+    fim.slice(0, 220),
+    /Boolean\(cfg\.teto\) && equipe\(\)\.length > 0 && !proximoAluno\(\)/,
+  );
   // NAO HA' CONTADOR DE RODADAS, ao contrario do modo de grupo: aqui o jogo diz o nivel de cada um,
   // e um contador ao lado seria uma segunda verdade — que se perderia no primeiro F5 e, pior,
   // ficaria errada quando o dono metesse um Lv 1 na equipe.
@@ -1117,13 +1135,19 @@ test('a subida nao esconde o fim da escada, que e onde moram os outros times', (
   // ele a fila de times. O dono: "nao encontro onde colocar os outros times".
   assert.ok(!codigo.includes('tetoSobe'), 'nada no painel depende de o teto fugir');
   assert.match(codigo, /destino\.style\.display = cfg\.fim === 'cacada' \? '' : 'none';/);
+  // E desde 14/10/2026 ela aparece por **dois** motivos: ser o fim da escada, ou ser a piscina.
   assert.match(
     codigo,
-    /campo\('\[data-times\]'\)\.style\.display = cfg\.fim === 'time' \? '' : 'none';/,
+    /campo\('\[data-times\]'\)\.style\.display = cfg\.fim === 'time' \|\| cfg\.piscina \? '' : 'none';/,
   );
   assert.match(codigo, /const perguntando = filaAcabou\(\);/);
   // A unica coisa que a subida mostra e' a frase que explica o que ela faz.
-  assert.match(codigo, /campo\('\[data-junta\]'\)\.style\.display = cfg\.subida \? '' : 'none';/);
+  // E na piscina ela cala-se: a frase fala de uma equipe que sobe junta, e a piscina sobe um de
+  // cada vez — a explicacao dela e' a outra, logo ali ao lado.
+  assert.match(
+    codigo,
+    /campo\('\[data-junta\]'\)\.style\.display = cfg\.subida && !cfg\.piscina \? '' : 'none';/,
+  );
   // Mexer no teto ou na subida muda quem e' o aluno: o cumprido era do aluno anterior.
   const ouve = codigo.slice(codigo.indexOf("['[data-subida]', 'subida'],"));
   assert.match(ouve.slice(0, 500), /cfg\.formados = false;/);
@@ -1382,5 +1406,209 @@ test('o exportar e importar da escada esta no painel, e e o do config.js', () =>
   assert.match(
     codigo,
     /if \(botoesConfig\) campo\('\[data-config\]'\)\.append\(botoesConfig\.el\);/,
+  );
+});
+
+// ---------------------------------------------------------------------------- a piscina de times
+
+test('na piscina o "formar em Lv" e chao, e a subida so comeca depois dele', () => {
+  // **O PEDIDO, POR EXTENSO, DE 14/10/2026.** "Tenho 6 pokes lvl 1 e 6 lvl 100; se eu coloco 140 e
+  // 2, os de level mais baixo vao chegar ao level 140, depois pula para o outro mais baixo ate o
+  // 140; quando todos tiverem 140 vai upando um por um ate o 142, depois todos ate o 144."
+  //
+  // Com `menor + subida` desde o inicio, o Lv 1 teria alvo 3 — doze Pokemon a ratear de 2 em 2
+  // desde o Lv 1, uma volta de equipe inteira por cada dois niveis. Por isso o chao vem primeiro,
+  // e inteiro.
+  const bloco = codigo.slice(codigo.indexOf('const alvoDaPiscina ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /if \(menor < chao\) return chao;/);
+  // E a subida e lida DEPOIS do chao: trocar a ordem das duas linhas e o defeito que isto evita.
+  assert.ok(
+    corpo.indexOf('if (menor < chao) return chao;') < corpo.indexOf('cfg.subida'),
+    'o chao decide antes de a subida ser sequer lida',
+  );
+  assert.match(corpo, /return menor \+ subida;/);
+  // Sem subida, o chao e tambem o fim — senao a piscina nunca acabaria sem ninguem ter pedido.
+  assert.match(corpo, /if \(!subida\) return chao;/);
+  // E sem chao nao ha piscina: nao se adivinha ate onde upar doze Pokemon.
+  assert.match(corpo, /if \(!chao \|\| !todos\.length\) return null;/);
+});
+
+test('o aluno da piscina e o mais atrasado, e nao o primeiro da ordem', () => {
+  // Sem piscina a ordem da equipe e uma escolha do dono e manda (ver `proximoAluno`). Com piscina a
+  // equipe e montada por esta ferramenta, entao nao ha ordem dele para respeitar — resta o nivel,
+  // que e o que ele pediu. As duas regras tem de continuar a existir, lado a lado.
+  const bloco = codigo.slice(codigo.indexOf('const alunoDaPiscina ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /if \(b\.nivel < alvo && \(!escolhido \|\| b\.nivel < escolhido\.nivel\)\)/);
+  // O empate resolve-se pela ordem da fila — `<` e nao `<=`. Com `<=`, duas batidas seguidas
+  // escolheriam Pokemon diferentes entre dois Lv 1, e nenhum deles subiria.
+  assert.doesNotMatch(corpo, /b\.nivel <= escolhido\.nivel/);
+  // E a outra regra continua la, inteira.
+  assert.match(
+    codigo,
+    /const proximoAluno = \(\) => \{[\s\S]*?equipe\(\)\.find\(\(p\) => p\.nivel !== null && !formado\(p, teto\)\)/,
+  );
+});
+
+test('a piscina sai dos times da fila, sem repetidos e sem quem nao e desta conta', () => {
+  const bloco = codigo.slice(codigo.indexOf('const piscinaDaFila ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  // Quem diz quem esta em cada time e a ferramenta Times, como no modo de grupo.
+  assert.match(corpo, /globalThis\.PPX\?\.times\?\.membrosDe/);
+  assert.match(corpo, /for \(const nome of fila\(\)\)/);
+  // O mesmo bicho em dois times e um bicho so.
+  assert.match(corpo, /if \(vistos\.has\(id\)\) continue;/);
+  // **Um id que nao esta na colecao nao e um Pokemon desta conta.** Acontece a quem importa a
+  // configuracao: os nomes dos times viajam, os bichos ficam. Sem isto a escada procuraria para
+  // sempre alguem que nao existe.
+  assert.match(corpo, /if \(!bicho\) continue;/);
+  assert.match(corpo, /if \(Number\.isFinite\(nivel\)\) todos\.push/);
+});
+
+test('a equipe da piscina cabe em seis e nao repete especie', () => {
+  // As duas regras do jogo que o modo de grupo ja tinha aprendido: seis lugares, e o jogo recusa
+  // **calado** a segunda da mesma especie. Por isso o repetido e saltado, e nao tentado.
+  const bloco = codigo.slice(codigo.indexOf('const equipeDaPiscina ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /if \(escolhidos\.length >= 6\) break;/);
+  assert.match(corpo, /if \(especies\.has\(b\.especie\)\) continue;/);
+  // O aluno vai no primeiro lugar, e e ele que vai para a frente: a montagem ja o entrega como
+  // lider, poupando uma troca e os 3 s de espera do jogo.
+  assert.match(corpo, /const escolhidos = \[aluno\];/);
+  // Quem ja passou do alvo nao entra: ocuparia o lugar de quem ainda tem o que fazer.
+  assert.match(corpo, /b\.nivel >= alvo\) continue;/);
+  // E os caroneiros sao escolhidos do mais atrasado para o menos.
+  assert.match(corpo, /\[\.\.\.todos\]\.sort\(\(a, c\) => a\.nivel - c\.nivel\)/);
+});
+
+test('a equipe da piscina monta-se depois de chegar, e nunca antes', () => {
+  // **O MESMO MOTIVO DA TROCA DE LIDER, MEDIDO EM 12/10/2026:** `PPX.cacadas.ir` remonta sempre o
+  // time guardado na propria caçada. Montar antes de viajar e montar para a viagem apagar.
+  const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
+  const viagem = bloco.indexOf('await viajar(degrau.cacada)');
+  const monta = bloco.indexOf('PPX.times.montar(');
+  const troca = bloco.indexOf('await trocarDeAluno(');
+  assert.ok(monta >= 0, 'a batida monta a equipe da piscina');
+  assert.ok(viagem < monta, 'a viagem vem antes da montagem');
+  assert.ok(monta < troca, 'a montagem vem antes da troca de lider');
+  // E so se monta estando la: fora do lugar, a equipe montada nao sobreviveria a viagem seguinte.
+  assert.match(bloco, /if \(naPiscina\(\) && chegou\(\) && !equipeDaPiscinaEmOrdem\(\)\)/);
+});
+
+test('a piscina recusa a cacada que guarda time, e diz qual degrau e', () => {
+  // A caçada manda no time dela. Esta ferramenta nao disputa isso — diz onde esta o conflito, como
+  // ja fazia o fim da escada e o modo de grupo.
+  const bloco = codigo.slice(codigo.indexOf('const faltaNaPiscina ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /const tropeco = degrauComTime\(\);/);
+  assert.match(corpo, /apagaria a minha/);
+  // E recusa antes de montar: a frase e devolvida pelo `conferir`, que para ali.
+  assert.match(
+    codigo,
+    /const falta = faltaNaPiscina\(\);\s*if \(falta\) \{\s*aviso\(falta\);\s*return 'falta na piscina';/,
+  );
+});
+
+test('com subida, a piscina nao acaba — e e de proposito', () => {
+  // "E por ai vai", dito em codigo: com `subida` preenchida o alvo sobe assim que o chao e
+  // alcançado, entao ha sempre alguem abaixo dele e o fim da escada nunca chega.
+  assert.match(codigo, /const voltaAcabou = \(\) =>/);
+  const bloco = codigo.slice(codigo.indexOf('const voltaAcabou ='));
+  assert.match(bloco.slice(0, 220), /naPiscina\(\)\s*\?\s*!alunoDaPiscina\(\)/);
+  // E o fim da escada passa a ser perguntado por aqui, nos dois caminhos.
+  assert.match(codigo, /if \(voltaAcabou\(\)\) return fimDaEscada\(aviso\);/);
+});
+
+test('na piscina, "trocar de time" nao e uma saida', () => {
+  // A fila ja e a piscina inteira: montar "o time seguinte" por cima da equipe que a piscina
+  // acabou de montar seria desfazer o proprio trabalho.
+  assert.match(codigo, /if \(cfg\.fim === 'nada' \|\| \(naPiscina\(\) && cfg\.fim === 'time'\)\)/);
+  assert.match(
+    codigo,
+    /if \(naPiscina\(\) && cfg\.fim === 'time'\) return `\$\{todos\} Fico onde você estiver\.`;/,
+  );
+  // O painel esconde a opcao, e mostra a fila por ser a piscina.
+  assert.match(
+    codigo,
+    /campo\('\[data-fim\] option\[value="time"\]'\)\.hidden = cfg\.piscina === true;/,
+  );
+  assert.match(
+    codigo,
+    /campo\('\[data-times\]'\)\.style\.display = cfg\.fim === 'time' \|\| cfg\.piscina \? '' : 'none';/,
+  );
+  // E a pergunta do fim da fila nao aparece: ela e sobre uma volta que ali nao existe.
+  assert.match(codigo, /const filaAcabou = \(\) => \{\s*if \(naPiscina\(\)\) return false;/);
+});
+
+test('ligar ou desligar a piscina esquece o aluno e o degrau cumprido', () => {
+  // Trocar de regra troca de aluno — de "o primeiro da equipe" para "o mais atrasado da fila", ou o
+  // contrario. O degrau cumprido era do aluno de antes, e deixa-lo guardado faria a escada
+  // recusar-se a descer para a caçada do novo ("nao desço com o mesmo aluno").
+  const bloco = codigo.slice(codigo.indexOf("campo('[data-piscina]').addEventListener"));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    });'));
+  assert.match(corpo, /cfg\.piscina = e\.target\.checked;/);
+  assert.match(corpo, /cfg\.aplicado = null;/);
+  assert.match(corpo, /cfg\.aluno = '';/);
+});
+
+test('a piscina precisa da colecao, e e a batida que a le', () => {
+  // O diagnostico e sincrono e nunca pede nada: sem esta leitura o painel diria "ainda nao li a
+  // coleção" para sempre, com a escada ligada e sem fazer nada.
+  assert.match(
+    codigo,
+    /if \(colecao\.size \|\| pedindoBichos \|\| \(cfg\.modo === 'escada' && !cfg\.piscina\)\) return;/,
+  );
+  const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
+  assert.match(
+    bloco,
+    /if \(\(!colecao\.size \|\| velha\) && !pedindoBichos\) \{\s*const lido = await pedirBichos\(\);/,
+  );
+  // E o painel tambem a pede, porque configurar a piscina faz-se com a escada parada.
+  assert.match(codigo, /if \(cfg\.piscina\) garantirColecao\(\);/);
+});
+
+test('a piscina viaja na configuracao, e os Pokemon dela nao', () => {
+  // A escolha "os times sao uma piscina" e configuracao e viaja. Os bichos de cada time sao desta
+  // conta e ficam — e por isso o importar esquece tambem de quem era a escada.
+  const bloco = codigo.slice(codigo.indexOf('montarBotoes({'));
+  assert.match(bloco, /piscina: cfg\.piscina === true,/);
+  assert.match(bloco, /cfg\.piscina = dados\?\.piscina === true;/);
+  assert.match(bloco, /cfg\.aluno = '';/);
+});
+
+test('na piscina o HUD manda sobre a colecao, porque so ele se mexe', () => {
+  // **MEDIDO NA BANCA EM 14/10/2026.** A coleção é lida uma vez e fica parada. O aluno chegou ao
+  // Lv 140 na tela e a escada continuou a tratá-lo como Lv 1 — aluno para sempre, com os outros
+  // onze à espera de uma vez que nunca chegava. Quem sobe de nível é sempre quem está à frente, e
+  // esse está sempre na equipe: o HUD, lido a cada batida, tem o único número que muda.
+  const bloco = codigo.slice(codigo.indexOf('const piscinaDaFila ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /const naTela = new Map\(equipe\(\)\.map\(\(p\) => \[p\.id, p\.nivel\]\)\);/);
+  assert.match(
+    corpo,
+    /const nivel = naTela\.has\(id\) && naTela\.get\(id\) !== null \? naTela\.get\(id\) : bicho\.nivel;/,
+  );
+  // E o registo da coleção não é alterado no lugar: ele é de outra ferramenta, e o modo de grupo
+  // lê o mesmo mapa. Copia-se o nível para cima de uma cópia.
+  assert.match(corpo, /todos\.push\(\{ \.\.\.bicho, nivel \}\)/);
+});
+
+test('a colecao relê-se quando o HUD discorda dela, e so entao', () => {
+  // **O LAÇO, MEDIDO NA BANCA EM 14/10/2026.** Formado, o aluno sai da equipe — e a tela deixa de
+  // o mostrar. A coleção velha volta então a jurá-lo em Lv 1, ele é escolhido outra vez, a equipe
+  // remonta-se para o ir buscar, ele sai de novo: equipes montadas para sempre, sem ninguém subir
+  // um nível. O sinal de que a coleção está velha é o HUD discordar dela, e é exatamente aí que
+  // vale a pena pagar a leitura — uma por nível ganho, e nenhuma enquanto nada muda.
+  const bloco = codigo.slice(codigo.indexOf('async function conferir(aviso'));
+  assert.match(
+    bloco,
+    /const velha = equipe\(\)\.some\(\(p\) => \{\s*const b = colecao\.get\(p\.id\);\s*return b && p\.nivel !== null && b\.nivel !== p\.nivel;\s*\}\);/,
+  );
+  assert.match(bloco, /if \(\(!colecao\.size \|\| velha\) && !pedindoBichos\) \{/);
+  // E a releitura vem ANTES de a piscina decidir fosse o que fosse.
+  assert.ok(
+    bloco.indexOf('const velha = equipe()') < bloco.indexOf('const falta = faltaNaPiscina();'),
+    'relê-se a coleção antes de escolher o aluno',
   );
 });

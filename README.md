@@ -1195,6 +1195,75 @@ pronta a divergir no primeiro F5 — e, pior, a ficar errada no dia em que você
 equipe. Derivado, esse Lv 1 puxa a conta para baixo e é ele o próximo aluno, que é exatamente o que
 se quer.
 
+### Os times da fila como uma piscina só, sem pedra nenhuma
+
+Pedido em **14/10/2026**: *"quero que veja os times que coloquei como uma pool de pokes a upar"*. O
+modo de grupo já fazia isso — mas ele precisa de um Pokémon com **pedra de XP**, e nem toda a conta
+tem um. A vontade é a mesma: um monte de atrasados a nivelar, sem escolher a dedo quem entra na
+equipe a seguir.
+
+Por isso, debaixo da fila de times há uma caixinha: **os times são uma piscina só**. Com ela marcada,
+e só no modo de degraus, mudam três coisas:
+
+1. **A fila deixa de ser percorrida time a time.** Os Pokémon de todos os times dela viram um
+   conjunto só, e a Escada monta a equipe sozinha com os seis mais atrasados — o aluno à frente, os
+   outros de carona, para que a vez seguinte seja só uma troca de líder e não uma equipe inteira a
+   desmontar.
+2. **O aluno é o mais atrasado da piscina**, e não o primeiro da ordem da equipe. Sem piscina a
+   ordem é uma escolha sua e manda; com piscina a equipe é montada por ela, então não há ordem sua
+   para respeitar — resta o nível.
+3. **"Formar em Lv" vira chão, e não teto.**
+
+#### O chão vem primeiro, inteiro; a subida começa só depois dele
+
+O exemplo é dele, por extenso: *"tenho 6 pokes lvl 1 e 6 lvl 100; se eu coloco 140 e 2, os de level
+mais baixo vão chegar ao level 140, depois pula para o outro mais baixo até o 140; quando todos
+tiverem 140 vai upando um por um até o 142, depois todos até o 144, e por aí vai"*.
+
+São dois tempos, e a ordem entre eles é tudo:
+
+- **Enquanto faltar alguém abaixo do chão, o alvo é o chão.** Quem está no Lv 1 vai direto ao 140, de
+  uma vez. A subida não se aplica aqui, de propósito: com *menor + passo*, o Lv 1 teria alvo 3 — doze
+  Pokémon a ratear de 2 em 2 desde o Lv 1 é uma volta de equipe inteira por cada dois níveis.
+- **Só depois do chão é que a subida começa**, e aí sim de N em N a partir do mais baixo: 142, 144,
+  146, sem fim.
+
+É o contrário da escada sem piscina, onde o teto é um fim e o passo vale desde o primeiro nível. São
+duas regras porque são dois pedidos diferentes, de dias diferentes — e o de 13/10 continua a valer
+para quem tem uma equipe só.
+
+Daí que, com o passo preenchido, **a piscina não acaba**: o alvo sobe assim que o chão é alcançado,
+então há sempre alguém abaixo dele. Por isso *"formados: ir à cidade e trocar de time"* desaparece do
+painel com a piscina ligada — a fila já é a piscina inteira, e montar "o time seguinte" por cima da
+equipe que ela acabou de montar seria desfazer o próprio trabalho.
+
+#### A caçada de cada degrau tem de aguentar o aluno
+
+Sem piscina, a equipe é sua e costuma ter alguém forte. Com piscina, a equipe inteira é de atrasados
+e quem está à frente é o mais fraco de todos. Os degraus continuam a ser os seus, e é neles que mora
+a proteção: um degrau de Lv 1 apontado para uma caçada de Lv 200 mata o aluno, e a Escada vai levá-lo
+à enfermeira e tentar de novo, para sempre.
+
+E a Escada **recusa-se a montar** se qualquer degrau apontar para uma caçada que guarda time: viajar
+remonta o time guardado na caçada e apagaria a equipe da piscina. Ela diz qual degrau é o culpado, em
+vez de lutar com a caçada — quem manda no time de uma caçada é a caçada.
+
+#### Quem diz o nível é o HUD, e a coleção relê-se quando ele discorda dela
+
+Dois defeitos medidos na banca em **14/10/2026**, os dois da mesma raiz: a lista dos Pokémon da conta
+é lida uma vez, pela API, e não se mexe mais.
+
+O primeiro: o aluno chegou ao Lv 140 na tela e a Escada continuou a tratá-lo como Lv 1 — aluno para
+sempre, com os outros onze à espera de uma vez que nunca chegava. Quem sobe de nível é sempre quem
+está à frente, e esse está sempre na equipe: o HUD, lido a cada batida, tem o único número que muda.
+Então o HUD manda sobre a coleção para quem está na tela.
+
+O segundo, logo a seguir: formado, o aluno **sai** da equipe — e a tela deixa de o mostrar. A coleção
+velha voltava a jurá-lo em Lv 1, ele era escolhido outra vez, a equipe remontava-se para o ir buscar,
+ele saía de novo. Equipes montadas para sempre, sem ninguém subir um nível. O sinal de que a coleção
+está velha é o próprio HUD discordar dela, e é exatamente aí que vale a pena pagar a releitura: uma
+por nível ganho, e nenhuma enquanto nada muda.
+
 ### Um campo no meio de um rótulo não estica
 
 Os dois números deste par nasceram na mesma linha — *"formar em Lv [ ] e mais [ ] níveis"* —, e no

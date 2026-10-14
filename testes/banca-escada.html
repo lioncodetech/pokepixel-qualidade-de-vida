@@ -189,6 +189,24 @@
       { id: 'j1', nome: 'Totodile' },
       { id: 'j2', nome: 'Chikorita' },
     ],
+    // **O exemplo do dono, de 14/10/2026, por extenso:** "tenho 6 pokes lvl 1 e 6 lvl 100". Dois
+    // times, porque a piscina tem de provar que junta os times da fila num conjunto so'.
+    'Piscina A': [
+      { id: 'a1', nome: 'Larvitar' },
+      { id: 'a2', nome: 'Bagon' },
+      { id: 'a3', nome: 'Beldum' },
+      { id: 'a4', nome: 'Gible' },
+      { id: 'a5', nome: 'Deino' },
+      { id: 'a6', nome: 'Goomy' },
+    ],
+    'Piscina B': [
+      { id: 'b1', nome: 'Lapras' },
+      { id: 'b2', nome: 'Snorlax' },
+      { id: 'b3', nome: 'Aerodactyl' },
+      { id: 'b4', nome: 'Kabutops' },
+      { id: 'b5', nome: 'Omastar' },
+      { id: 'b6', nome: 'Onix' },
+    ],
   };
 
   /**
@@ -210,6 +228,20 @@
     // A piscina da segunda pedra.
     { id: 'j1', nome: 'Totodile', especie: 'totodile', nivel: 8 },
     { id: 'j2', nome: 'Chikorita', especie: 'chikorita', nivel: 8 },
+    // Os doze do exemplo do dono: seis em Lv 1, seis em Lv 100, todos de especies diferentes —
+    // a regra da especie repetida ja' tem a sua prova no Caterpie, ali em cima.
+    { id: 'a1', nome: 'Larvitar', especie: 'larvitar', nivel: 1 },
+    { id: 'a2', nome: 'Bagon', especie: 'bagon', nivel: 1 },
+    { id: 'a3', nome: 'Beldum', especie: 'beldum', nivel: 1 },
+    { id: 'a4', nome: 'Gible', especie: 'gible', nivel: 1 },
+    { id: 'a5', nome: 'Deino', especie: 'deino', nivel: 1 },
+    { id: 'a6', nome: 'Goomy', especie: 'goomy', nivel: 1 },
+    { id: 'b1', nome: 'Lapras', especie: 'lapras', nivel: 100 },
+    { id: 'b2', nome: 'Snorlax', especie: 'snorlax', nivel: 100 },
+    { id: 'b3', nome: 'Aerodactyl', especie: 'aerodactyl', nivel: 100 },
+    { id: 'b4', nome: 'Kabutops', especie: 'kabutops', nivel: 100 },
+    { id: 'b5', nome: 'Omastar', especie: 'omastar', nivel: 100 },
+    { id: 'b6', nome: 'Onix', especie: 'onix', nivel: 100 },
   ];
 
   const hud = document.querySelector('.hud');
@@ -724,6 +756,88 @@
     entrada.files = dados.files;
     entrada.dispatchEvent(new Event('change'));
     anotar('banca: entreguei ao painel uma escada exportada noutra janela');
+  });
+
+  // ------------------------------------------------------------------- a piscina
+
+  /**
+   * O cenario do pedido, montado de uma vez: dois times na fila, a caixinha marcada, chao 140 e
+   * passo 2.
+   *
+   * Entra pelo Importar porque e' o unico caminho que escreve a configuracao inteira num clique —
+   * e, de quebra, prova que a escolha da piscina viaja entre janelas, que e' uma decisao a mais a
+   * ser exercitada sem custar um comando proprio.
+   */
+  comando('a piscina do dono (6 em Lv 1 · 6 em Lv 100)', () => {
+    const pacote = {
+      pacote: 'pokepixel-qualidade-de-vida',
+      formato: 1,
+      ferramenta: 'escada',
+      nome: 'Escada de caçadas',
+      quando: new Date().toISOString(),
+      dados: {
+        degraus: [
+          { nivel: 1, cacada: 'Caça de Togepi' },
+          { nivel: 50, cacada: 'Caça de Ralts' },
+        ],
+        trocar: true,
+        teto: 140,
+        subida: 2,
+        modo: 'escada',
+        fim: 'nada',
+        destino: '',
+        times: ['Piscina A', 'Piscina B'],
+        piscina: true,
+        sempre: '',
+        grupo: { cacadas: [], turnos: [], alvo: null, minimo: null, passo: null },
+      },
+    };
+    const entrada = document.querySelector('input[data-cfg-arquivo="escada"]');
+    if (!entrada) return anotar('banca: o Importar não está no painel (falta o config.js?)');
+    const dados = new DataTransfer();
+    dados.items.add(
+      new File([JSON.stringify(pacote)], 'escada-config.json', { type: 'application/json' }),
+    );
+    entrada.files = dados.files;
+    entrada.dispatchEvent(new Event('change'));
+    anotar('banca: piscina armada — chão 140, passo 2, dois times na fila');
+  });
+
+  /**
+   * Sobe o aluno da piscina ate' ao chao de uma vez.
+   *
+   * Clicar "+1" cento e trinta e nove vezes por cada um dos doze nao prova nada que esta nao
+   * prove, e o que se quer ver e' a **passagem de vez**: o seguinte mais atrasado a entrar.
+   */
+  comando('o aluno da piscina chegou ao chão (140)', () => {
+    const quem = [...equipe].sort((a, b) => a.nivel - b.nivel)[0];
+    if (!quem) return anotar('banca: equipe vazia');
+    const antes = quem.nivel;
+    quem.nivel = 140;
+    for (const b of MOCHILA) if (b.id === quem.id) b.nivel = 140;
+    pintarHud();
+    anotar(`banca: ${quem.nome} saltou de Lv ${antes} para 140`);
+  });
+
+  /**
+   * Toda a piscina no chao: o estado em que a **segunda** regra comeca a valer.
+   *
+   * E' o "quando todos tiverem lvl 140" do pedido. Daqui em diante o alvo tem de passar a 142, e
+   * depois a 144 sozinho — o que nenhuma quantidade de cliques no "+1" mostraria em tempo util.
+   */
+  comando('nivelar a piscina toda (todos no maior)', () => {
+    const ids = new Set(
+      [...(TIMES['Piscina A'] || []), ...(TIMES['Piscina B'] || [])].map((m) => m.id),
+    );
+    const niveis = [
+      ...MOCHILA.filter((b) => ids.has(b.id)).map((b) => b.nivel),
+      ...equipe.filter((q) => ids.has(q.id)).map((q) => q.nivel),
+    ];
+    const maior = Math.max(...niveis);
+    for (const b of MOCHILA) if (ids.has(b.id)) b.nivel = maior;
+    for (const q of equipe) if (ids.has(q.id)) q.nivel = maior;
+    pintarHud();
+    anotar(`banca: os doze da piscina estão em Lv ${maior} — o alvo tem de passar a ${maior + 2}`);
   });
 
   pintarHud();

@@ -96,6 +96,21 @@ Três regras, e cada uma já tem o seu teste em `testes/config.test.mjs`:
 3. **O que chega é lido como se viesse de fora, porque vem.** Quem aplica é a ferramenta, campo a
    campo, com limite e tipo. Nunca escreva no armazenamento a chave que vier no arquivo.
 
+## Um cache lido uma vez mente, e mente duas vezes
+
+A coleção dos Pokémon da conta vem da API, custa uma chamada e por isso guarda-se. Em **14/10/2026**
+isso produziu dois defeitos seguidos, na piscina da Escada, e os dois com a mesma raiz:
+
+1. **O cache não viu o que a tela viu.** O aluno subiu ao nível pedido no HUD e o cache continuou a
+   jurá-lo no nível antigo: aluno para sempre, e os outros à espera de uma vez que nunca chegava.
+2. **O cache sobreviveu ao que o explicava.** Formado, o aluno saiu da equipe e deixou de aparecer no
+   HUD — e aí o cache velho voltou a mandar. Ele era escolhido outra vez, a equipe remontava-se para
+   o ir buscar, ele saía de novo: um laço que montava equipes para sempre sem ninguém subir um nível.
+
+A regra que sobra: **onde o jogo mostra o número ao vivo, é o vivo que manda** — e o cache relê-se no
+instante em que o vivo discordar dele, que é o único instante em que a releitura paga o que custa.
+Um cache que só se relê "quando está vazio" está a apostar que nada muda, e aqui tudo muda.
+
 ## O resto
 
 - Reproduza antes de consertar. Uma banca construída sobre a suposição só confirma a suposição.

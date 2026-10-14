@@ -105,7 +105,9 @@ PPX.modulo(
      * Custa uma chamada a' API do jogo, sem abrir janela nenhuma.
      */
     const garantirColecao = () => {
-      if (colecao.size || pedindoBichos || cfg.modo === 'escada') return;
+      // No modo de degraus a colecao nao serve para nada — **menos com a piscina ligada**, que e'
+      // feita de ids de Pokemon e precisa dos niveis deles para saber quem esta' mais atrasado.
+      if (colecao.size || pedindoBichos || (cfg.modo === 'escada' && !cfg.piscina)) return;
       pedindoBichos = true;
       void pedirBichos()
         .then((lido) => {
@@ -169,6 +171,26 @@ PPX.modulo(
        * **Nao ha' contador de onde se esta' na fila, e isso e' deliberado** — ver `timeSeguinte`.
        */
       times: [],
+      /**
+       * Os times da fila sao **uma piscina so'**, e nao etapas em ordem.
+       *
+       * Pedido pelo dono em 14/10/2026: "quero que veja os times que coloquei como uma pool de
+       * pokes a upar". Nem toda a conta dele tem um Pokemon com pedra de XP, e sem pedra o modo de
+       * grupo nao serve — mas a vontade e' a mesma: um monte de atrasados a nivelar, sem ele ter de
+       * escolher a dedo quem entra na equipe a seguir.
+       *
+       * Com isto ligado mudam **tres** coisas, e so' no modo de degraus:
+       *
+       *   1. A fila deixa de ser percorrida time a time. Os Pokemon de todos os times dela sao um
+       *      conjunto so', e a escada monta a equipe sozinha com os mais atrasados.
+       *   2. O aluno passa a ser **o mais atrasado da piscina**, e nao o primeiro da ordem da
+       *      equipe. A ordem da equipe deixa de ser uma escolha do dono: a equipe e' montada aqui.
+       *   3. **"Formar em Lv" vira chao, e nao teto** — ver `alvoDaPiscina`. E' a regra que ele
+       *      descreveu com o proprio exemplo, e e' o contrario do que a escada faz sem piscina.
+       *
+       * Desligado, nada disto existe e a fila volta a ser a de sempre.
+       */
+      piscina: false,
       /**
        * Como ela upa: `'escada'` (um aluno de cada vez, viajando os degraus), `'grupo'` (um fixo
        * com a pedra e os outros a rodar, ate' um nivel) ou `'passo'` (o mesmo, subindo o alvo de
@@ -445,7 +467,19 @@ PPX.modulo(
      * Sem teto nao ha' fila nem formatura: o aluno e' quem o dono poe a' frente, e esta ferramenta
      * nunca mexe nisso.
      */
-    const alunoDeAgora = () => (cfg.teto ? proximoAluno() : caixaDoLider());
+    const alunoDeAgora = () =>
+      naPiscina() ? alunoDaPiscinaNoHud() : cfg.teto ? proximoAluno() : caixaDoLider();
+
+    /**
+     * Acabou o que havia para subir nesta volta — e e' daqui que sai o fim da escada.
+     *
+     * Sem piscina e' a equipe na tela: todos no teto de agora, ninguem por subir. Com piscina e' o
+     * conjunto inteiro dos times da fila, e **com `subida` preenchida isto nunca e' verdade**: o
+     * alvo sobe assim que o chao e' alcancado, e portanto ha' sempre alguem abaixo dele. Nao e' um
+     * descuido — e' o "e por ai' vai" do pedido, dito em codigo.
+     */
+    const voltaAcabou = () =>
+      naPiscina() ? !alunoDaPiscina() : Boolean(cfg.teto) && equipe().length > 0 && !proximoAluno();
 
     /**
      * Em que caçada se esta', pela porta das Caçadas.
@@ -599,6 +633,9 @@ PPX.modulo(
      * nao pergunta nada e' um campo a mais para quem olha de relance decifrar.
      */
     const filaAcabou = () => {
+      // Na piscina a fila nao e' percorrida, entao ela nunca "acaba": perguntar o que fazer a
+      // seguir seria perguntar sobre uma volta que nao existe.
+      if (naPiscina()) return false;
       if (cfg.fim !== 'time' || !cfg.teto) return false;
       if (!equipe().length || proximoAluno()) return false;
       const vez = timeSeguinte();
@@ -681,7 +718,7 @@ PPX.modulo(
     const primeiroDegrau = () =>
       cfg.degraus.reduce((m, d) => (!m || d.nivel < m.nivel ? d : m), null);
 
-    // ------------------------------------------------------- o modo de grupo (a pedra da XP)
+    // --------------------------------------------------------------------------- a colecao
 
     /**
      * A colecao, como a ponte a leu na ultima batida: `id -> { id, nome, especie, nivel, onde }`.
@@ -689,8 +726,198 @@ PPX.modulo(
      * Fica em memoria porque o diagnostico e' **sincrono** e a leitura e' assincrona: sem cache, o
      * painel teria de dizer "espere" a cada repintura. Ninguem decide por ela sem a reler primeiro
      * — quem age usa a leitura da propria batida.
+     *
+     * Serve aos dois donos: o modo de grupo e a piscina. Por isso mora aqui em cima, e nao dentro
+     * de um deles.
      */
     let colecao = new Map();
+
+    // ------------------------------------------ a piscina (os times da fila como um conjunto so')
+
+    /**
+     * A piscina esta' a mandar nesta batida.
+     *
+     * Tres condicoes, e as tres sao do dono: o modo de degraus, a caixinha marcada e **pelo menos
+     * um time na fila**. Sem times nao ha' de onde tirar ninguem, e uma piscina vazia que se
+     * anunciasse como ligada faria a escada parar sem dizer porque'.
+     */
+    const naPiscina = () => cfg.modo === 'escada' && cfg.piscina === true && fila().length > 0;
+
+    /**
+     * Os Pokemon de todos os times da fila, achatados num conjunto so'.
+     *
+     * Sem repetidos — o mesmo bicho em dois times e' um bicho — e na ordem da fila, que e' a unica
+     * ordem que o dono escreveu e portanto a unica honesta para desempatar.
+     *
+     * **Quem nao esta' na colecao fica de fora, calado.** Um id guardado num time de outra conta
+     * (o importar traz os nomes, nao os bichos) nao e' um Pokemon daqui, e tentar upa-lo seria
+     * procurar para sempre alguem que nao existe.
+     */
+    const piscinaDaFila = () => {
+      const membrosDe = globalThis.PPX?.times?.membrosDe;
+      if (typeof membrosDe !== 'function') return [];
+      // **O HUD manda sobre a colecao, e isto e' o conserto de um defeito medido na banca em
+      // 14/10/2026.** A colecao e' lida uma vez e fica parada: o aluno chegou ao Lv 140 na tela e a
+      // escada continuou a trata-lo como Lv 1, aluno para sempre, com os outros onze a' espera de
+      // uma vez que nunca chegava. Quem sobe de nivel e' sempre o que esta' a' frente, e esse esta'
+      // **sempre** na equipe — entao o HUD, que e' lido a cada batida, tem o unico numero que muda.
+      // A colecao continua a valer para os que estao fora da equipe, que nao estao a ganhar nada.
+      const naTela = new Map(equipe().map((p) => [p.id, p.nivel]));
+      const vistos = new Set();
+      const todos = [];
+      for (const nome of fila())
+        for (const id of membrosDe(nome)) {
+          if (vistos.has(id)) continue;
+          vistos.add(id);
+          const bicho = colecao.get(id);
+          if (!bicho) continue;
+          const nivel = naTela.has(id) && naTela.get(id) !== null ? naTela.get(id) : bicho.nivel;
+          if (Number.isFinite(nivel)) todos.push({ ...bicho, nivel });
+        }
+      return todos;
+    };
+
+    /**
+     * Ate' onde a piscina sobe **agora** — e aqui mora a regra que o dono descreveu.
+     *
+     * **"FORMAR EM LV" E' CHAO, E NAO TETO.** Pedido em 14/10/2026, com o exemplo dele por extenso:
+     * "tenho 6 pokes lvl 1 e 6 lvl 100; se eu coloco 140 e 2, os de level mais baixo vao chegar ao
+     * level 140, depois pula para o outro mais baixo ate' o 140; quando todos tiverem 140 vai
+     * upando um por um ate' o 142, depois todos ate' o 144, e por ai' vai".
+     *
+     * Entao sao dois tempos, e a ordem entre eles e' tudo:
+     *
+     *   1. **Enquanto faltar alguem abaixo do chao, o alvo e' o chao.** Quem esta' em Lv 1 vai
+     *      direito ao 140, de uma vez. Nao se aplica a subida aqui, e e' de proposito: com
+     *      `menor + subida` o Lv 1 teria alvo 3, passaria a vez, voltaria para o 5 — doze Pokemon
+     *      a ratear de 2 em 2 desde o Lv 1 e' uma volta de equipe inteira por cada dois niveis.
+     *   2. **So' depois do chao e' que a subida comeca**, e ai' sim de `subida` em `subida` a
+     *      partir do mais baixo: 142, 144, 146, sem fim.
+     *
+     * E' o contrario do que a escada sem piscina faz — la' o teto e' um fim, e a subida vale desde
+     * o primeiro nivel (ver `tetoDeAgora`). Sao duas regras porque sao dois pedidos diferentes, de
+     * dias diferentes, e o de 13/10 continua a valer para quem tem uma equipe so'.
+     *
+     * Sem chao nao ha' piscina: nao se adivinha ate' onde upar doze Pokemon.
+     */
+    const alvoDaPiscina = (todos = piscinaDaFila()) => {
+      const chao = Number(cfg.teto) || 0;
+      if (!chao || !todos.length) return null;
+      const menor = Math.min(...todos.map((b) => b.nivel));
+      if (menor < chao) return chao;
+      const subida = Number(cfg.subida) || 0;
+      // Sem subida o chao e' tambem o fim: todos la', a piscina acabou e o fim da escada decide.
+      if (!subida) return chao;
+      return menor + subida;
+    };
+
+    /**
+     * O aluno da piscina: **o mais atrasado que ainda nao chegou ao alvo**.
+     *
+     * Aqui o criterio e' o nivel, e nao a ordem — ao contrario do `proximoAluno`, que respeita a
+     * ordem em que o dono montou a equipe. A diferenca nao e' um descuido: sem piscina a equipe e'
+     * dele e a ordem e' uma escolha dele; com piscina a equipe e' montada por esta ferramenta, e
+     * entao nao ha' ordem nenhuma dele para respeitar. Resta o nivel, que e' o que ele pediu.
+     *
+     * Empate resolve-se pela ordem da fila: duas batidas seguidas tem de escolher o mesmo, ou a
+     * escada ficaria a trocar de aluno entre dois Lv 1 sem nenhum deles subir.
+     */
+    const alunoDaPiscina = (todos = piscinaDaFila(), alvo = alvoDaPiscina(todos)) => {
+      if (!alvo) return null;
+      let escolhido = null;
+      for (const b of todos)
+        if (b.nivel < alvo && (!escolhido || b.nivel < escolhido.nivel)) escolhido = b;
+      return escolhido;
+    };
+
+    /**
+     * A equipe que a piscina quer na tela: o aluno, e os cinco atrasados seguintes.
+     *
+     * **Os caroneiros nao sao enfeite.** Quem caça e' o aluno, a' frente; os outros vao junto para
+     * que a vez seguinte seja so' uma troca de lider — e nao uma equipe inteira a desmontar e a
+     * montar a cada dois niveis, que sao seis chamadas ao jogo por cada uma que valia a pena.
+     *
+     * Duas regras do jogo, as mesmas que o modo de grupo ja' aprendeu: a equipe tem seis lugares, e
+     * **especie nao repete** — o jogo recusa calado o segundo. Por isso o repetido e' saltado, e
+     * nao tentado.
+     *
+     * Quem ja' passou do alvo nao entra: ele nao tem nada a fazer aqui, e ocuparia o lugar de quem
+     * tem.
+     */
+    const equipeDaPiscina = (aluno, todos = piscinaDaFila(), alvo = alvoDaPiscina(todos)) => {
+      if (!aluno || !alvo) return [];
+      const especies = new Set([aluno.especie]);
+      const escolhidos = [aluno];
+      for (const b of [...todos].sort((a, c) => a.nivel - c.nivel)) {
+        if (escolhidos.length >= 6) break;
+        if (b.id === aluno.id || b.nivel >= alvo) continue;
+        if (especies.has(b.especie)) continue;
+        especies.add(b.especie);
+        escolhidos.push(b);
+      }
+      return escolhidos;
+    };
+
+    /**
+     * O aluno da piscina **como o HUD o conhece**, quando ele ja' esta' na equipe.
+     *
+     * A caixa do HUD sabe tres coisas que a colecao nao sabe — quem esta' a' frente, quem esta'
+     * morto e se o jogo esta' na espera de 3 s —, e sao essas tres que o motor consulta a seguir.
+     * Fora da equipe sobra o registo da colecao, que chega para escolher o degrau e viajar: por
+     * essa altura ele ainda nem devia estar la' a' frente.
+     */
+    const alunoDaPiscinaNoHud = () => {
+      const b = alunoDaPiscina();
+      if (!b) return null;
+      return equipe().find((p) => p.id === b.id) || b;
+    };
+
+    /**
+     * A equipe que a piscina quer ja' e' a que esta' na tela.
+     *
+     * Compara-se o conjunto, e nao a ordem: a ordem dentro da equipe nao e' decisao desta
+     * ferramenta — quem esta' **a' frente** e' —, e exigi-la faria a escada remontar a equipe
+     * inteira a cada vez que o jogo a reordenasse por sua conta.
+     */
+    const equipeDaPiscinaEmOrdem = () => {
+      const quero = equipeDaPiscina(alunoDaPiscina()).map((b) => b.id);
+      if (!quero.length) return true;
+      const tenho = equipe().map((p) => p.id);
+      return quero.length === tenho.length && quero.every((id) => tenho.includes(id));
+    };
+
+    /** O que falta escolher para a piscina poder correr, ou `''`. */
+    const faltaNaPiscina = () => {
+      if (!globalThis.PPX?.times?.montar)
+        return 'A ferramenta Times está desligada — é ela que monta a equipe da piscina.';
+      if (typeof globalThis.PPX?.times?.membrosDe !== 'function')
+        return 'Os Times não sabem dizer quem está em cada time — recarregue a extensão.';
+      if (!Number(cfg.teto))
+        return 'Diga o nível mínimo em "formar em Lv" — é até lá que a piscina sobe primeiro.';
+      const sabidos = globalThis.PPX?.times?.nomes?.();
+      if (Array.isArray(sabidos) && sabidos.length) {
+        const orfao = fila().find((nome) => !sabidos.includes(nome));
+        if (orfao)
+          return `O time "${orfao}" não existe nesta conta — escolha outro, ou guarde-o nos Times.`;
+      }
+      // **A caçada manda no time dela, e nos nao disputamos isso.** Medido em 12/10/2026 com o fim
+      // da escada: `PPX.cacadas.ir` remonta sempre o time guardado na propria caçada, e apagaria a
+      // equipe que a piscina acabou de montar. Dizer qual degrau e' o culpado e' o que faz a frase
+      // servir para alguma coisa.
+      const tropeco = degrauComTime();
+      if (tropeco)
+        return (
+          `Não monto equipe nenhuma: a caçada "${tropeco.cacada}" do degrau de ` +
+          `Lv ${tropeco.nivel} monta o time "${tropeco.time}" ao chegar e apagaria a minha. ` +
+          'Tire o time dessa caçada nas Caçadas.'
+        );
+      if (!colecao.size) return 'Ainda não li a coleção.';
+      if (!piscinaDaFila().length)
+        return 'Os times da fila não têm nenhum Pokémon desta conta — confira-os nos Times.';
+      return '';
+    };
+
+    // ------------------------------------------------------- o modo de grupo (a pedra da XP)
 
     /**
      * O nivel em que um rodante sai do grupo.
@@ -946,8 +1173,18 @@ PPX.modulo(
 
       // O fim da escada vem antes do degrau: com a equipe toda no teto nao ha' aluno, e dizer em
       // que degrau ele esta' seria responder a pergunta errada.
-      if (cfg.teto && equipe().length && !proximoAluno()) {
-        const todos = `A equipe toda chegou ao Lv ${tetoDeAgora()}.`;
+      if (naPiscina()) {
+        const falta = faltaNaPiscina();
+        if (falta) return falta;
+      }
+      if (voltaAcabou()) {
+        const todos = naPiscina()
+          ? `A piscina inteira chegou ao Lv ${alvoDaPiscina()}.`
+          : `A equipe toda chegou ao Lv ${tetoDeAgora()}.`;
+        // Na piscina, "trocar de time" nao e' uma saida: a fila ja' e' a piscina inteira. O painel
+        // esconde a opcao e o motor trata-a como "ficar onde estiver" — ver `fimDaEscada` —, e o
+        // diagnostico tem de contar a mesma historia, ou ele promete uma troca que nunca acontece.
+        if (naPiscina() && cfg.fim === 'time') return `${todos} Fico onde você estiver.`;
         if (cfg.fim === 'cidade')
           return cfg.formados
             ? `${todos} Levei a equipe para a cidade e curei.`
@@ -1028,9 +1265,16 @@ PPX.modulo(
           return `${quem} Lv ${n}: iria para "${degrau.cacada}", mas não tenho licença para trocar de caçada. Use o ▸.`;
         return `${quem} Lv ${n}: falta ir para "${degrau.cacada}".`;
       }
-      if (cfg.teto && !aluno.lider)
+      // A equipe da piscina so' se monta depois de chegar, e por isso so' se diz depois de chegar.
+      if (naPiscina() && !equipeDaPiscinaEmOrdem())
+        return `${quem} Lv ${n}: em "${degrau.cacada}" — falta montar a equipe da piscina.`;
+      if ((cfg.teto || naPiscina()) && !aluno.lider)
         return `${quem} Lv ${n}: em "${degrau.cacada}" — falta pô-lo à frente.`;
-      return `${quem} Lv ${n}: em "${degrau.cacada}", como manda o degrau de Lv ${degrau.nivel}.`;
+      const comoManda = `${quem} Lv ${n}: em "${degrau.cacada}", como manda o degrau de Lv ${degrau.nivel}.`;
+      if (!naPiscina()) return comoManda;
+      const alvo = alvoDaPiscina();
+      const atrasados = piscinaDaFila().filter((b) => b.nivel < alvo).length;
+      return `${comoManda} Alvo da piscina: Lv ${alvo} — faltam ${atrasados}.`;
     }
 
     // ------------------------------------------------------------- o motor
@@ -1266,7 +1510,11 @@ PPX.modulo(
         return 'formados';
       };
 
-      if (cfg.fim === 'nada') {
+      // **Na piscina, "trocar de time" nao quer dizer nada.** A fila ja' e' a piscina inteira, e
+      // montar "o time seguinte" por cima da equipe que a piscina acabou de montar seria desfazer
+      // o proprio trabalho. O painel esconde a opcao; aqui ela e' tratada como "ficar onde estiver"
+      // para o caso de ela ter ficado guardada de antes da caixinha ser marcada.
+      if (cfg.fim === 'nada' || (naPiscina() && cfg.fim === 'time')) {
         aviso(diagnostico());
         return 'sem fim';
       }
@@ -1749,9 +1997,38 @@ PPX.modulo(
 
       if (!equipe().length) return '';
 
+      // **A piscina precisa da colecao, e e' a batida que a le'.** O diagnostico e' sincrono e
+      // nunca a pede; sem isto o painel diria "ainda nao li a coleção" para sempre, com a escada
+      // ligada e sem fazer nada.
+      if (naPiscina()) {
+        // **A COLECAO VELHA FAZ UM LAÇO, E ISTO FOI MEDIDO NA BANCA EM 14/10/2026.** Ela e' lida
+        // uma vez e nao se move; o HUD, sim. Enquanto o aluno esta' na equipe o `piscinaDaFila`
+        // tapa o buraco com o nivel da tela — mas no instante em que ele se forma e sai da equipe,
+        // a tela deixa de o mostrar e a colecao volta a jura-lo em Lv 1. Ele era escolhido outra
+        // vez, a equipe remontava-se para o ir buscar, ele saia de novo: a escada ficava a montar
+        // equipes para sempre, sem ninguem subir um unico nivel.
+        //
+        // O sinal de que a colecao esta' velha e' o proprio HUD discordar dela — e e' exactamente
+        // quando ele discorda que vale a pena pagar a leitura. Uma por nivel ganho, e nenhuma
+        // enquanto nada muda.
+        const velha = equipe().some((p) => {
+          const b = colecao.get(p.id);
+          return b && p.nivel !== null && b.nivel !== p.nivel;
+        });
+        if ((!colecao.size || velha) && !pedindoBichos) {
+          const lido = await pedirBichos();
+          if (lido?.bichos?.length) colecao = new Map(lido.bichos.map((b) => [b.id, b]));
+        }
+        const falta = faltaNaPiscina();
+        if (falta) {
+          aviso(falta);
+          return 'falta na piscina';
+        }
+      }
+
       // O fim da escada vem antes de tudo: sem aluno nenhum, perguntar em que degrau ele esta'
       // seria responder a pergunta errada.
-      if (cfg.teto && !proximoAluno()) return fimDaEscada(aviso);
+      if (voltaAcabou()) return fimDaEscada(aviso);
       if (cfg.formados) {
         cfg.formados = false;
         // Comecou uma volta nova, entao a pergunta do fim da fila e' uma pergunta nova. Guardar a
@@ -1868,8 +2145,57 @@ PPX.modulo(
         gravar();
       }
 
+      // ------------------------------------------------- 2.5. e, na piscina, a equipe
+      //
+      // **Depois da viagem, e nunca antes.** Pelo mesmo motivo que a troca de lider vem depois: a
+      // caçada remonta a equipe ao chegar, e montar antes seria montar para ela apagar. Por isso
+      // tambem so' se monta **estando la'** — fora do lugar, a equipe que se montasse nao
+      // sobreviveria a' viagem seguinte.
+      if (naPiscina() && chegou() && !equipeDaPiscinaEmOrdem()) {
+        if (Date.now() < esperaAte) {
+          aviso(diagnostico());
+          return 'esperando';
+        }
+        const todos = piscinaDaFila();
+        const alvo = alvoDaPiscina(todos);
+        const quero = equipeDaPiscina(alunoDaPiscina(todos, alvo), todos, alvo);
+        correndo = true;
+        try {
+          const soltar = await esperarAVez();
+          if (!soltar) {
+            adiar(ATE_TENTAR_A_VEZ);
+            aviso('Outra ferramenta está agindo. Tento de novo.');
+            return 'sem vez';
+          }
+          try {
+            aviso(`Montando a equipe da piscina: ${quero.map((b) => b.nome).join(', ')}.`);
+            // Quem monta e' a ferramenta Times, com as tres regras do jogo medidas la'. E o lider
+            // vai a' frente ja' aqui: e' ele quem caça, e uma montagem que deixasse outro a'
+            // frente custaria uma troca a seguir, com os 3 s de espera do jogo pelo meio.
+            const r = await globalThis.PPX.times.montar(
+              quero.map((b) => ({ id: b.id, nome: b.nome })),
+              quero[0].id,
+              'a piscina',
+            );
+            if (!r?.ok) {
+              adiar(CASTIGO);
+              aviso(`Não consegui montar a equipe: ${r?.erro || 'o jogo não montou'}`);
+              return 'falhou';
+            }
+          } finally {
+            soltar();
+          }
+        } finally {
+          correndo = false;
+        }
+        desenhar(false);
+        aviso(diagnostico());
+        retomar();
+        return 'equipe montada';
+      }
+
       // ---------------------------------------------------------------- 3. e so' agora a troca
-      if (cfg.teto) {
+      if (cfg.teto || naPiscina()) {
         // **A caixa lida antes da viagem nao serve depois dela.** A caçada guardada monta a equipe
         // inteira e o jogo redesenha o HUD: o elemento lido antes fica orfao, e clicar nele nao
         // clica em nada. Le-se outra vez, pelo `data-creature-id`.
@@ -1999,6 +2325,15 @@ PPX.modulo(
           <p class="vazio" data-junta>
             Todos sobem juntos: cada um vai até o degrau de agora e passa a vez. Sem "formar em Lv",
             isso continua para sempre; com ele, até lá — e nunca abaixo do nível que a equipe já tem.
+          </p>
+          <label class="caixa" title="Os Pokémon de todos os times da fila viram um conjunto só, e eu monto a equipe sozinha com os mais atrasados">
+            <input type="checkbox" data-piscina> os times são uma piscina só
+          </label>
+          <p class="vazio" data-piscina-diz>
+            Monto a equipe sozinha com os mais atrasados de todos os times da fila. Aqui
+            "formar em Lv" é o <b>chão</b>: cada um vai direto até lá, um de cada vez; quando todos
+            chegarem, subo de tantos em tantos níveis, sem fim. A caçada de cada degrau tem de
+            aguentar o aluno — na piscina a equipe inteira é de atrasados.
           </p>
           <select data-fim title="O que fazer quando a equipe inteira se formar">
             <option value="nada">formados: ficar onde estiver</option>
@@ -2617,13 +2952,22 @@ PPX.modulo(
       // A subida nao esconde o fim da escada — ela so' muda o caminho ate' la'. Esconde-lo foi o
       // defeito de uma hora: a fila de times sumiu do painel, e com ela o unico lugar de dizer
       // "quando estes acabarem, upa os outros".
-      campo('[data-junta]').style.display = cfg.subida ? '' : 'none';
+      campo('[data-junta]').style.display = cfg.subida && !cfg.piscina ? '' : 'none';
+      campo('[data-piscina]').checked = cfg.piscina === true;
+      campo('[data-piscina-diz]').style.display = cfg.piscina ? '' : 'none';
+      // Com a piscina ligada a colecao e' precisa ja' no painel: sem os niveis dos Pokemon dos
+      // times, o diagnostico nao sabe dizer quem esta' atrasado nem quantos faltam.
+      if (cfg.piscina) garantirColecao();
       ajustarAltura();
       // Cada fim pede uma coisa diferente, ou nenhuma. Mostrar os tres campos ao mesmo tempo faria
       // o painel perguntar duas coisas que nao vao ser usadas.
       const destino = campo('[data-destino]');
       destino.style.display = cfg.fim === 'cacada' ? '' : 'none';
-      campo('[data-times]').style.display = cfg.fim === 'time' ? '' : 'none';
+      // A fila aparece por **dois** motivos agora: ser o fim da escada, ou ser a piscina. Com a
+      // piscina ligada ela deixa de ser um fim e passa a ser a entrada, entao "trocar de time"
+      // sai da lista — e' uma saida que, ali, nao faz nada.
+      campo('[data-times]').style.display = cfg.fim === 'time' || cfg.piscina ? '' : 'none';
+      campo('[data-fim] option[value="time"]').hidden = cfg.piscina === true;
       encherCacadas(destino, cfg.destino, 'escolha a caçada');
       desenharFila();
 
@@ -2818,6 +3162,18 @@ PPX.modulo(
       gravar();
       desenhar();
       if (cfg.trocar) void conferir();
+    });
+
+    campo('[data-piscina]').addEventListener('change', (e) => {
+      cfg.piscina = e.target.checked;
+      // Ligar ou desligar a piscina troca quem e' o aluno — de "o primeiro da equipe" para "o mais
+      // atrasado da fila", ou o contrario. O degrau cumprido era do aluno de antes, e deixa-lo
+      // guardado faria a escada recusar-se a descer para a caçada do novo. Ver `cfg.aplicado`.
+      cfg.aplicado = null;
+      cfg.aluno = '';
+      gravar();
+      desenhar();
+      void conferir();
     });
 
     for (const [qual, chave] of [
@@ -3031,6 +3387,7 @@ PPX.modulo(
         fim: cfg.fim,
         destino: cfg.destino,
         times: cfg.times,
+        piscina: cfg.piscina === true,
         sempre: cfg.sempre,
         grupo: {
           cacadas: cfg.grupo.cacadas,
@@ -3059,6 +3416,7 @@ PPX.modulo(
         cfg.times = lista(dados?.times)
           .slice(0, 50)
           .map((t) => limparTexto(t, 60));
+        cfg.piscina = dados?.piscina === true;
         cfg.sempre = ['nada', 'cidade', 'time', 'parar'].includes(dados?.sempre)
           ? dados.sempre
           : '';
@@ -3083,6 +3441,7 @@ PPX.modulo(
         cfg.aplicado = null;
         cfg.depois = '';
         cfg.formados = false;
+        cfg.aluno = '';
         cfg.grupo.rodada = 0;
         gravar();
         desenhar(false);
