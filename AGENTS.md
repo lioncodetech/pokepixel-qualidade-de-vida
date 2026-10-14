@@ -122,6 +122,25 @@ A regra: antes de trazer para cá uma cópia de dados que são do jogo, procure-
 uma segunda verdade — e esta extensão corre sobre um fan game, que pode divergir da tabela canónica
 sem avisar ninguém.
 
+## Quem esconde o jogo tem de saber desfazer
+
+Em **15/10/2026** a Raridades passou a espelhar o filtro na janela do inventário, escondendo os
+quadradinhos que não passam. Três coisas que não eram opcionais:
+
+- **Guarde o estado anterior no próprio elemento**, e reponha-o por todos os caminhos de saída
+  (desligar a caixinha, fechar o painel, o bicho voltar a passar). Uma mochila com buracos e nada na
+  tela a explicar porquê é um Pokémon desaparecido, aos olhos do dono.
+- **A janela é React e refaz-se sozinha** ao abrir, ao mudar de aba, ao vender, ao capturar. Sem um
+  `MutationObserver` (com peneira, que o jogo mexe no DOM muitas vezes por segundo) o filtro vale
+  até ao primeiro clique do dono e depois deixa de valer **sem dizer nada**.
+- **Não esconda o que não conhece.** Um slot que a lista não tem pode ser um bicho apanhado depois da
+  última leitura. E não espelhe uma janela que pagina — a do depósito pagina, e filtrar só a página à
+  vista parece completo sem ser.
+
+E uma lição sobre os testes desta mudança: duas mutações sobreviveram por frouxidão minha. Afirmar
+que a função existe não prova que ela faz algo, e `corpo.includes('f.iv')` também casa com `f.ivUm`.
+Quando um critério tem um irmão de nome parecido, ancore a afirmação na linha inteira.
+
 ## O resto
 
 - Reproduza antes de consertar. Uma banca construída sobre a suposição só confirma a suposição.

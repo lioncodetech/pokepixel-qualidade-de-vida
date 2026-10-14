@@ -34,6 +34,10 @@
    * e' menos coisa para dar errado, e nada aqui identifica ninguem.
    */
   const reduzir = (c) => ({
+    // **O `id` entrou em 15/10/2026, e e' ele que liga a lista a' janela do jogo.** Cada slot do
+    // inventario e' um `.inventory-slot` com `data-creature-id`: sem o id aqui, o filtro so' podia
+    // desenhar uma lista a' parte; com ele, pode esconder no sitio o que nao passa.
+    id: String(c?.id || ''),
     especie: String(c?.species_name || c?.species_id || '?'),
     apelido: String(c?.nickname || ''),
     raridade: Number(c?.quality_multiplier),
@@ -43,6 +47,18 @@
     brilhante: c?.is_shiny === true,
     trancado: c?.locked === true,
     venda: Number(c?.sell_value) || 0,
+    // Os seis, como o jogo os chama. **Nao se soma aqui**: quem filtra por `spa >= 25` precisa dos
+    // seis separados, e quem filtra pelo total faz a soma de uma linha. Somar na ponte seria
+    // escolher por quem decide.
+    ivs: {
+      hp: Number(c?.ivs?.hp) || 0,
+      atk: Number(c?.ivs?.atk) || 0,
+      def: Number(c?.ivs?.def) || 0,
+      spa: Number(c?.ivs?.spa) || 0,
+      spd: Number(c?.ivs?.spd) || 0,
+      spe: Number(c?.ivs?.spe) || 0,
+    },
+    elementos: Array.isArray(c?.elements) ? c.elements.map(String) : [],
   });
 
   /**
@@ -79,7 +95,9 @@
     // e' o que se quer na abertura do painel e nao e' o que se quer depois de capturar algo.
     const buscar = fresco ? api?.getCreaturesFresh : api?.getCreatures;
     if (typeof buscar !== 'function') {
-      responder({ erro: 'o jogo ainda não publicou a API — espere a tela carregar e tente de novo' });
+      responder({
+        erro: 'o jogo ainda não publicou a API — espere a tela carregar e tente de novo',
+      });
       return;
     }
 

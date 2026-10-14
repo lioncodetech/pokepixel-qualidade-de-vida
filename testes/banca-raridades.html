@@ -61,8 +61,18 @@
 
   // ---- o jogo de mentira, com a forma medida -------------------------------
   const ESPECIES = [
-    'Dragonair', 'Togetic', 'Tyranitar', 'Mankey', 'Pidgey', 'Ralts', 'Kirlia', 'Magnemite',
-    'Scyther', 'Lapras', 'Snorlax', 'Gengar',
+    'Dragonair',
+    'Togetic',
+    'Tyranitar',
+    'Mankey',
+    'Pidgey',
+    'Ralts',
+    'Kirlia',
+    'Magnemite',
+    'Scyther',
+    'Lapras',
+    'Snorlax',
+    'Gengar',
   ];
   const FAIXAS = {
     weak: { min: 0.9, max: 0.99 },
@@ -72,15 +82,23 @@
     epic: { min: 1.4, max: 1.54 },
     legendary: { min: 1.55, max: 1.69 },
   };
-  const qualidadeDe = (m) => Object.keys(FAIXAS).find((k) => m >= FAIXAS[k].min && m <= FAIXAS[k].max) || 'epic';
+  const qualidadeDe = (m) =>
+    Object.keys(FAIXAS).find((k) => m >= FAIXAS[k].min && m <= FAIXAS[k].max) || 'epic';
 
   let semente = 7;
-  const sorteio = () => ((semente = (semente * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const sorteio = () => (semente = (semente * 1103515245 + 12345) % 2147483648) / 2147483648;
 
   const criar = (onde, quantos) =>
     Array.from({ length: quantos }, (_, i) => {
       const m = 0.9 + sorteio() * 0.79;
+      // Os IVs: um sorteado por atributo, de 0 a 31, mais um "quase perfeito" de 5 em 5 bichos,
+      // para que o filtro de "soma acima de 140" tenha sempre o que encontrar.
+      const perfeito = i % 5 === 0;
+      const iv = () => (perfeito ? 26 + Math.floor(sorteio() * 6) : Math.floor(sorteio() * 32));
       return {
+        id: `${onde}-${i}`,
+        ivs: { hp: iv(), atk: iv(), def: iv(), spa: iv(), spd: iv(), spe: iv() },
+        elements: i % 3 === 0 ? ['fire'] : i % 3 === 1 ? ['water', 'flying'] : ['grass'],
         species_name: ESPECIES[i % ESPECIES.length],
         nickname: i % 5 === 0 ? 'Apelido' + i : ESPECIES[i % ESPECIES.length],
         quality_multiplier: m,
@@ -97,6 +115,43 @@
     });
 
   const TUDO = [...criar('team', 1), ...criar('inventory', 16), ...criar('storage', 100)];
+
+  /**
+   * Uma "janela do jogo" de mentira: os slots da mochila, com o `data-creature-id` de cada um.
+   *
+   * E' o unico sitio onde o filtro no jogo pode ser provado sem o jogo — e o que ela tem de ter e'
+   * exactamente o que foi medido em 15/10/2026: `.inventory-slot[data-creature-id]`, e mais nada.
+   * O botao de redesenhar imita o React: destroi os slots e refaz, que e' o que acontece ao abrir
+   * a janela, ao mudar de aba, ao vender e ao capturar.
+   */
+  const mochila = document.createElement('div');
+  mochila.id = 'mochila-de-mentira';
+  mochila.style.cssText =
+    'position:fixed;left:12px;bottom:12px;max-width:420px;background:#0d1219;border:1px solid #2a3244;' +
+    'border-radius:8px;padding:8px;display:flex;flex-wrap:wrap;gap:4px;z-index:5';
+  document.body.append(mochila);
+
+  const pintarMochila = () => {
+    mochila.innerHTML = '';
+    for (const c of TUDO.filter((x) => x.location === 'inventory')) {
+      const slot = document.createElement('div');
+      slot.className = 'inventory-slot';
+      slot.setAttribute('data-creature-id', c.id);
+      slot.style.cssText =
+        'width:54px;height:40px;background:#19202c;border:1px solid #2a3244;border-radius:5px;' +
+        'font:10px system-ui;color:#c8d2e0;display:flex;align-items:center;justify-content:center;text-align:center';
+      slot.textContent = `${c.species_name.slice(0, 6)} ${c.level}`;
+      mochila.append(slot);
+    }
+  };
+  pintarMochila();
+  globalThis.__mochila = {
+    pintar: pintarMochila,
+    visiveis: () =>
+      [...mochila.querySelectorAll('.inventory-slot')].filter((e) => e.style.display !== 'none')
+        .length,
+    total: () => mochila.querySelectorAll('.inventory-slot').length,
+  };
 
   if (!new URLSearchParams(location.search).has('mudo')) {
     window.PokeIdle = {

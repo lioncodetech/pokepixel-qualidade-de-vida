@@ -91,6 +91,28 @@ PPX.modulo(
       mythic: 'Mítica',
     };
     const LOCAIS = { inventory: 'mochila', storage: 'depósito', team: 'time' };
+
+    /** Os tipos como o jogo os escreve na tela, para o seletor nao falar ingles no meio do resto. */
+    const TIPOS_PT = {
+      normal: 'Normal',
+      fire: 'Fogo',
+      water: 'Água',
+      electric: 'Elétrico',
+      grass: 'Planta',
+      ice: 'Gelo',
+      fighting: 'Lutador',
+      poison: 'Veneno',
+      ground: 'Terra',
+      flying: 'Voador',
+      psychic: 'Psíquico',
+      bug: 'Inseto',
+      rock: 'Pedra',
+      ghost: 'Fantasma',
+      dragon: 'Dragão',
+      dark: 'Sombrio',
+      steel: 'Aço',
+      fairy: 'Fada',
+    };
     const CORES = {
       weak: '#8b97a8',
       common: '#9aa6b8',
@@ -118,11 +140,55 @@ PPX.modulo(
       </header>
       <div class="resumo" data-resumo></div>
       <div class="corpo">
-        <div class="faixa">
-          <label>de <input type="text" data-de inputmode="decimal" placeholder="0,90"></label>
-          <label>até <input type="text" data-ate inputmode="decimal" placeholder="1,69"></label>
-          <button type="button" data-limpar title="Mostrar todos de novo">tudo</button>
+        <div class="filtros">
+          <div class="faixa">
+            <span class="rotulo">raridade</span>
+            <input type="text" data-de inputmode="decimal" placeholder="0,90">
+            <input type="text" data-ate inputmode="decimal" placeholder="1,69">
+          </div>
+          <div class="faixa">
+            <span class="rotulo">nível</span>
+            <input type="number" min="1" data-nivel-de placeholder="1">
+            <input type="number" min="1" data-nivel-ate placeholder="—">
+          </div>
+          <div class="faixa">
+            <span class="rotulo" title="A soma dos seis, de 0 a 186">IV total</span>
+            <input type="number" min="0" max="186" data-iv-de placeholder="0">
+            <input type="number" min="0" max="186" data-iv-ate placeholder="186">
+          </div>
+          <div class="faixa">
+            <select data-iv-qual title="Um atributo em particular, de 0 a 31">
+              <option value="">um IV só…</option>
+              <option value="hp">HP</option>
+              <option value="atk">Ataque</option>
+              <option value="def">Defesa</option>
+              <option value="spa">At. Esp.</option>
+              <option value="spd">Def. Esp.</option>
+              <option value="spe">Velocidade</option>
+            </select>
+            <input type="number" min="0" max="31" data-iv-um-de placeholder="0">
+            <input type="number" min="0" max="31" data-iv-um-ate placeholder="31">
+          </div>
+          <div class="faixa">
+            <input type="text" data-especie placeholder="espécie ou apelido" list="lioncode-raridades-especies">
+            <select data-elemento title="O tipo do Pokémon">
+              <option value="">todos os tipos</option>
+            </select>
+          </div>
+          <div class="faixa">
+            <select data-onde title="Onde ele está">
+              <option value="">mochila, depósito e time</option>
+              <option value="inventory">só a mochila</option>
+              <option value="storage">só o depósito</option>
+              <option value="team">só o time</option>
+            </select>
+            <button type="button" data-limpar title="Mostrar todos de novo">tudo</button>
+          </div>
+          <label class="caixa" title="Esconder na janela do jogo os que não passam no filtro">
+            <input type="checkbox" data-no-jogo> filtrar também a janela do jogo
+          </label>
         </div>
+        <datalist id="lioncode-raridades-especies" data-especies></datalist>
         <p class="conta" data-conta></p>
         <ul data-lista></ul>
         <div class="rodape">
@@ -161,6 +227,20 @@ PPX.modulo(
         background: #1f2a3d; color: #e7edf6; border: 1px solid #33405a; border-radius: 6px;
         padding: 3px 8px; font: inherit; font-size: 12px; cursor: pointer;
       }
+      /* Os filtros sao seis linhas curtas, e nao um formulario: cada uma cabe de relance, e o
+         rotulo a' esquerda da' a elas o alinhamento que um rotulo por campo nao daria. */
+      #lioncode-raridades .filtros { display: flex; flex-direction: column; gap: 4px; }
+      #lioncode-raridades .faixa .rotulo {
+        width: 56px; flex: none; color: #9aa6b8; font-size: 12px;
+      }
+      #lioncode-raridades .faixa select {
+        flex: 1; min-width: 0; background: #0d1219; color: #e7edf6; border: 1px solid #2a3244;
+        border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
+      }
+      #lioncode-raridades .caixa {
+        display: flex; align-items: center; gap: 5px; color: #9aa6b8; font-size: 12px;
+      }
+      #lioncode-raridades .caixa input { width: auto; }
       #lioncode-raridades .conta { margin: 0; color: #8b97a8; font-size: 12px; }
       #lioncode-raridades ul {
         list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px;
@@ -227,39 +307,153 @@ PPX.modulo(
 
     /** Aceita vírgula e ponto: ninguém digita `1.45` num jogo que escreve `×1,45`. */
     const comoNumero = (texto) => {
-      const limpo = String(texto ?? '').trim().replace(',', '.');
+      const limpo = String(texto ?? '')
+        .trim()
+        .replace(',', '.');
       if (!limpo) return null;
       const valor = Number(limpo);
       return Number.isFinite(valor) ? valor : null;
     };
 
-    const faixaEscolhida = () => ({
-      de: comoNumero(campo('[data-de]').value),
-      ate: comoNumero(campo('[data-ate]').value),
+    /** Os seis atributos do IV, como o jogo os chama. A soma maxima possivel e' 6 x 31 = 186. */
+    const ATRIBUTOS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
+
+    /** A soma dos seis. **Nao vem somada da ponte** de proposito: ver `reduzir`, la'. */
+    const somaDosIvs = (c) => ATRIBUTOS.reduce((total, k) => total + (Number(c?.ivs?.[k]) || 0), 0);
+
+    /**
+     * Tudo o que esta' escrito nos filtros, lido de uma vez.
+     *
+     * **UM CAMPO VAZIO NAO E' UM ZERO, E' UMA PERGUNTA QUE NAO SE FEZ.** Por isso tudo o que nao
+     * foi preenchido vira `null`, e `null` nao recusa ninguem. Tratar vazio como zero faria o
+     * "IV total ate' —" esconder a coleção inteira no instante em que o painel abrisse.
+     */
+    const filtroEscolhido = () => ({
+      raridade: {
+        de: comoNumero(campo('[data-de]').value),
+        ate: comoNumero(campo('[data-ate]').value),
+      },
+      nivel: {
+        de: comoNumero(campo('[data-nivel-de]').value),
+        ate: comoNumero(campo('[data-nivel-ate]').value),
+      },
+      iv: {
+        de: comoNumero(campo('[data-iv-de]').value),
+        ate: comoNumero(campo('[data-iv-ate]').value),
+      },
+      ivUm: {
+        qual: campo('[data-iv-qual]').value,
+        de: comoNumero(campo('[data-iv-um-de]').value),
+        ate: comoNumero(campo('[data-iv-um-ate]').value),
+      },
+      especie: campo('[data-especie]').value.trim().toLowerCase(),
+      elemento: campo('[data-elemento]').value,
+      onde: campo('[data-onde]').value,
     });
 
+    /** `null` de um lado nao recusa ninguem: e' um limite que ninguem pediu. */
+    const dentro = (valor, faixa) =>
+      (faixa.de === null || valor >= faixa.de) && (faixa.ate === null || valor <= faixa.ate);
+
+    /**
+     * Um Pokemon passa em **todos** os filtros preenchidos, ou nao passa.
+     *
+     * E' `e`, e nao `ou`: quem escreve "nivel 1 a 20" **e** "IV total acima de 140" esta' a procurar
+     * um bicho novo que valha a pena guardar, e nao duas listas somadas. Com `ou`, o filtro mais
+     * largo apagaria o mais estreito, e o resultado seria sempre pior do que nao filtrar.
+     */
+    const passa = (c, f) => {
+      if (!dentro(c.raridade, f.raridade)) return false;
+      if (!dentro(c.nivel, f.nivel)) return false;
+      if (!dentro(somaDosIvs(c), f.iv)) return false;
+      if (f.ivUm.qual && !dentro(Number(c?.ivs?.[f.ivUm.qual]) || 0, f.ivUm)) return false;
+      if (f.onde && c.onde !== f.onde) return false;
+      if (f.elemento && !(c.elementos || []).includes(f.elemento)) return false;
+      if (f.especie) {
+        // O apelido conta: quem batizou o bicho procura-o pelo nome que lhe deu.
+        const alvo = `${c.especie} ${c.apelido || ''}`.toLowerCase();
+        if (!alvo.includes(f.especie)) return false;
+      }
+      return true;
+    };
+
     const filtrados = () => {
-      const { de, ate } = faixaEscolhida();
-      return colecao
-        .filter((c) => Number.isFinite(c.raridade))
-        .filter((c) => (de === null || c.raridade >= de) && (ate === null || c.raridade <= ate))
-        // Do mais raro para o menos raro: o topo da lista é o que interessa.
-        .sort((a, b) => b.raridade - a.raridade);
+      const f = filtroEscolhido();
+      return (
+        colecao
+          .filter((c) => Number.isFinite(c.raridade))
+          .filter((c) => passa(c, f))
+          // Do mais raro para o menos raro: o topo da lista é o que interessa.
+          .sort((a, b) => b.raridade - a.raridade)
+      );
+    };
+
+    // --------------------------------------------------- o mesmo filtro, na janela do jogo
+
+    /**
+     * Esconde na janela do jogo os Pokemon que nao passam no filtro.
+     *
+     * **POR QUE SO' NO INVENTARIO.** Medido em 15/10/2026: cada slot da mochila e' um
+     * `.inventory-slot` com `data-creature-id`, entao da' para casar cada quadradinho com o
+     * registro da API e escondê-lo. O **deposito** nao serve para isto: a janela dele pagina (48
+     * paginas na conta do dono) e quem pagina e' o jogo — esconder quadradinhos ali filtraria so' a
+     * pagina a' vista, e pareceria completo sem ser. Para o deposito, a lista deste painel e' a
+     * resposta, e ela nao pagina porque a API devolve os 216 de uma vez.
+     *
+     * **E ELA DESFAZ-SE SOZINHA.** O que se mexe e' so' o `display`, guardado num atributo nosso,
+     * e qualquer caminho de saida — desligar a caixinha, limpar o filtro, fechar o painel — repoe
+     * tudo. Uma ferramenta que esconde coisas do jogo e nao sabe desesconder e' uma ferramenta que
+     * o dono vai acusar de ter apagado os Pokemon dele.
+     */
+    const MARCA = 'data-lioncode-escondido';
+
+    const mostrarTudoNoJogo = () => {
+      for (const slot of document.querySelectorAll(`[${MARCA}]`)) {
+        slot.style.display = slot.getAttribute(MARCA) === 'vazio' ? '' : slot.getAttribute(MARCA);
+        slot.removeAttribute(MARCA);
+      }
+    };
+
+    const filtrarNoJogo = () => {
+      if (!campo('[data-no-jogo]').checked) {
+        mostrarTudoNoJogo();
+        return 0;
+      }
+      const f = filtroEscolhido();
+      const porId = new Map(colecao.map((c) => [c.id, c]));
+      let escondidos = 0;
+      for (const slot of document.querySelectorAll('.inventory-slot[data-creature-id]')) {
+        const c = porId.get(slot.getAttribute('data-creature-id'));
+        // **Um slot que a lista nao conhece fica visivel.** Pode ser um Pokemon apanhado depois da
+        // ultima leitura, e esconder o que nao se conhece seria esconder por ignorancia.
+        const esconder = Boolean(c) && !passa(c, f);
+        if (esconder) {
+          if (!slot.hasAttribute(MARCA)) slot.setAttribute(MARCA, slot.style.display || 'vazio');
+          slot.style.display = 'none';
+          escondidos += 1;
+        } else if (slot.hasAttribute(MARCA)) {
+          slot.style.display = slot.getAttribute(MARCA) === 'vazio' ? '' : slot.getAttribute(MARCA);
+          slot.removeAttribute(MARCA);
+        }
+      }
+      return escondidos;
     };
 
     const linhaDeTexto = (c) => {
       const apelido = c.apelido && c.apelido !== c.especie ? ` "${c.apelido}"` : '';
       const qualidade = QUALIDADES[c.qualidade] || c.qualidade || '—';
-      return `${numero(c.raridade)}\t${c.especie}${apelido}\t${qualidade}\tnv ${c.nivel}\t${
-        LOCAIS[c.onde] || c.onde
-      }`;
+      return `${numero(c.raridade)}\t${c.especie}${apelido}\t${qualidade}\tnv ${c.nivel}\tIV ${somaDosIvs(
+        c,
+      )}\t${LOCAIS[c.onde] || c.onde}`;
     };
 
     const desenhar = () => {
       const mostrados = filtrados();
       lista.innerHTML = '';
+      const naMochila = mostrados.filter((c) => c.onde === 'inventory').length;
       campo('[data-conta]').textContent = colecao.length
-        ? `${mostrados.length} de ${colecao.length}`
+        ? `${mostrados.length} de ${colecao.length}` +
+          (campo('[data-no-jogo]').checked ? ` · ${naMochila} à vista na mochila` : '')
         : '';
       campo('[data-copiar]').disabled = mostrados.length === 0;
       if (!colecao.length) {
@@ -269,7 +463,7 @@ PPX.modulo(
       if (!mostrados.length) {
         const vazio = document.createElement('p');
         vazio.className = 'vazio';
-        vazio.textContent = 'Nenhum Pokémon nessa faixa.';
+        vazio.textContent = 'Nenhum Pokémon passa nesses filtros.';
         lista.append(vazio);
         pintarResumo();
         return;
@@ -292,16 +486,21 @@ PPX.modulo(
         nome.className = 'nome';
         const titulo = document.createElement('b');
         titulo.textContent = c.especie + (c.brilhante ? ' ✦' : '');
-        titulo.title = c.apelido && c.apelido !== c.especie ? `apelidado "${c.apelido}"` : c.especie;
+        titulo.title =
+          c.apelido && c.apelido !== c.especie ? `apelidado "${c.apelido}"` : c.especie;
         const abaixo = document.createElement('small');
         abaixo.textContent = [
           QUALIDADES[c.qualidade] || c.qualidade,
           `nv ${c.nivel}`,
+          // O IV entra na linha porque entrou no filtro: um criterio que nao se ve' no resultado
+          // obriga a abrir cada bicho no jogo para conferir o que a lista ja' sabia.
+          `IV ${somaDosIvs(c)}`,
           LOCAIS[c.onde] || c.onde,
           c.trancado ? 'trancado' : '',
         ]
           .filter(Boolean)
           .join(' · ');
+        abaixo.title = ATRIBUTOS.map((k) => `${k} ${Number(c?.ivs?.[k]) || 0}`).join(' · ');
         nome.append(titulo, abaixo);
 
         item.append(valor, nome);
@@ -332,6 +531,35 @@ PPX.modulo(
       caixa.append(linha2);
     };
 
+    /**
+     * Enche o seletor de tipos e a lista de especies com o que a **conta** tem.
+     *
+     * Nao com os 18 tipos nem com as mil especies do jogo: filtrar por um tipo que ninguem na
+     * mochila tem e' uma opcao que so' pode dar lista vazia, e uma opcao que nunca serve e' uma
+     * opcao a mais para ler. O que se oferece e' o que de facto esta' la'.
+     */
+    const encherEscolhas = () => {
+      const sel = campo('[data-elemento]');
+      const antes = sel.value;
+      const tipos = [...new Set(colecao.flatMap((c) => c.elementos || []))].sort();
+      sel.innerHTML = '<option value="">todos os tipos</option>';
+      for (const t of tipos) {
+        const o = document.createElement('option');
+        o.value = t;
+        o.textContent = TIPOS_PT[t] || t;
+        sel.append(o);
+      }
+      sel.value = tipos.includes(antes) ? antes : '';
+
+      const dl = campo('[data-especies]');
+      dl.innerHTML = '';
+      for (const nome of [...new Set(colecao.map((c) => c.especie))].sort()) {
+        const o = document.createElement('option');
+        o.value = nome;
+        dl.append(o);
+      }
+    };
+
     const buscar = async (fresco) => {
       if (buscando) return;
       buscando = true;
@@ -345,7 +573,9 @@ PPX.modulo(
         }
         colecao = Array.isArray(resposta.lista) ? resposta.lista : [];
         faixasDoJogo = resposta.faixas || {};
+        encherEscolhas();
         desenhar();
+        filtrarNoJogo();
         const porLocal = colecao.reduce((conta, c) => {
           conta[c.onde] = (conta[c.onde] || 0) + 1;
           return conta;
@@ -365,24 +595,65 @@ PPX.modulo(
 
     // ------------------------------------------------------------- interacao
 
-    const guardarFaixa = () => {
-      gravar(CHAVE_FAIXA, {
-        de: campo('[data-de]').value.trim(),
-        ate: campo('[data-ate]').value.trim(),
-      });
+    /**
+     * Os campos do filtro, numa lista so'.
+     *
+     * Uma lista, e nao doze linhas repetidas: guardar, limpar, repor e ouvir sao a mesma operacao
+     * sobre o mesmo conjunto, e quatro copias desse conjunto divergiriam no dia em que entrasse o
+     * decimo terceiro campo — tipicamente ficando **um** deles por limpar, que e' o defeito que
+     * ninguem reproduz.
+     */
+    const CAMPOS = [
+      '[data-de]',
+      '[data-ate]',
+      '[data-nivel-de]',
+      '[data-nivel-ate]',
+      '[data-iv-de]',
+      '[data-iv-ate]',
+      '[data-iv-qual]',
+      '[data-iv-um-de]',
+      '[data-iv-um-ate]',
+      '[data-especie]',
+      '[data-elemento]',
+      '[data-onde]',
+      '[data-no-jogo]',
+    ];
+
+    const valorDe = (seletor) => {
+      const el = campo(seletor);
+      return el.type === 'checkbox' ? el.checked : el.value.trim();
     };
 
-    for (const seletor of ['[data-de]', '[data-ate]'])
-      campo(seletor).addEventListener('input', () => {
-        guardarFaixa();
-        desenhar();
-      });
+    const guardarFaixa = () => {
+      const tudo = {};
+      for (const seletor of CAMPOS) tudo[seletor] = valorDe(seletor);
+      gravar(CHAVE_FAIXA, tudo);
+    };
 
-    campo('[data-limpar]').addEventListener('click', () => {
-      campo('[data-de]').value = '';
-      campo('[data-ate]').value = '';
+    /** Redesenha a lista **e** a janela do jogo: sao duas vistas do mesmo filtro. */
+    const refazer = () => {
       guardarFaixa();
       desenhar();
+      filtrarNoJogo();
+    };
+
+    for (const seletor of CAMPOS)
+      campo(seletor).addEventListener(
+        campo(seletor).tagName === 'SELECT' || campo(seletor).type === 'checkbox'
+          ? 'change'
+          : 'input',
+        refazer,
+      );
+
+    campo('[data-limpar]').addEventListener('click', () => {
+      for (const seletor of CAMPOS) {
+        const el = campo(seletor);
+        if (el.type === 'checkbox') continue;
+        el.value = '';
+      }
+      // A caixinha do jogo **nao** se limpa junto: ela nao e' um criterio, e' onde o resultado
+      // aparece. Desligá-la aqui faria o "tudo" parecer que quebrou o espelho na janela.
+      refazer();
     });
 
     campo('[data-atualizar]').addEventListener('click', () => void buscar(true));
@@ -399,7 +670,8 @@ PPX.modulo(
         // "não deu", a lista vai para um campo já selecionado: copiar continua a um Ctrl+C.
         const caixa = document.createElement('textarea');
         caixa.value = texto;
-        caixa.style.cssText = 'width:100%;height:80px;background:#0d1219;color:#e7edf6;border:1px solid #2a3244;border-radius:6px;font:12px monospace';
+        caixa.style.cssText =
+          'width:100%;height:80px;background:#0d1219;color:#e7edf6;border:1px solid #2a3244;border-radius:6px;font:12px monospace';
         campo('.rodape').after(caixa);
         caixa.select();
         dizer('Não consegui usar a área de transferência: a lista está aí, com Ctrl+C.', true);
@@ -443,6 +715,9 @@ PPX.modulo(
     });
 
     campo('[data-fechar]').addEventListener('click', () => {
+      // **Esconder o painel desfaz o filtro na janela do jogo.** Um painel fechado com slots
+      // escondidos por ele seria uma mochila com buracos sem nada na tela a explicar porque'.
+      mostrarTudoNoJogo();
       mostrarPainel(false);
       globalThis.PPX?.anotar?.('raridades', false);
     });
@@ -486,8 +761,18 @@ PPX.modulo(
 
     const guardada = ler(CHAVE_FAIXA, null);
     if (guardada) {
-      campo('[data-de]').value = String(guardada.de ?? '');
-      campo('[data-ate]').value = String(guardada.ate ?? '');
+      // O formato antigo guardava `{de, ate}` da raridade. Ele continua a ser lido: quem atualiza o
+      // pacote nao tem por que perder a faixa que deixou escrita ontem.
+      if (guardada.de !== undefined || guardada.ate !== undefined) {
+        campo('[data-de]').value = String(guardada.de ?? '');
+        campo('[data-ate]').value = String(guardada.ate ?? '');
+      }
+      for (const seletor of CAMPOS) {
+        if (guardada[seletor] === undefined) continue;
+        const el = campo(seletor);
+        if (el.type === 'checkbox') el.checked = guardada[seletor] === true;
+        else el.value = String(guardada[seletor] ?? '');
+      }
     }
 
     desenhar();
@@ -498,6 +783,30 @@ PPX.modulo(
     if (globalThis.PPX) {
       globalThis.PPX.controlar?.('raridades', mostrarPainel);
       mostrarPainel(globalThis.PPX.visivel?.('raridades') !== false);
+    }
+
+    /**
+     * Repoe o filtro quando a janela do jogo se redesenha.
+     *
+     * **NAO E' ZELO, E' A UNICA MANEIRA DE ISTO FUNCIONAR.** A mochila e' React: ela refaz os slots
+     * ao abrir, ao mudar de aba, ao vender, ao capturar — e cada refazer devolve os elementos
+     * limpos, sem o `display` que tinhamos posto. Sem isto, o filtro valia ate' ao primeiro clique
+     * do dono na janela, e depois deixava de valer **sem dizer nada**, que e' o pior dos dois.
+     *
+     * Observa-se o `body` porque a janela nem sempre existe para ser observada: ela nasce no
+     * momento em que ele a abre. E peneira-se antes de agir — o jogo mexe no DOM muitas vezes por
+     * segundo, e so' interessa a batida em que ha' slots por filtrar.
+     */
+    {
+      let agendado = 0;
+      const olho = new MutationObserver(() => {
+        if (agendado || !campo('[data-no-jogo]').checked) return;
+        agendado = setTimeout(() => {
+          agendado = 0;
+          filtrarNoJogo();
+        }, 120);
+      });
+      olho.observe(document.body, { childList: true, subtree: true });
     }
 
     // A primeira busca é automática: um painel que abre vazio e espera um clique para ter conteúdo

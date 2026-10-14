@@ -17,7 +17,7 @@ janela em que você está.
 | Times | guarda composições de equipe e troca para uma delas num clique | Alt+T esconde · Alt+Y mostra |
 | Ginásio do dia | sai da caçada, troca o time, desafia o ginásio de hoje e volta | Alt+G esconde · Alt+H mostra |
 | Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+W esconde · Alt+E mostra |
-| Raridades | lista todos os seus Pokémon com o número da raridade, e filtra por faixa | Alt+A esconde · Alt+S mostra |
+| Raridades | procura na coleção por raridade, nível, IV, espécie, tipo e lugar, e espelha o filtro na mochila do jogo | Alt+A esconde · Alt+S mostra |
 | Escada de caçadas | troca de caçada sozinha quando o aluno sobe de nível, e leva o derrotado à enfermeira | Alt+U esconde · Alt+I mostra |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
@@ -758,8 +758,40 @@ sequência, feita à mão.
 ## Raridades: a coleção inteira numa tela
 
 Lista **todos** os seus Pokémon — mochila, depósito e time — com o número da raridade de cada um,
-ordenados do mais raro para o menos raro. Dois campos, `de` e `até`, filtram pela faixa que
-interessa; `Copiar a lista` leva o resultado para fora do jogo.
+ordenados do mais raro para o menos raro. `Copiar a lista` leva o resultado para fora do jogo.
+
+Os filtros são sete, e valem **todos ao mesmo tempo**: faixa de raridade, faixa de nível, soma dos
+IVs, um atributo de IV à sua escolha (hp, atk, def, spa, spd ou spe), espécie ou apelido, tipo e
+lugar. É `e`, e não `ou`: quem escreve "nível 1 a 20" **e** "IV total acima de 140" está à procura
+de um bicho novo que valha a pena guardar, e não de duas listas somadas — com `ou`, o filtro mais
+largo apagaria o mais estreito e o resultado seria sempre pior do que não filtrar. Campo vazio é
+pergunta que não se fez: tratar vazio como zero apagaria a coleção no instante em que o painel
+abrisse.
+
+O IV filtra-se pelo total **e** por atributo porque são duas perguntas diferentes: "soma ≥ 140"
+decide se vale a pena guardar; "spa ≥ 25" serve para um bicho específico. O seletor de tipos e a
+lista de espécies nascem da sua coleção, e não dos 18 tipos e das mil espécies do jogo — uma opção
+que nunca serve é uma opção a mais para ler.
+
+### Ela também filtra dentro do jogo, e só encontra
+
+A caixinha `espelhar na mochila do jogo` esconde, na janela do inventário aberta, os quadradinhos
+que não passam no filtro. **Ela nunca age**: não vende, não liberta, não move e não clica — só
+mostra e esconde, e a contagem do painel diz quantos ficaram à vista. Um quadradinho que a lista não
+conhece fica visível: pode ser um Pokémon apanhado depois da última leitura, e esconder o que não se
+conhece seria esconder por ignorância.
+
+Esconder coisas do jogo obriga a saber desfazer, senão a mochila fica com buracos e parece que os
+Pokémon desapareceram. O estado anterior de cada quadradinho fica guardado no próprio elemento, e
+volta por três caminhos: desligando a caixinha, fechando o painel, ou o bicho voltando a passar.
+
+E o filtro sobrevive ao jogo redesenhar a janela. **Não é zelo**: a mochila é React e refaz os
+quadradinhos ao abrir, ao mudar de aba, ao vender e ao capturar — sem um observador, o filtro valeria
+até ao primeiro clique seu na janela e depois deixava de valer *sem dizer nada*.
+
+O **depósito** não é espelhado, de propósito: a janela dele pagina, e quem pagina é o jogo. Esconder
+quadradinhos ali filtraria só a página à vista e pareceria completo sem ser. Para o depósito, a lista
+do painel é a resposta — ela lê a coleção inteira de uma vez.
 
 Cada linha diz a espécie, a qualidade, o nível e onde o bicho está. Parar o mouse sobre o número
 mostra a faixa daquela qualidade — é a mesma leitura que a tela do jogo faz com `×1,45 / ×1,54`:
@@ -782,8 +814,9 @@ você acabou de capturar alguma coisa.
 `world: "MAIN"` e só responde pedidos; `raridades.js` desenha o painel e nunca toca no jogo. Os dois
 conversam por evento de DOM, o único canal que os dois mundos partilham.
 
-Só atravessa a ponte o que a lista usa: espécie, apelido, raridade, qualidade, lugar, nível, brilho,
-tranca e valor de venda. O registro do jogo também traz id de treinador, assinatura de captura e
+Só atravessa a ponte o que a lista usa: id, espécie, apelido, raridade, qualidade, lugar, nível, os
+seis IVs, os tipos, brilho, tranca e valor de venda. Os IVs atravessam **separados**, e não somados:
+quem filtra por atributo precisa dos seis, e a soma é uma linha de código deste lado. O registro do jogo também traz id de treinador, assinatura de captura e
 zona de origem — nada disso tem por que cruzar para ser descartado do outro lado.
 
 Cada pedido leva um eco de volta. Dois podem estar no ar ao mesmo tempo — o automático da abertura e
