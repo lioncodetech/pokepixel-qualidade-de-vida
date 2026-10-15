@@ -2182,6 +2182,11 @@ A expedição é conferida no início da rodada **e antes de cada ataque**, porq
 quatro horas e você pode entrar nela no meio de uma rodada de quinze minutos. Nesse caso o que sobra
 fica a dever, como a rodada inteira ficaria.
 
+O instante dentro da janela é sorteado **uma vez por ocorrência**. A Arena guarda esse instante em
+memória e cada batida apenas confere quanto falta. Antes, ela fazia um novo sorteio a cada vinte
+segundos, sempre contado do novo “agora”; o alvo fugia continuamente para a frente, então “Atacar
+agora” funcionava, mas a rodada diária nunca começava sozinha.
+
 ### A vez é pedida por ataque, e não pela rodada inteira
 
 A batalha joga-se sozinha — os golpes saem sem ninguém clicar e o pokémon derrotado é substituído

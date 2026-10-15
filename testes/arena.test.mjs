@@ -182,6 +182,22 @@ test('o horario vem do calendario, e o que nao se entende nao vira todo dia', ()
   assert.match(mudou.slice(0, 500), /cfg\.ultima = 0;/);
 });
 
+test('o horario da rodada e sorteado uma vez, e nao foge a cada batida', () => {
+  // `esperaDaAgenda` sorteia do agora até o fim da janela. Chamá-la a cada 20 s cria um novo alvo
+  // sempre no futuro; o botão manual funciona, mas a agenda jamais alcança a hora sorteada.
+  assert.match(codigo, /let proximaRodada = 0;/);
+  assert.match(codigo, /proximaRodada = agora \+ Math\.max\(0, falta\);/);
+  assert.match(codigo, /return Math\.max\(0, proximaRodada - agora\);/);
+
+  const bate = codigo.slice(codigo.indexOf('const bater = () =>'));
+  const batida = bate.slice(0, bate.indexOf('\n    };'));
+  assert.match(batida, /const falta = faltaParaRodada\(\);/);
+  assert.doesNotMatch(batida, /esperaDaJanela\(\) !== null && esperaDaJanela\(\) <= 0/);
+
+  const mudou = codigo.slice(codigo.indexOf('const agendaMudou = ()'));
+  assert.match(mudou.slice(0, 600), /esquecerPlano\(\);/);
+});
+
 test('a ferramenta esta no catalogo, no manifest e com atalho proprio', () => {
   const manifest = JSON.parse(ler('manifest.json'));
   const blocos = manifest.content_scripts;
@@ -245,7 +261,7 @@ test('o prazo da divida vem do jogo, e ela morre quando o dia da arena vira', ()
     'primeiro espera-se a expedição, depois cobra-se a dívida',
   );
   assert.ok(
-    batida.indexOf('if (cfg.devendo) {') < batida.indexOf('const falta = esperaDaJanela();'),
+    batida.indexOf('if (cfg.devendo) {') < batida.lastIndexOf('const falta = faltaParaRodada();'),
     'a dívida corre sem depender da janela de horário, que já pode ter fechado',
   );
 });

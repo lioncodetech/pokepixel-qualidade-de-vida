@@ -721,6 +721,27 @@ PPX.modulo(
     const esperaDaJanela = () =>
       calendario()?.esperaDaAgenda({ horarios: cfg.horarios, dias: cfg.dias }, cfg.ultima) ?? null;
 
+    /**
+     * O instante sorteado para esta ocorrência.
+     *
+     * `esperaDaAgenda` sorteia um ponto dentro da janela. Chama-la de novo em cada batida sorteava
+     * sempre outro ponto a partir do novo "agora" — portanto o alvo corria vinte segundos para a
+     * frente para sempre. Sorteia-se uma vez e, dali em diante, o relógio apenas se aproxima dele.
+     */
+    let proximaRodada = 0;
+    const esquecerPlano = () => {
+      proximaRodada = 0;
+    };
+    const faltaParaRodada = () => {
+      const agora = Date.now();
+      if (!proximaRodada) {
+        const falta = esperaDaJanela();
+        if (falta === null) return null;
+        proximaRodada = agora + Math.max(0, falta);
+      }
+      return Math.max(0, proximaRodada - agora);
+    };
+
     let relogio = 0;
     const bater = () => {
       if (!cfg.ligada || correndo) return;
@@ -734,8 +755,10 @@ PPX.modulo(
       // A expedição e' esperada aqui tambem, e nao so' dentro da rodada: assim a batida nao abre a
       // janela da arena por cima do jogo dele a cada vinte segundos.
       if (naExpedicao()) {
-        if (esperaDaJanela() !== null && esperaDaJanela() <= 0) {
+        const falta = faltaParaRodada();
+        if (falta !== null && falta <= 0) {
           cfg.ultima = Date.now();
+          esquecerPlano();
           gravar();
           void ficarADever(dizer);
         }
@@ -747,9 +770,10 @@ PPX.modulo(
         void rodada(dizer);
         return;
       }
-      const falta = esperaDaJanela();
+      const falta = faltaParaRodada();
       if (falta === null || falta > 0) return;
       cfg.ultima = Date.now();
+      esquecerPlano();
       gravar();
       void rodada(dizer);
     };
@@ -847,7 +871,7 @@ PPX.modulo(
       const marcas = linhas
         .map((l) => `<span style="color:${CORES[l.estado] || '#8b97a8'}">●</span>`)
         .join('');
-      const falta = esperaDaJanela();
+      const falta = cfg.ligada && !cfg.devendo ? faltaParaRodada() : null;
       const quando = !cfg.ligada
         ? 'parada'
         : naExpedicao()
@@ -931,6 +955,7 @@ PPX.modulo(
       // Mexer na agenda e' mudar de ideia sobre quando: o carimbo da ultima rodada era da agenda
       // antiga, e guarda-lo faria a janela nova passar por ja' usada.
       cfg.ultima = 0;
+      esquecerPlano();
       gravar();
       // Horario que ninguem entende nao vira "todo dia" — ver o AGENTS.md. O campo fica marcado.
       const bom = calendario()
@@ -968,6 +993,7 @@ PPX.modulo(
 
     campo('[data-ligar]').addEventListener('click', () => {
       cfg.ligada = !cfg.ligada;
+      esquecerPlano();
       if (!cfg.ligada) parar = true;
       gravar();
       desenhar();
@@ -982,6 +1008,7 @@ PPX.modulo(
       }
       cfg.ultima = Date.now();
       cfg.devendo = 0;
+      esquecerPlano();
       gravar();
       void rodada(dizer);
     });
