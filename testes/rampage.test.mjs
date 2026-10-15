@@ -35,6 +35,22 @@ test('o time é montado antes de gastar a tentativa', () => {
   assert.match(trecho, /\.worldboss-mmo__enter/);
 });
 
+test('vai para a cidade antes de montar o time e entrar no Rampage', () => {
+  const cidade = codigo.indexOf('await irParaCidade()');
+  const time = codigo.indexOf('times.usar(cfg.time)');
+  const entrar = codigo.indexOf('entrar.click()');
+  assert.ok(cidade >= 0 && cidade < time && time < entrar);
+  assert.match(codigo, /VOLTAR .{1,2} CIDADE/i);
+});
+
+test('placar por evento pode ser corrigido e é marcado após o resultado', () => {
+  assert.match(codigo, /lioncode:rampage:placar/);
+  assert.match(codigo, /data-status/);
+  assert.match(codigo, /marcarAtacado\(!foiAtacado\(\), true\)/);
+  assert.match(codigo, /marcarAtacado\(true, false\)/);
+  assert.match(codigo, /Este Rampage está marcado como atacado/);
+});
+
 test('expedição não é interrompida e a luta tem parada segura', () => {
   assert.match(codigo, /if \(naExpedicao\(\)\) return dizer/);
   assert.match(codigo, /if \(correndo\) \{ parar = true;/);

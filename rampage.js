@@ -7,6 +7,7 @@ PPX.modulo(
     const CHAVE = 'lioncode:rampage:config';
     const CHAVE_POS = 'lioncode:rampage:posicao';
     const CHAVE_MIN = 'lioncode:rampage:minimizado';
+    const CHAVE_PLACAR = 'lioncode:rampage:placar';
     const PEDIDO = 'lioncode:rampage:pedido';
     const RESPOSTA = 'lioncode:rampage:resposta';
     const MINHA_VEZ = 'rampage';
@@ -72,6 +73,7 @@ PPX.modulo(
     painel.innerHTML = `
       <header><strong data-titulo>Rampage</strong><button data-minimizar>–</button><button data-fechar>×</button></header>
       <div class="resumo" data-resumo>—</div>
+      <button type="button" data-status title="Clique para corrigir: não atacado ↔ atacado">○ Não atacado</button>
       <div class="botoes"><button data-ligar>Iniciar</button><button data-agora>Atacar agora</button></div>
       <div class="corpo">
         <div data-agenda></div>
@@ -85,7 +87,7 @@ PPX.modulo(
     estilo.textContent = `
       #lioncode-rampage,#lioncode-rampage *{box-sizing:border-box}#lioncode-rampage{position:fixed;z-index:2147483000;width:260px;background:#11161f;color:#e7edf6;border:1px solid #2a3244;border-radius:10px;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px #0008}
       #lioncode-rampage header{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #2a3244;cursor:move}#lioncode-rampage header strong{flex:1}#lioncode-rampage header button{border:0;background:none;color:#8b97a8;cursor:pointer}
-      #lioncode-rampage .resumo{padding:6px 10px;color:#8b97a8;font-size:12px}#lioncode-rampage .botoes{display:flex;gap:6px;padding:0 10px 10px}#lioncode-rampage button,#lioncode-rampage select,#lioncode-rampage input{border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}#lioncode-rampage .botoes button{flex:1;cursor:pointer}#lioncode-rampage .corpo{display:grid;gap:8px;padding:0 10px 10px}#lioncode-rampage.minimizado .corpo{display:none}#lioncode-rampage label{display:flex;align-items:center;gap:6px;color:#c3ccda}#lioncode-rampage label select{flex:1;min-width:0}#lioncode-rampage .marca input{width:auto}#lioncode-rampage p{margin:0;color:#8b97a8;font-size:12px}#lioncode-rampage p.mau{color:#f85149}#lioncode-rampage .campo-mau{border-color:#f85149}
+      #lioncode-rampage .resumo{padding:6px 10px;color:#8b97a8;font-size:12px}#lioncode-rampage [data-status]{margin:0 10px 8px;width:calc(100% - 20px);cursor:pointer;font-weight:700}#lioncode-rampage [data-status].feito{border-color:#3fb950;color:#7ee787;background:#12251a}#lioncode-rampage .botoes{display:flex;gap:6px;padding:0 10px 10px}#lioncode-rampage button,#lioncode-rampage select,#lioncode-rampage input{border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}#lioncode-rampage .botoes button{flex:1;cursor:pointer}#lioncode-rampage .corpo{display:grid;gap:8px;padding:0 10px 10px}#lioncode-rampage.minimizado .corpo{display:none}#lioncode-rampage label{display:flex;align-items:center;gap:6px;color:#c3ccda}#lioncode-rampage label select{flex:1;min-width:0}#lioncode-rampage .marca input{width:auto}#lioncode-rampage p{margin:0;color:#8b97a8;font-size:12px}#lioncode-rampage p.mau{color:#f85149}#lioncode-rampage .campo-mau{border-color:#f85149}
     `;
     document.documentElement.append(estilo, painel);
     const campo = (s) => painel.querySelector(s);
@@ -125,6 +127,21 @@ PPX.modulo(
     let estadoVisto = null;
     let eventoVisto = '';
     let proxima = 0;
+    const placar = () => ler(CHAVE_PLACAR, {}) || {};
+    const foiAtacado = (evento = estadoVisto?.evento) => Boolean(evento && placar()[evento]?.atacado);
+    const sincronizarPlacar = () => {
+      const evento = estadoVisto?.evento;
+      if (!evento || Object.hasOwn(placar(), evento)) return;
+      if (estadoVisto.maximo > 0 && estadoVisto.restantes < estadoVisto.maximo) marcarAtacado(true, false);
+    };
+    const marcarAtacado = (sim, manual = false) => {
+      const evento = estadoVisto?.evento;
+      if (!evento) return dizer('Ainda não consegui identificar este evento.', true);
+      const todos = placar();
+      todos[evento] = { atacado: sim, quando: Date.now(), manual };
+      gravarChave(CHAVE_PLACAR, todos);
+      resumo();
+    };
     const falta = () => {
       if (!cfg.ligada) return null;
       if (!proxima) {
@@ -139,6 +156,9 @@ PPX.modulo(
       const f = falta();
       const quando = !cfg.ligada ? 'parado' : correndo ? 'atacando' : f === null ? 'sem horário' : f <= 0 ? 'verificando' : `em ${Math.ceil(f / 60000)} min`;
       campo('[data-resumo]').textContent = `${evento} · ${quando}`;
+      const feito = foiAtacado();
+      campo('[data-status]').textContent = feito ? '✓ Atacado' : '○ Não atacado';
+      campo('[data-status]').classList.toggle('feito', feito);
       campo('[data-ligar]').textContent = cfg.ligada ? 'Parar' : 'Iniciar';
       campo('[data-agora]').textContent = correndo ? 'Parar ciclo' : 'Atacar agora';
     }
@@ -164,6 +184,17 @@ PPX.modulo(
       if (f) for (const tipo of ['pointerdown', 'mousedown', 'mouseup', 'click'])
         f.dispatchEvent(new MouseEvent(tipo, { bubbles: true, cancelable: true, view: window }));
     };
+    const estaVisivel = (el) => Boolean(el) && el.getBoundingClientRect().width > 0;
+    const irParaCidade = async () => {
+      if (!globalThis.PPX?.cacadas?.atual?.()) return { ok: true };
+      const botao = [...document.querySelectorAll('.pokeidle-map-action-bar__button')].find(
+        (b) => estaVisivel(b) && /VOLTAR .{1,2} CIDADE/i.test((b.textContent || '').trim()),
+      );
+      if (!botao) return { ok: false, erro: 'não achei o botão “Voltar à cidade”' };
+      botao.click();
+      const chegou = await ate(() => !globalThis.PPX?.cacadas?.atual?.(), 10000);
+      return chegou ? { ok: true } : { ok: false, erro: 'o jogo não confirmou a chegada à cidade' };
+    };
 
     const executar = async () => {
       if (correndo) return;
@@ -175,13 +206,19 @@ PPX.modulo(
       try {
         estadoVisto = await estado();
         if (!estadoVisto?.ok) return dizer(estadoVisto?.erro || 'não consegui ler o Rampage', true);
+        sincronizarPlacar();
         if (!estadoVisto.ativo) return dizer('O Rampage não está ativo agora.');
         if (!modoSuportado(estadoVisto.modo))
           return dizer(`Este Rampage usa o modo “${estadoVisto.modo}”, que ainda não foi medido.`, true);
         if (estadoVisto.restantes < 1 && !estadoVisto.lutando) return dizer('A tentativa deste Rampage já foi usada.');
+        if (foiAtacado() && !estadoVisto.lutando) return dizer('Este Rampage está marcado como atacado.');
         if (naExpedicao()) return dizer('Você está na expedição — não vou tirar você dela.');
         soltar = await esperarAVez(dizer);
         if (!soltar) return dizer('Desisti: o jogo ficou ocupado tempo demais.', true);
+
+        dizer('Voltando para a cidade antes do Rampage…');
+        const cidade = await irParaCidade();
+        if (!cidade.ok) return dizer(`Não fui para a cidade: ${cidade.erro}`, true);
 
         if (cfg.time) {
           const times = globalThis.PPX?.times;
@@ -215,6 +252,7 @@ PPX.modulo(
         await ponte({ acao: 'mover', ligado: false });
         if (!resultado) return dizer('A luta ainda não mostrou o resultado; parei sem clicar novamente.', true);
         fecharResultado(estadoVisto.modo);
+        marcarAtacado(true, false);
         await espera(1200);
         estadoVisto = await estado();
         dizer('Ataque registrado.');
@@ -262,6 +300,10 @@ PPX.modulo(
     campo('[data-agora]').addEventListener('click', () => {
       if (correndo) { parar = true; dizer('Vou parar no próximo ponto seguro.'); return; }
       void executar();
+    });
+    campo('[data-status]').addEventListener('click', () => {
+      marcarAtacado(!foiAtacado(), true);
+      dizer(foiAtacado() ? 'Marquei este Rampage como atacado.' : 'Marquei este Rampage como não atacado.');
     });
 
     const botoes = globalThis.PPX?.config?.montarBotoes({
@@ -312,6 +354,7 @@ PPX.modulo(
     const bater = async () => {
       if (correndo) return;
       estadoVisto = await estado();
+      sincronizarPlacar();
       const eventoAgora = estadoVisto?.evento || '';
       if (eventoAgora && eventoAgora !== eventoVisto) {
         eventoVisto = eventoAgora;
