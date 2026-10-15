@@ -1,6 +1,19 @@
 # PokePixel — qualidade de vida
 
-As onze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+## Rampage automático
+
+O painel **Rampage** observa a disponibilidade pela própria API do jogo, portanto não depende de
+supor que o evento acontece exatamente de dois em dois dias. Você escolhe um time guardado em
+**Times** e uma janela de horário; quando houver tentativa dentro dessa janela, a ferramenta pede a
+vez na fila comum, monta a equipe e entra pelo botão normal do evento. Durante a luta, os Pokémon
+atacam sozinhos e uma patrulha simples movimenta o treinador para evitar a penalidade por ficar
+parado. Ao terminar, ela tenta restaurar o time e a caçada anteriores.
+
+O painel também tem **Atacar agora** e **Parar ciclo**. A expedição nunca é interrompida, e uma
+configuração inválida ou um botão indisponível faz a rotina parar sem repetir o clique que consome a
+tentativa.
+
+As treze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.

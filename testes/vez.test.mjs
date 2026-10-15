@@ -106,7 +106,14 @@ test('um nucleo sem fila nao impede as ferramentas de funcionar', () => {
 import { readdirSync } from 'node:fs';
 
 /** Ferramentas que agem no jogo por conta própria: estas TÊM de passar pela fila. */
-const NA_FILA = ['venda-rapida.js', 'loja-rapida.js', 'gym.js', 'escada.js', 'arena.js'];
+const NA_FILA = [
+  'venda-rapida.js',
+  'loja-rapida.js',
+  'gym.js',
+  'escada.js',
+  'arena.js',
+  'rampage.js',
+];
 
 /**
  * Ferramentas que não agem sozinhas, com o motivo de cada uma.
@@ -136,6 +143,8 @@ const FORA = {
   'cacadas-main.js': 'só lê a lista de caçadas pela API, não clica em nada nem entra em caçada',
   'arena-main.js':
     'só lê o estado da arena pela API — atacar e atualizar são cliques, em arena.js, que pede a vez',
+  'rampage-main.js':
+    'peça: lê o evento, abre a tela e movimenta o treinador só quando rampage.js pede — e ele já tem a vez',
 };
 
 test('toda ferramenta nova escolhe um lado da fila', () => {
