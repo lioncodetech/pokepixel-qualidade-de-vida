@@ -23,7 +23,9 @@ test('estado e disponibilidade vêm da API do jogo', () => {
   assert.match(ponte, /restantes: Math\.max\(0, Number\(d\.attempts_remaining\)/);
   assert.match(codigo, /estadoVisto\.restantes < 1/);
   assert.doesNotMatch(codigo, /2\s*\*\s*24\s*\*\s*60/);
-  assert.match(codigo, /estadoVisto\.modo !== 'live_v1'/);
+  assert.match(codigo, /modo === 'live_v1' \|\| modo === 'cinematic_v1'/);
+  assert.match(codigo, /\.worldboss-map-result/);
+  assert.match(codigo, /pokeidle-worldboss-map/);
 });
 
 test('o time é montado antes de gastar a tentativa', () => {

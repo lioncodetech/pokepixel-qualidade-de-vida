@@ -143,8 +143,17 @@ PPX.modulo(
       campo('[data-agora]').textContent = correndo ? 'Parar ciclo' : 'Atacar agora';
     }
 
-    const fecharResultado = () => {
-      const b = document.querySelector('.rl-result__actions button');
+    const modoSuportado = (modo) => !modo || modo === 'live_v1' || modo === 'cinematic_v1';
+    const lutaComecou = (modo) => modo === 'cinematic_v1'
+      ? document.body.classList.contains('pokeidle-worldboss-map') || Boolean(document.querySelector('.worldboss-entry,.worldboss-map-hud'))
+      : Boolean(document.querySelector('.rl-hud'));
+    const resultadoApareceu = (modo) => modo === 'cinematic_v1'
+      ? document.querySelector('.worldboss-map-result')
+      : document.querySelector('.rl-result');
+    const fecharResultado = (modo) => {
+      const b = modo === 'cinematic_v1'
+        ? document.querySelector('.worldboss-map-result button')
+        : document.querySelector('.rl-result__actions button');
       if (b) b.click();
       return Boolean(b);
     };
@@ -167,7 +176,7 @@ PPX.modulo(
         estadoVisto = await estado();
         if (!estadoVisto?.ok) return dizer(estadoVisto?.erro || 'não consegui ler o Rampage', true);
         if (!estadoVisto.ativo) return dizer('O Rampage não está ativo agora.');
-        if (estadoVisto.modo && estadoVisto.modo !== 'live_v1')
+        if (!modoSuportado(estadoVisto.modo))
           return dizer(`Este Rampage usa o modo “${estadoVisto.modo}”, que ainda não foi medido.`, true);
         if (estadoVisto.restantes < 1 && !estadoVisto.lutando) return dizer('A tentativa deste Rampage já foi usada.');
         if (naExpedicao()) return dizer('Você está na expedição — não vou tirar você dela.');
@@ -193,17 +202,19 @@ PPX.modulo(
         if (!entrar) return dizer('O botão de entrar não ficou disponível.', true);
         entrar.click();
 
-        const comecou = await ate(() => document.querySelector('.rl-hud'), 20000);
+        const comecou = await ate(() => lutaComecou(estadoVisto.modo), 20000);
         if (!comecou) return dizer('O jogo não confirmou o início da luta.', true);
         cfg.ultimoEvento = estadoVisto.evento;
         gravar();
-        if (cfg.movimento) await ponte({ acao: 'mover', ligado: true });
-        dizer('Rampage em andamento. Os Pokémon atacam e o treinador está se movimentando.');
+        if (cfg.movimento && estadoVisto.modo === 'live_v1') await ponte({ acao: 'mover', ligado: true });
+        dizer(estadoVisto.modo === 'cinematic_v1'
+          ? 'Rampage em andamento. A batalha cinematográfica está sendo executada.'
+          : 'Rampage em andamento. Os Pokémon atacam e o treinador está se movimentando.');
 
-        const resultado = await ate(() => document.querySelector('.rl-result'), 180000);
+        const resultado = await ate(() => resultadoApareceu(estadoVisto.modo), 180000);
         await ponte({ acao: 'mover', ligado: false });
         if (!resultado) return dizer('A luta ainda não mostrou o resultado; parei sem clicar novamente.', true);
-        fecharResultado();
+        fecharResultado(estadoVisto.modo);
         await espera(1200);
         estadoVisto = await estado();
         dizer('Ataque registrado.');
