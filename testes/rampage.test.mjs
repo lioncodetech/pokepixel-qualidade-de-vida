@@ -51,6 +51,15 @@ test('placar por evento pode ser corrigido e é marcado após o resultado', () =
   assert.match(codigo, /Este Rampage está marcado como atacado/);
 });
 
+test('espera o mapa cinematográfico terminar antes de restaurar time e caçada', () => {
+  const esperaVolta = codigo.indexOf('await esperarVoltaDoRampage(estadoVisto.modo)');
+  const restauraTime = codigo.indexOf('times?.usar?.(timeOrigem)');
+  const restauraCacada = codigo.indexOf('cacadas?.ir?.(origem.nome)');
+  assert.ok(esperaVolta >= 0 && esperaVolta < restauraTime && restauraTime < restauraCacada);
+  assert.match(codigo, /!document\.body\.classList\.contains\('pokeidle-worldboss-map'\)/);
+  assert.match(codigo, /document\.querySelector\('\.worldboss-mmo'\)/);
+});
+
 test('expedição não é interrompida e a luta tem parada segura', () => {
   assert.match(codigo, /if \(naExpedicao\(\)\) return dizer/);
   assert.match(codigo, /if \(correndo\) \{ parar = true;/);

@@ -177,6 +177,19 @@ PPX.modulo(
       if (b) b.click();
       return Boolean(b);
     };
+    const esperarVoltaDoRampage = async (modo) => {
+      if (modo !== 'cinematic_v1') {
+        await espera(1200);
+        return true;
+      }
+      return Boolean(await ate(
+        () =>
+          !document.body.classList.contains('pokeidle-worldboss-map') &&
+          !document.querySelector('.worldboss-map-result') &&
+          document.querySelector('.worldboss-mmo'),
+        20000,
+      ));
+    };
     const fecharJanela = () => {
       const conteudo = document.querySelector('.worldboss-mmo');
       const raiz = conteudo?.closest('.pokeidle-panel, .pokeidle-window') || conteudo?.parentElement;
@@ -253,12 +266,15 @@ PPX.modulo(
         if (!resultado) return dizer('A luta ainda não mostrou o resultado; parei sem clicar novamente.', true);
         fecharResultado(estadoVisto.modo);
         marcarAtacado(true, false);
-        await espera(1200);
+        const voltouDoRampage = await esperarVoltaDoRampage(estadoVisto.modo);
+        if (!voltouDoRampage)
+          return dizer('Ataque registrado, mas o jogo ainda não voltou do mapa do Rampage.', true);
         estadoVisto = await estado();
         dizer('Ataque registrado.');
 
         if (cfg.voltar && origem?.nome) {
           fecharJanela();
+          await ate(() => !document.querySelector('.worldboss-mmo'), 5000);
           if (timeOrigem && timeOrigem !== cfg.time) {
             const troca = await globalThis.PPX?.times?.usar?.(timeOrigem);
             if (!troca?.ok) return dizer(`Ataque feito, mas não restaurei o time: ${troca?.erro || 'falhou'}`, true);
