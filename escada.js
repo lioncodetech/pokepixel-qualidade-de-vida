@@ -561,8 +561,15 @@ PPX.modulo(
      * um destino; e' um lugar que, estando-se la', se respeita. Acabada a expedição, o jogo
      * devolve o jogador a' caçada anterior e a lista segue para a primeira que da' para abrir.
      */
-    const lugarDoGrupo = () => {
+    const lugarDoGrupo = (destinoAutomatico = '') => {
       const porta = globalThis.PPX?.cacadas;
+      if (destinoAutomatico) {
+        if (porta?.estouEm?.(destinoAutomatico)) return { aqui: destinoAutomatico, ir: null };
+        return {
+          aqui: null,
+          ir: porta?.daParaIr?.(destinoAutomatico) === false ? null : destinoAutomatico,
+        };
+      }
       const lista = cacadasDoGrupo();
       const aqui = lista.find((nome) => porta?.estouEm?.(nome));
       if (aqui) return { aqui, ir: null };
@@ -803,9 +810,9 @@ PPX.modulo(
      * Devolve um **degrau**, da mesma forma que os escritos a' mao: quem o recebe la' em baixo nao
      * precisa de saber de onde ele veio, e e' por isso que o automatico cabe no motor sem o abrir.
      */
-    const degrauAutomatico = (aluno) => {
+    const degrauAutomatico = (aluno, forcar = false) => {
       const conta = globalThis.PPX?.tipos;
-      if (!conta || !cfg.auto || !aluno || aluno.nivel === null) return null;
+      if (!conta || (!cfg.auto && !forcar) || !aluno || aluno.nivel === null) return null;
       const especie = aluno.especie || colecao.get(aluno.id)?.especie || '';
       const ficha = especie ? mundo.especies.get(especie) : null;
       if (!ficha) return null;
@@ -836,6 +843,16 @@ PPX.modulo(
      */
     const degrauDoAluno = (aluno) =>
       degrauAutomatico(aluno) || (aluno ? degrauPara(aluno.nivel) : null);
+
+    /**
+     * Sem pedra, o lider da rotacao e' o aluno e leva consigo a mesma escolha segura da escada:
+     * nivel proximo, sem levar vantagem de tipo e com o melhor ataque disponivel. Se nenhuma
+     * caçada passar no filtro, a lista do grupo continua a ser a rede escrita pelo dono.
+     */
+    const cacadaAutomaticaDoTurno = (montagem) =>
+      montagem?.turno?.tipo === 'rotacao'
+        ? degrauAutomatico(montagem.lider, true)?.cacada || ''
+        : '';
 
     // ------------------------------------------ a piscina (os times da fila como um conjunto so')
 
@@ -1237,7 +1254,8 @@ PPX.modulo(
       if (!colecao.size) return `Alvo Lv ${alvo}. Ainda não li a coleção.`;
       const m = montagemDoGrupo(colecao, alvo);
       if (m.erro) return m.erro;
-      const lugar = lugarDoGrupo();
+      const automatica = cacadaAutomaticaDoTurno(m);
+      const lugar = lugarDoGrupo(automatica);
       const onde = lugar.aqui ? `em "${lugar.aqui}"` : `fora da lista`;
       // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
       // entre "ela parou" e "ela esta' na segunda".
@@ -1968,12 +1986,20 @@ PPX.modulo(
       }
 
       // ---------------------------------------------------------------- 3. a viagem
-      const lugar = lugarDoGrupo();
+      // No turno sem pedra, cada novo lider e' um aluno da escada. Carregamos os dados da especie
+      // antes de escolher a hunt; com pedra permanece a lista fixa de caçadas do grupo.
+      if (m.turno.tipo === 'rotacao') {
+        const especie = m.lider.especie || colecao.get(m.lider.id)?.especie || '';
+        if (especie) await garantirMundo([especie]);
+      }
+      const automatica = cacadaAutomaticaDoTurno(m);
+      const lugar = lugarDoGrupo(automatica);
       if (!lugar.aqui) {
         if (!lugar.ir) {
           aviso(
-            'Estou fora da lista e não consigo entrar sozinha em nenhuma delas. ' +
-              'Ponha na lista uma caçada guardada, ou entre você.',
+            m.turno.tipo === 'rotacao'
+              ? 'Não achei uma caçada automática segura para este Pokémon e também não consigo entrar nas caçadas alternativas do grupo.'
+              : 'Estou fora da lista e não consigo entrar sozinha em nenhuma delas. Ponha na lista uma caçada guardada, ou entre você.',
           );
           return 'sem porta';
         }

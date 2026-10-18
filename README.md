@@ -1,5 +1,7 @@
 # PokePixel — qualidade de vida
 
+Na 1.26.2, cada turno sem pedra usa o Pokémon mais atrasado como aluno da Escada e escolhe para ele a melhor caçada automática pelo nível e pelos tipos. Se nenhuma caçada segura passar no filtro, a lista de caçadas do grupo continua como alternativa.
+
 ## Rampage automático
 
 O painel **Rampage** observa a disponibilidade pela própria API do jogo, portanto não depende de
