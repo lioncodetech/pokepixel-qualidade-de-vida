@@ -81,7 +81,7 @@ PPX.modulo(
         <label>resgatar todo dia às <input type="time" data-hora></label>
         <label>pausa entre cliques <input type="number" min="0.5" max="10" step="0.5" data-intervalo> s</label>
         <label><input type="checkbox" data-world-boss> entrar no World Boss quando abrir</label>
-        <label>time do World Boss <select data-world-boss-time><option value="">equipe atual</option></select></label>
+        <label>time do World Boss <select data-world-boss-time><option value="">equipe atual</option></select><button type="button" data-recarregar-times title="Atualizar a lista de times">↻</button></label>
         <p data-world-boss-estado>World Boss: consultando…</p>
         <p data-eventos>Consultando os eventos…</p>
         <div data-config></div>
@@ -299,6 +299,11 @@ PPX.modulo(
     });
     campo('[data-world-boss-time]').addEventListener('change', (e) => {
       cfg.worldBossTime = e.target.value; gravar();
+    });
+    campo('[data-recarregar-times]').addEventListener('click', () => {
+      preencherTimesWorldBoss();
+      const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
+      dizer(quantos ? `${quantos} time(s) relido(s).` : 'Nenhum time guardado foi encontrado.', !quantos);
     });
 
     const botoes = globalThis.PPX?.config?.montarBotoes({

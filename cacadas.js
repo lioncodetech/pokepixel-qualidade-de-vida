@@ -584,6 +584,7 @@ PPX.modulo(
         <div class="busca">
           <input type="search" data-filtro placeholder="filtrar por nome, nível ou região" />
           <button type="button" data-atualizar title="Reler a lista de caçadas do jogo">↻</button>
+          <button type="button" data-recarregar-times title="Atualizar a lista de times">↻ times</button>
         </div>
         <ul data-lista></ul>
         <div data-config></div>
@@ -1230,6 +1231,12 @@ PPX.modulo(
     });
 
     campo('[data-atualizar]').addEventListener('click', () => garantirCatalogo(true));
+    campo('[data-recarregar-times]').addEventListener('click', () => {
+      desenhar();
+      const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
+      if (quantos) celebrar(`${quantos} time(s) relido(s).`);
+      else dizer('Nenhum time guardado foi encontrado.', true);
+    });
 
     /** Guarda a cacada que esta' na tela. Regravar a mesma atualiza a regiao e o modo. */
     const guardarAtual = () => {

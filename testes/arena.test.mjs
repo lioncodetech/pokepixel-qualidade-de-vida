@@ -398,3 +398,16 @@ test('quem diz que o ataque aconteceu e a arena, e nao a tela', () => {
     'fecha-se o resultado velho antes de procurar o cartao',
   );
 });
+
+test('falha temporaria ao reler o estado nao encerra a rodada depois de um ataque', () => {
+  const atacar = codigo.slice(codigo.indexOf('const atacar = async'));
+  const corpoAtacar = atacar.slice(0, atacar.indexOf('\n    };'));
+  assert.match(corpoAtacar, /let depois = await pedirEstado\(\)/);
+  assert.match(corpoAtacar, /if \(!depois\?\.ok\) depois = await pedirEstado\(\)/);
+
+  const rodada = codigo.slice(codigo.indexOf('const rodada = async'));
+  const corpoRodada = rodada.slice(0, rodada.indexOf('\n    };'));
+  assert.match(corpoRodada, /const sobra = r\.estado \? r\.estado\.tentativas\.restantes : null/);
+  assert.match(corpoRodada, /if \(sobra !== null && sobra <= 0\)/);
+  assert.doesNotMatch(corpoRodada, /r\.estado \? r\.estado\.tentativas\.restantes : 0/);
+});

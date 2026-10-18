@@ -2508,6 +2508,7 @@ PPX.modulo(
     painel.innerHTML = `
       <header>
         <strong data-titulo>Escada</strong>
+        <button type="button" data-recarregar-times title="Atualizar a lista de times">↻</button>
         <button type="button" data-minimizar title="Minimizar">–</button>
         <button type="button" data-fechar title="Esconder (Alt+U)">×</button>
       </header>
@@ -3366,6 +3367,12 @@ PPX.modulo(
       gravar();
       desenhar();
       if (!cfg.pausada) void conferir();
+    });
+
+    campo('[data-recarregar-times]').addEventListener('click', () => {
+      desenhar(false);
+      const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
+      diz(quantos ? `${quantos} time(s) relido(s).` : 'Nenhum time guardado foi encontrado.', !quantos);
     });
 
     campo('[data-modo]').addEventListener('change', (e) => {

@@ -77,7 +77,7 @@ PPX.modulo(
       <div class="botoes"><button data-ligar>Iniciar</button><button data-agora>Atacar agora</button></div>
       <div class="corpo">
         <div data-agenda></div>
-        <label>time salvo <select data-time><option value="">equipe atual</option></select></label>
+        <label>time salvo <select data-time><option value="">equipe atual</option></select><button type="button" data-recarregar-times title="Atualizar a lista de times">↻</button></label>
         <label class="marca"><input type="checkbox" data-movimento> movimentar durante a luta</label>
         <label class="marca"><input type="checkbox" data-voltar> voltar à caçada ao terminar</label>
         <div data-config></div>
@@ -304,6 +304,11 @@ PPX.modulo(
     horas.addEventListener('change', agendaMudou);
     campoDias.addEventListener('change', agendaMudou);
     campo('[data-time]').addEventListener('change', (e) => { cfg.time = e.target.value; gravar(); });
+    campo('[data-recarregar-times]').addEventListener('click', () => {
+      preencherTimes();
+      const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
+      dizer(quantos ? `${quantos} time(s) relido(s).` : 'Nenhum time guardado foi encontrado.', !quantos);
+    });
     campo('[data-movimento]').addEventListener('change', (e) => { cfg.movimento = e.target.checked; gravar(); });
     campo('[data-voltar]').addEventListener('change', (e) => { cfg.voltar = e.target.checked; gravar(); });
     campo('[data-ligar]').addEventListener('click', () => {

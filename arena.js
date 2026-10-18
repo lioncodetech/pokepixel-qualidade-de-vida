@@ -463,7 +463,15 @@ PPX.modulo(
       const classeDizVitoria = fim.classList.contains('is-win');
 
       // Quem decide e' o placar do perfil, nao a classe. Ver o cabeçalho.
-      const depois = await pedirEstado();
+      let depois = await pedirEstado();
+
+      // A API pode não responder enquanto o resultado ainda cobre a arena. Não transforme uma
+      // falha transitória em "acabaram as tentativas": fecha-se o resultado, volta-se à aba de
+      // ataque e tenta-se ler mais uma vez. Se ainda falhar, a próxima volta da rodada relê o
+      // estado antes de escolher rival e só o jogo poderá dizer que as tentativas acabaram.
+      await fecharResultado();
+      await irParaAtacar();
+      if (!depois?.ok) depois = await pedirEstado();
 
       /**
        * **A ARENA DIZ SE O ATAQUE CONTOU, E ELA E' A UNICA QUE SABE.**
@@ -495,11 +503,9 @@ PPX.modulo(
           ? classeDizVitoria
           : pontosDepois > pontosAntes;
 
-      await fecharResultado();
       // **O jogo larga-a no "Histórico".** Medido em 13/10/2026: fechada a batalha, a aba aberta e'
       // a do historico, e o ataque seguinte procuraria os rivais numa tela que nao os tem. Volta-se
       // ja', e nao so' no proximo ataque, para o painel nao ficar a dever uma tela ao dono.
-      await irParaAtacar();
 
       return {
         ganhou,
@@ -676,8 +682,8 @@ PPX.modulo(
             `${alvo.nome}: ${r.ganhou ? 'ganhei' : 'perdi — não entro mais nela'} ${pontosEmTexto(r.pontos)}`,
           );
 
-          const sobra = r.estado ? r.estado.tentativas.restantes : 0;
-          if (sobra <= 0) {
+          const sobra = r.estado ? r.estado.tentativas.restantes : null;
+          if (sobra !== null && sobra <= 0) {
             aviso('Acabaram as tentativas de hoje. Não compro mais com diamante.');
             return;
           }

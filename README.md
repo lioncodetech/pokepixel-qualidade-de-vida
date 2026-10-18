@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.27.4, ao entrar numa Ilha Lendária o módulo suspende temporariamente a Escada sem perder o ponto dela; o botão da Escada mostra “Retomar” durante essa suspensão e volta sozinho para “Pausar” quando as Ilhas a liberam. As Ilhas funcionam como automação de fundo: cedem a vez para Arena, Ginásio, Rampage, Eventos, venda, loja ou qualquer outra automação da fila e voltam a verificar a ilha assim que o trabalho prioritário termina. O painel pode ser arrastado, guarda a posição e mantém os campos dentro da caixa.
+Na 1.28.0, todos os painéis que escolhem times têm um botão para reler imediatamente a lista da ferramenta Times: Ginásio, Escada, Caçadas, Rampage, Eventos/World Boss e Ilhas Lendárias. A seleção atual é preservada quando o time continua existindo. A Arena automática também não confunde mais uma falha temporária de leitura depois do primeiro combate com “acabaram as tentativas”: ela tenta novamente e continua a rodada enquanto o jogo não disser que as tentativas chegaram a zero.
 
 ## Ilhas Lendárias
 

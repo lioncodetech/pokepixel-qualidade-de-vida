@@ -39,14 +39,14 @@ PPX.modulo(
       <div class="botoes"><button data-ligar>Iniciar</button><button data-pausar>Pausar</button></div>
       <div class="corpo">
         <label>caçada <select data-cacada><option value="">escolha uma ilha</option></select></label>
-        <label>time <select data-time><option value="">escolha um time</option></select></label>
+        <label class="com-acao">time <select data-time><option value="">escolha um time</option></select><button type="button" data-recarregar-times title="Atualizar a lista de times">↻</button></label>
         <button data-verificar>Verificar agora</button>
         <p data-estado></p>
       </div>`;
     const estilo = document.createElement('style');
     estilo.textContent = `
       #lioncode-ilhas,#lioncode-ilhas *{box-sizing:border-box}#lioncode-ilhas{position:fixed;z-index:2147483000;right:20px;top:190px;width:270px;background:#11161f;color:#e7edf6;border:1px solid #2a3244;border-radius:10px;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px #0008}
-      #lioncode-ilhas header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #2a3244;cursor:move;user-select:none}#lioncode-ilhas header strong{flex:1}#lioncode-ilhas header button{border:0;background:none;color:#8b97a8;cursor:pointer}#lioncode-ilhas .resumo{padding:6px 10px;color:#8b97a8;font-size:12px}#lioncode-ilhas .botoes{display:flex;gap:6px;padding:0 10px 10px}#lioncode-ilhas button,#lioncode-ilhas select{border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}#lioncode-ilhas .botoes button{flex:1}#lioncode-ilhas .corpo{display:grid;gap:8px;padding:0 10px 10px;min-width:0;overflow:hidden}#lioncode-ilhas label{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:center;gap:6px;min-width:0;width:100%}#lioncode-ilhas label select{display:block;width:100%;min-width:0;max-width:100%;text-overflow:ellipsis}#lioncode-ilhas p{margin:0;color:#8b97a8;font-size:12px;overflow-wrap:anywhere}#lioncode-ilhas p.mau{color:#f85149}#lioncode-ilhas.minimizado .corpo{display:none}`;
+      #lioncode-ilhas header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #2a3244;cursor:move;user-select:none}#lioncode-ilhas header strong{flex:1}#lioncode-ilhas header button{border:0;background:none;color:#8b97a8;cursor:pointer}#lioncode-ilhas .resumo{padding:6px 10px;color:#8b97a8;font-size:12px}#lioncode-ilhas .botoes{display:flex;gap:6px;padding:0 10px 10px}#lioncode-ilhas button,#lioncode-ilhas select{border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}#lioncode-ilhas .botoes button{flex:1}#lioncode-ilhas .corpo{display:grid;gap:8px;padding:0 10px 10px;min-width:0;overflow:hidden}#lioncode-ilhas label{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:center;gap:6px;min-width:0;width:100%}#lioncode-ilhas label.com-acao{grid-template-columns:46px minmax(0,1fr) auto}#lioncode-ilhas label select{display:block;width:100%;min-width:0;max-width:100%;text-overflow:ellipsis}#lioncode-ilhas p{margin:0;color:#8b97a8;font-size:12px;overflow-wrap:anywhere}#lioncode-ilhas p.mau{color:#f85149}#lioncode-ilhas.minimizado .corpo{display:none}`;
     document.documentElement.append(estilo, painel);
     const campo = (s) => painel.querySelector(s);
 
@@ -208,6 +208,11 @@ PPX.modulo(
     campo('[data-verificar]').addEventListener('click', () => void verificar());
     campo('[data-cacada]').addEventListener('change', (e) => { cfg.cacada = e.target.value; gravar(); });
     campo('[data-time]').addEventListener('change', (e) => { cfg.time = e.target.value; gravar(); });
+    campo('[data-recarregar-times]').addEventListener('click', () => {
+      preencher();
+      const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
+      dizer(quantos ? `${quantos} time(s) relido(s).` : 'Nenhum time guardado foi encontrado.', !quantos);
+    });
     campo('[data-min]').addEventListener('click', () => painel.classList.toggle('minimizado'));
     campo('[data-fechar]').addEventListener('click', () => { painel.style.display = 'none'; globalThis.PPX?.anotar?.('ilhas', false); });
     const recolocar = () => {
