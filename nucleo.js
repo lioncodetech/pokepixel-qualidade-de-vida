@@ -642,7 +642,18 @@
   const comJanela = () =>
     modulos.filter((m) => !m.efeito && m.aplicar && !FORA_DO_SUMICO.includes(m.id));
 
+  /** O jogo cria o Votar com o chat e remove os dois quando o próprio chat é minimizado. */
+  const minimizarChatEVoto = () => {
+    const minimizar = [...document.querySelectorAll('button')].find((b) => {
+      const nome = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''} ${b.textContent || ''}`;
+      return /minimizar chat/i.test(nome);
+    });
+    minimizar?.click();
+  };
+
   function esconderTudo() {
+    // O chat pode ter sido reaberto à mão mesmo se as janelas do pacote já estavam escondidas.
+    minimizarChatEVoto();
     // Ja' escondido, nao ha' nada a esconder — e refazer a lista aqui seria apaga-la.
     if (Array.isArray(sumico)) return;
     const janelas = comJanela();

@@ -62,6 +62,21 @@ test('Alt+X restaura o chat para o jogo recriar o botao Votar', () => {
   );
 });
 
+test('Alt+Z minimiza o chat e leva o botao Votar junto', () => {
+  const ajuda = nucleo.slice(nucleo.indexOf('const minimizarChatEVoto'));
+  const corpo = ajuda.slice(0, ajuda.indexOf('\n  };'));
+  assert.match(corpo, /document\.querySelectorAll\('button'\)/);
+  assert.match(corpo, /minimizar chat/i);
+  assert.match(corpo, /minimizar\?\.click\(\)/);
+  const esconde = nucleo.slice(nucleo.indexOf('function esconderTudo()'));
+  const dentro = esconde.slice(0, esconde.indexOf('\n  }'));
+  assert.ok(
+    dentro.indexOf('minimizarChatEVoto();') <
+      dentro.indexOf('if (Array.isArray(sumico)) return;'),
+    'o chat fecha até se as janelas da extensão já estavam escondidas',
+  );
+});
+
 test('as ferramentas de efeito ficam de fora', () => {
   // "Ocultar popups" e "Sem gráfico" não têm janela nenhuma na tela: o botão delas liga e desliga
   // o que fazem com a página. Apagá-las aqui não limparia a tela — mudaria o jogo.

@@ -125,21 +125,23 @@ test('o que chega de fora e lido como se viesse de fora', () => {
   assert.match(loja, /Number\.isFinite\(alvo\) && alvo >= 0/, 'alvo tem de ser número não negativo');
 });
 
-test('o backup geral usa os validadores das ferramentas e nunca leva os Times', () => {
+test('o backup geral usa os validadores e nunca leva Times nem Escada', () => {
   assert.match(fonte, /const registros = new Map\(\)/);
-  assert.match(fonte, /if \(id !== 'times'\) registros\.set/);
+  assert.match(fonte, /new Set\(\['times', 'escada'\]\)/);
+  assert.match(fonte, /if \(!FORA_DO_BACKUP_GERAL\.has\(id\)\) registros\.set/);
   assert.match(fonte, /ferramentas\[id\] = r\.coletar\(\)/);
   assert.match(fonte, /r\.aplicar\(valor\)/);
   const de = fonte.indexOf('const CHAVES_SIMPLES');
   const simples = fonte.slice(de, fonte.indexOf('];', de));
   assert.doesNotMatch(simples, /lioncode:times/);
+  assert.doesNotMatch(simples, /lioncode:escada/);
   assert.match(simples, /lioncode:gym:escolhas/);
 });
 
 test('o menu oferece um arquivo unico para exportar e importar', () => {
   assert.match(fonte, /data-tudo-exportar>Exportar tudo/);
   assert.match(fonte, /data-tudo-importar>Importar tudo/);
-  assert.match(fonte, /montarPacote\('todas', 'Todas as ferramentas \(sem Times\)'/);
+  assert.match(fonte, /montarPacote\('todas', 'Todas as ferramentas \(sem Times e Escada\)'/);
   assert.match(ler('nucleo.js'), /colocarConfigGeral\(el\)/);
   assert.match(ler('nucleo.js'), /data-config-geral/);
 });

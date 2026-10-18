@@ -37,6 +37,7 @@
 
   /** Configurações que já têm coletor e importador próprios, registradas ao montar seus botões. */
   const registros = new Map();
+  const FORA_DO_BACKUP_GERAL = new Set(['times', 'escada']);
 
   /**
    * Ferramentas simples que ainda não têm painel de Exportar/Importar. Só estas chaves reconhecidas
@@ -138,9 +139,10 @@
    */
   const montarBotoes = ({ id, nome, coletar, aplicar, avisar = () => {} }) => {
     // O backup geral chama exatamente os mesmos coletores e importadores dos botões individuais.
-    // `times` é recusado aqui também: mesmo que um dia ganhe botões próprios, os IDs dos Pokémon
-    // daquela conta nunca entram no arquivo geral.
-    if (id !== 'times') registros.set(id, { id, nome, coletar, aplicar, avisar });
+    // Times e Escada continuam com exportação individual, mas nunca entram no arquivo geral.
+    // Times carregam IDs da conta; a Escada é uma configuração operacional que o dono quer montar
+    // separadamente em cada janela.
+    if (!FORA_DO_BACKUP_GERAL.has(id)) registros.set(id, { id, nome, coletar, aplicar, avisar });
     const el = document.createElement('span');
     el.className = 'ppx-cfg';
     el.innerHTML = `
@@ -260,7 +262,7 @@
     el.innerHTML = `
       <button type="button" data-tudo-exportar>Exportar tudo</button>
       <button type="button" data-tudo-importar>Importar tudo</button>
-      <small data-tudo-aviso>Times não entram; referências pelos nomes entram.</small>`;
+      <small data-tudo-aviso>Times e Escada não entram; referências pelos nomes entram.</small>`;
     const arquivo = document.createElement('input');
     arquivo.type = 'file';
     arquivo.accept = 'application/json,.json';
@@ -269,13 +271,13 @@
     const aviso = el.querySelector('[data-tudo-aviso]');
     el.querySelector('[data-tudo-exportar]').addEventListener('click', async () => {
       const texto = JSON.stringify(
-        montarPacote('todas', 'Todas as ferramentas (sem Times)', coletarTudo()),
+        montarPacote('todas', 'Todas as ferramentas (sem Times e Escada)', coletarTudo()),
         null,
         2,
       );
       const feito = await baixar(nomeDoArquivo('pokepixel-todas'), texto);
       aviso.textContent = feito.ok
-        ? `Tudo exportado para a ${feito.como}, sem os Times.`
+        ? `Tudo exportado para a ${feito.como}, sem Times e Escada.`
         : 'Não consegui exportar.';
     });
     el.querySelector('[data-tudo-importar]').addEventListener('click', () => {

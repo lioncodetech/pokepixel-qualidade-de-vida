@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.26.2, cada turno sem pedra usa o Pokémon mais atrasado como aluno da Escada e escolhe para ele a melhor caçada automática pelo nível e pelos tipos. Se nenhuma caçada segura passar no filtro, a lista de caçadas do grupo continua como alternativa.
+Na 1.26.4, o **Alt+Z** também minimiza o chat e esconde com ele o botão Votar que o Alt+X restaura. O **Exportar tudo** deixa de fora tanto os Times quanto a Escada.
 
 ## Rampage automático
 
@@ -40,9 +40,9 @@ as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, entã
 quantidades da loja, posições dos painéis, usuário e senha atravessam a troca sem se perder.
 
 No menu principal há **Exportar tudo** e **Importar tudo**. O arquivo reúne as configurações das
-ferramentas, mas deixa de fora a extensão **Times**: as composições carregam IDs de Pokémon daquela
-conta e não servem noutra. Os **nomes** escolhidos nas outras ferramentas viajam normalmente — por
-exemplo, time do Ginásio, do Rampage, do World Boss e filas da Escada.
+ferramentas, mas deixa de fora **Times** e **Escada**. As composições carregam IDs de Pokémon daquela
+conta e a Escada é configurada separadamente em cada janela. Os **nomes** escolhidos nas demais
+ferramentas viajam normalmente — por exemplo, time do Ginásio, do Rampage e do World Boss.
 
 ## Os dois comandos de cada linha
 
@@ -71,6 +71,9 @@ botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que n�
 O **Alt+X também restaura o chat do jogo**, porque o PokePixel só cria o botão **Votar** enquanto o
 chat está aberto. Mesmo sem um Alt+Z anterior, apertar Alt+X reabre o chat minimizado e o próprio
 jogo recoloca o botão de voto.
+
+O **Alt+Z minimiza o chat novamente**, usando o botão do próprio jogo; assim, o botão Votar também
+some e não fica solto por cima da tela limpa.
 
 São dois, e não um que alterna — a mesma regra de cada ferramenta aqui, pelo mesmo motivo: com um
 atalho só nunca se sabe em que estado se está sem olhar, e quem aperta duas vezes volta ao começo.
