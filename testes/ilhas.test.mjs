@@ -81,3 +81,15 @@ test('o botao da escada espelha a suspensao temporaria das ilhas', () => {
   assert.match(escada, /será retomada automaticamente/);
   assert.match(escada, /desenhar\(false\);\s*if \(!suspensoesExternas\.size && cfg\.ligada/);
 });
+
+test('as ilhas nunca tiram o jogador da expedicao', () => {
+  assert.match(codigo, /const naExpedicao = \(\) => atual\(\)\?\.tipo === 'expedicao'/);
+  const entrada = codigo.slice(codigo.indexOf('const entrar = async'), codigo.indexOf('const voltar = async'));
+  const volta = codigo.slice(codigo.indexOf('const voltar = async'), codigo.indexOf('const verificar = async'));
+  const inicioVerificacao = codigo.indexOf('const verificar = async');
+  const verificacao = codigo.slice(inicioVerificacao, codigo.indexOf("campo('[data-ligar]')", inicioVerificacao));
+  assert.ok(entrada.indexOf('naExpedicao()') < entrada.indexOf('irCidade()'));
+  assert.ok(volta.indexOf('naExpedicao()') < volta.indexOf('irCidade()'));
+  assert.ok(verificacao.indexOf('naExpedicao()') < verificacao.indexOf('cacadas?.atualizar'));
+  assert.match(codigo, /Você está na expedição — as Ilhas esperam ela terminar/);
+});

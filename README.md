@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.28.0, todos os painéis que escolhem times têm um botão para reler imediatamente a lista da ferramenta Times: Ginásio, Escada, Caçadas, Rampage, Eventos/World Boss e Ilhas Lendárias. A seleção atual é preservada quando o time continua existindo. A Arena automática também não confunde mais uma falha temporária de leitura depois do primeiro combate com “acabaram as tentativas”: ela tenta novamente e continua a rodada enquanto o jogo não disser que as tentativas chegaram a zero.
+Na 1.28.1, as Ilhas Lendárias respeitam a Expedição: enquanto você estiver nela, não voltam à cidade, não trocam o time e não tentam entrar nem sair de ilha; apenas esperam e verificam novamente depois. Todos os painéis que escolhem times têm um botão para reler imediatamente a lista da ferramenta Times: Ginásio, Escada, Caçadas, Rampage, Eventos/World Boss e Ilhas Lendárias.
 
 ## Ilhas Lendárias
 

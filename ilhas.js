@@ -28,6 +28,7 @@ PPX.modulo(
     const todasIlhas = () => (globalThis.PPX?.cacadas?.todas?.() || []).filter(ehIlha);
     const abertas = () => todasIlhas().filter((c) => c.trancada !== true);
     const atual = () => globalThis.PPX?.cacadas?.atual?.() || null;
+    const naExpedicao = () => atual()?.tipo === 'expedicao';
     const suspenderEscada = () => globalThis.PPX?.escada?.suspender?.(MINHA_VEZ);
     const liberarEscada = () => globalThis.PPX?.escada?.liberar?.(MINHA_VEZ);
 
@@ -119,6 +120,7 @@ PPX.modulo(
     };
 
     const entrar = async () => {
+      if (naExpedicao()) return dizer('Você está na expedição — as Ilhas esperam ela terminar.');
       const alvo = ultima.find((c) => c.nome === cfg.cacada);
       if (!alvo) return dizer(`As ilhas abriram, mas "${cfg.cacada}" não está disponível.`, true);
       const timeDaCacada = globalThis.PPX?.cacadas?.timeDe?.(alvo.nome) || '';
@@ -138,6 +140,7 @@ PPX.modulo(
       correndo = true;
       desenharResumo();
       try {
+        if (naExpedicao()) return dizer('Você está na expedição — as Ilhas esperam ela terminar.');
         let r = await irCidade();
         if (!r.ok) return dizer(r.erro, true);
         r = await montar(cfg.time);
@@ -151,12 +154,14 @@ PPX.modulo(
 
     const voltar = async () => {
       if (!sessao) return;
+      if (naExpedicao()) return dizer('Você está na expedição — as Ilhas esperam ela terminar.');
       const destino = sessao;
       const soltar = await esperarAVez();
       if (!soltar) return;
       correndo = true;
       desenharResumo();
       try {
+        if (naExpedicao()) return dizer('Você está na expedição — as Ilhas esperam ela terminar.');
         let r = await irCidade();
         if (!r.ok) return dizer(r.erro, true);
         r = await montar(destino.time);
@@ -174,6 +179,8 @@ PPX.modulo(
 
     const verificar = async () => {
       if (correndo) return;
+      if (cfg.ligada && !cfg.pausada && naExpedicao())
+        return dizer('Você está na expedição — as Ilhas esperam ela terminar.');
       const prioridade = outraAutomacao();
       if (cfg.ligada && !cfg.pausada && prioridade) {
         return dizer(`Ilhas pausadas para ${globalThis.PPX?.vez?.nome?.(prioridade) || prioridade}. Retomo quando terminar.`);
