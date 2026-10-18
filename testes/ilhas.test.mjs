@@ -72,3 +72,12 @@ test('as ilhas suspendem a escada e liberam depois da volta', () => {
   assert.match(ler('escada.js'), /suspender: \(dono\) =>/);
   assert.match(ler('escada.js'), /liberar: \(dono\) =>/);
 });
+
+test('o botao da escada espelha a suspensao temporaria das ilhas', () => {
+  const escada = ler('escada.js');
+  assert.match(escada, /const suspensa = suspensoesExternas\.size > 0/);
+  assert.match(escada, /cfg\.pausada \|\| suspensa \? 'Retomar' : 'Pausar'/);
+  assert.match(escada, /pausar\.disabled = !cfg\.ligada \|\| suspensa/);
+  assert.match(escada, /será retomada automaticamente/);
+  assert.match(escada, /desenhar\(false\);\s*if \(!suspensoesExternas\.size && cfg\.ligada/);
+});

@@ -3168,9 +3168,15 @@ PPX.modulo(
       // Parar esquece o que ia fazer; pausar guarda o lugar. Sao dois botoes porque sao duas
       // coisas, e quem pausa a noite inteira nao quer perder a rodada por clicar no errado.
       const pausar = campo('[data-pausar]');
-      pausar.textContent = cfg.pausada ? 'Retomar' : 'Pausar';
-      pausar.classList.toggle('a-correr', cfg.pausada);
-      pausar.disabled = !cfg.ligada;
+      const suspensa = suspensoesExternas.size > 0;
+      pausar.textContent = cfg.pausada || suspensa ? 'Retomar' : 'Pausar';
+      pausar.classList.toggle('a-correr', cfg.pausada || suspensa);
+      // Uma suspensão das Ilhas termina sozinha. O botão espelha a pausa, mas fica bloqueado para
+      // não transformar um clique em pausa manual e impedir a retomada automática ao fechar.
+      pausar.disabled = !cfg.ligada || suspensa;
+      pausar.title = suspensa
+        ? 'Pausada temporariamente pelas Ilhas Lendárias; será retomada automaticamente.'
+        : '';
       campo('[data-modo]').value = cfg.modo || 'escada';
       const noGrupo = cfg.modo !== 'escada';
       campo('[data-escada]').style.display = noGrupo ? 'none' : '';

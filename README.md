@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.27.3, ao entrar numa Ilha Lendária o módulo suspende temporariamente a Escada sem perder o ponto dela; depois de restaurar a caçada e o time anteriores, libera a Escada para continuar. As Ilhas funcionam como automação de fundo: cedem a vez para Arena, Ginásio, Rampage, Eventos, venda, loja ou qualquer outra automação da fila e voltam a verificar a ilha assim que o trabalho prioritário termina. O painel pode ser arrastado, guarda a posição e mantém os campos dentro da caixa.
+Na 1.27.4, ao entrar numa Ilha Lendária o módulo suspende temporariamente a Escada sem perder o ponto dela; o botão da Escada mostra “Retomar” durante essa suspensão e volta sozinho para “Pausar” quando as Ilhas a liberam. As Ilhas funcionam como automação de fundo: cedem a vez para Arena, Ginásio, Rampage, Eventos, venda, loja ou qualquer outra automação da fila e voltam a verificar a ilha assim que o trabalho prioritário termina. O painel pode ser arrastado, guarda a posição e mantém os campos dentro da caixa.
 
 ## Ilhas Lendárias
 
