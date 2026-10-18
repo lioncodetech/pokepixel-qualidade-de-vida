@@ -37,6 +37,11 @@ As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas con
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,
 quantidades da loja, posições dos painéis, usuário e senha atravessam a troca sem se perder.
 
+No menu principal há **Exportar tudo** e **Importar tudo**. O arquivo reúne as configurações das
+ferramentas, mas deixa de fora a extensão **Times**: as composições carregam IDs de Pokémon daquela
+conta e não servem noutra. Os **nomes** escolhidos nas outras ferramentas viajam normalmente — por
+exemplo, time do Ginásio, do Rampage, do World Boss e filas da Escada.
+
 ## Os dois comandos de cada linha
 
 Cada ferramenta tem **dois** comandos no menu, e eles não são a mesma coisa:
@@ -60,6 +65,10 @@ botão do meio mostra `—` e fica apagado, em vez de prometer uma ação que n�
 ## Alt+Z e Alt+X: limpar a tela inteira
 
 **Alt+Z** esconde todas as janelas do pacote de uma vez. **Alt+X** traz de volta.
+
+O **Alt+X também restaura o chat do jogo**, porque o PokePixel só cria o botão **Votar** enquanto o
+chat está aberto. Mesmo sem um Alt+Z anterior, apertar Alt+X reabre o chat minimizado e o próprio
+jogo recoloca o botão de voto.
 
 São dois, e não um que alterna — a mesma regra de cada ferramenta aqui, pelo mesmo motivo: com um
 atalho só nunca se sabe em que estado se está sem olhar, e quem aperta duas vezes volta ao começo.
@@ -402,6 +411,9 @@ porta `PPX.times`: a escolha guardada e a lista na tela seguem o nome novo sozin
 
 O botão `–` no cabeçalho deixa só o **nome do time e o `Usar`**. Somem o campo de salvar, a lista de
 quem está em cada time e o `×` de esquecer.
+
+No modo cheio, as setas **↑** e **↓** mudam a ordem dos times guardados. Só a posição muda: nome,
+Pokémon, líder e ordem de batalha permanecem iguais.
 
 Trocar de equipe é o que se faz todo dia; guardar um time novo, quase nunca. Com a lista cheia, o
 painel ocupava um pedaço da tela do jogo sobretudo para mostrar o que já se sabe de cor. A escolha
@@ -1543,9 +1555,10 @@ cada um chega onde você quer.
 
 Em cada turno você escolhe o tipo, o **Pokémon principal**, os **times** de onde vêm os que rodam e o
 nível alvo. No turno **com pedra**, continua exatamente como antes: o principal fica fixo e não
-conta para concluir o alvo. No turno **sem pedra**, o Pokémon escolhido não é fixo: ele entra na
-mesma rotação dos times, assume a frente quando for a vez dele e também precisa chegar ao alvo.
-Assim os dois tipos podem ficar misturados na mesma fila.
+conta para concluir o alvo. No turno **sem pedra**, não se escolhe Pokémon principal: todos os
+Pokémon de todos os times escolhidos entram na mesma rotação. O mais atrasado assume a frente e,
+quando alcança os outros, dá lugar ao próximo. Assim os dois tipos podem ficar misturados na mesma
+fila.
 
 Quem chega ao alvo sai; quem ainda falta entra no lugar. Quando não falta mais ninguém, a ferramenta
 passa ao próximo turno. Se todos terminaram, ela continua a farmar com o principal ou abre a próxima

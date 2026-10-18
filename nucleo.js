@@ -379,6 +379,12 @@
       m.iniciar = iniciar;
       agendarMontagem();
     },
+
+    /** O config.js pendura aqui o backup único depois que o menu já existe. */
+    colocarConfigGeral(el) {
+      const lugar = menu?.querySelector?.('[data-config-geral]');
+      if (lugar && el && !lugar.contains(el)) lugar.append(el);
+    },
   };
 
   const iniciarModulo = (m) => {
@@ -427,6 +433,13 @@
       padding: 4px 10px 0; color: #6f7789; font-size: 11px; line-height: 1.35;
       border-top: 1px solid #2a3243; margin-top: 2px;
     }
+    .config-geral { padding: 6px 10px; }
+    .config-geral .ppx-cfg-geral { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .config-geral button {
+      background: #19202c; color: #c8d2e0; border: 1px solid #2a3240; border-radius: 6px;
+      padding: 5px 7px; font: inherit; cursor: pointer;
+    }
+    .config-geral small { grid-column: 1 / -1; color: #6f7789; line-height: 1.25; }
     .fechar {
       background: none; border: 0; color: #8b93a5; cursor: pointer; font: inherit;
       padding: 0 4px; border-radius: 6px;
@@ -483,6 +496,7 @@
       A chave verde ativa ou desativa a ferramenta inteira nesta janela.
       <b>Alt+Z</b> esconde todas as janelas de uma vez; <b>Alt+X</b> traz de volta as que estavam à vista.
     </div>
+    <div class="config-geral" data-config-geral></div>
     <div class="rodape"></div>`;
   const lista = menu.querySelector('ul');
   const rodape = menu.querySelector('.rodape');
@@ -641,7 +655,25 @@
     desenhar();
   }
 
+  /**
+   * O jogo so' cria o botao "Votar" enquanto o chat esta' aberto. Quando ele e' minimizado, o
+   * botao deixa de existir no DOM — nao ha' `display` para desfazer. Alt+X e' o pedido explicito
+   * de devolver o que se usa na tela, por isso restaura o chat e deixa o proprio jogo recriar o
+   * botao. Isto corre mesmo quando nenhuma janela do pacote estava escondida.
+   */
+  const restaurarChatParaVotar = () => {
+    const botoes = [...document.querySelectorAll('button')];
+    const votar = botoes.find((b) => /^votar!?$/i.test((b.textContent || '').trim()));
+    if (votar) return;
+    const restaurar = botoes.find((b) => {
+      const nome = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('title') || ''} ${b.textContent || ''}`;
+      return /restaurar chat/i.test(nome);
+    });
+    restaurar?.click();
+  };
+
   function mostrarTudo() {
+    restaurarChatParaVotar();
     if (!Array.isArray(sumico)) return;
     const voltam = sumico;
     sumico = null;

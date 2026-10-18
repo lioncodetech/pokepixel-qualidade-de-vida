@@ -1062,14 +1062,12 @@ PPX.modulo(
       if (!cacadasDoGrupo().length)
         return 'Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência.';
       const turnos = turnosDoGrupo();
-      if (!turnos.length) return 'Crie um turno e escolha o Pokémon principal e os times que ele vai upar.';
+      if (!turnos.length) return 'Crie um turno e escolha os times que vão entrar na rotação.';
       const sabidos = globalThis.PPX?.times?.nomes?.();
       for (const [i, turno] of turnos.entries()) {
         const qual = turnos.length > 1 ? `Turno ${i + 1}: e` : 'E';
-        if (!turno.fixo)
-          return turno.tipo === 'rotacao'
-            ? `${qual}scolha o Pokémon avulso — sem pedra, ele entra na rotação até o alvo.`
-            : `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
+        if (turno.tipo !== 'rotacao' && !turno.fixo)
+          return `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
         const meus = semVazios(turno.times);
         if (!meus.length) return `${qual}scolha os times de onde vêm os que rodam.`;
         // **Um time que nao existe nesta conta nao e' um time.** Acontece a quem leva a configuracao
@@ -1136,20 +1134,15 @@ PPX.modulo(
     /**
      * Quem um turno upa.
      *
-     * Com pedra, o principal fica fora da conta como sempre ficou. Sem pedra, o Pokémon escolhido
-     * entra na mesma piscina dos times e roda como qualquer outro: ele não fica preso à liderança.
+     * Com pedra, o principal fica fora da conta como sempre ficou. Sem pedra, nao ha' principal:
+     * todos os membros de todos os times escolhidos formam uma piscina e rodam pela liderança.
      */
     const piscinaDoTurno = (turno, todos) => {
       const membrosDe = globalThis.PPX?.times?.membrosDe;
       if (typeof membrosDe !== 'function') return [];
-      const semPedra = turno.tipo === 'rotacao';
       const vistos = new Set();
       const piscina = [];
-      if (semPedra && turno.fixo) {
-        vistos.add(turno.fixo);
-        const principal = todos.get(turno.fixo);
-        if (principal) piscina.push(principal);
-      } else if (turno.fixo) vistos.add(turno.fixo);
+      if (turno.tipo !== 'rotacao' && turno.fixo) vistos.add(turno.fixo);
       for (const nome of semVazios(turno.times || []))
         for (const id of membrosDe(nome)) {
           if (vistos.has(id)) continue;
@@ -1183,8 +1176,9 @@ PPX.modulo(
       if (!turno) return { erro: 'nenhum turno configurado' };
       const numero = turnos.indexOf(turno) + 1;
 
-      const escolhidoDoTurno = todos.get(turno.fixo);
-      if (!escolhidoDoTurno)
+      const semPedra = turno.tipo === 'rotacao';
+      const escolhidoDoTurno = semPedra ? null : todos.get(turno.fixo);
+      if (!semPedra && !escolhidoDoTurno)
         return {
           erro:
             turnos.length > 1
@@ -1194,13 +1188,13 @@ PPX.modulo(
 
       const piscina = piscinaDoTurno(turno, todos);
       const faltam = piscina.filter((b) => b.nivel < alvo);
-      const semPedra = turno.tipo === 'rotacao';
       // Sem pedra, quem está mais atrasado fica à frente e ganha XP. Empates conservam a ordem da
       // piscina, portanto duas batidas não ficam trocando de líder sem ninguém subir.
       const lider = semPedra
         ? faltam.reduce((menor, b) => (!menor || b.nivel < menor.nivel ? b : menor), null) ||
-          escolhidoDoTurno
+          piscina[0]
         : escolhidoDoTurno;
+      if (!lider) return { erro: 'os times deste turno não têm Pokémon nesta conta' };
       const especies = new Set([lider.especie]);
       const escolhidos = [lider];
       const saltados = [];
@@ -1248,7 +1242,8 @@ PPX.modulo(
       // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
       // entre "ela parou" e "ela esta' na segunda".
       const tipo = m.turno.tipo === 'rotacao' ? 'Sem pedra' : 'Com pedra';
-      const pedra = m.quantos > 1 ? `Turno ${m.numero}/${m.quantos} · ${tipo} (${m.fixo.nome}). ` : '';
+      const detalhe = m.fixo ? ` (${m.fixo.nome})` : '';
+      const pedra = m.quantos > 1 ? `Turno ${m.numero}/${m.quantos} · ${tipo}${detalhe}. ` : '';
       if (!m.faltam.length) {
         const quantos = m.acabou
           ? turnosDoGrupo().reduce((n, t) => n + piscinaDoTurno(t, colecao).length, 0)
@@ -3004,8 +2999,8 @@ PPX.modulo(
         const cima = document.createElement('div');
         cima.className = 'cima';
         const tipo = document.createElement('select');
-        tipo.title = 'Com pedra: o principal fica fixo. Sem pedra: o escolhido entra na rotação.';
-        tipo.append(new Option('com pedra', 'pedra'), new Option('sem pedra · entra na rotação', 'rotacao'));
+        tipo.title = 'Com pedra: o principal fica fixo. Sem pedra: os times inteiros entram na rotação.';
+        tipo.append(new Option('com pedra', 'pedra'), new Option('sem pedra · times em rotação', 'rotacao'));
         tipo.value = turno.tipo === 'rotacao' ? 'rotacao' : 'pedra';
         tipo.addEventListener('change', () => {
           turno.tipo = tipo.value;
@@ -3015,9 +3010,7 @@ PPX.modulo(
           void conferir();
         });
         const quem = document.createElement('select');
-        quem.title = turno.tipo === 'rotacao'
-          ? 'Um Pokémon avulso que entra na rotação junto com os times'
-          : 'O Pokémon que tem a pedra — ele nunca sai do grupo';
+        quem.title = 'O Pokémon que tem a pedra — ele nunca sai do grupo';
         desenharFixo(quem, turno);
         quem.addEventListener('change', () => {
           turno.fixo = quem.value;
@@ -3035,7 +3028,9 @@ PPX.modulo(
           gravar();
           desenhar();
         });
-        cima.append(tipo, quem, forada);
+        cima.append(tipo);
+        if (turno.tipo !== 'rotacao') cima.append(quem);
+        cima.append(forada);
 
         const times = document.createElement('ul');
         if (!semVazios(turno.times).length) {

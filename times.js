@@ -824,7 +824,8 @@ PPX.modulo(
       #lioncode-times.compacto .salvar,
       #lioncode-times.compacto li small,
       #lioncode-times.compacto li [data-apagar],
-      #lioncode-times.compacto li [data-atualizar] { display: none; }
+      #lioncode-times.compacto li [data-atualizar],
+      #lioncode-times.compacto li [data-mover] { display: none; }
       /* O nome convida a ser clicado: e' por ele que se renomeia. */
       #lioncode-times li b { cursor: text; }
       #lioncode-times li b:hover { text-decoration: underline dotted #8b97a8; }
@@ -908,6 +909,19 @@ PPX.modulo(
 
     const times = () => ler(CHAVE_TIMES, []);
 
+    const moverTime = (nome, passo) => {
+      if (aplicando) return;
+      const guardados = times();
+      const de = guardados.findIndex((t) => t.nome === nome);
+      const para = de + passo;
+      if (de < 0 || para < 0 || para >= guardados.length) return;
+      const [movido] = guardados.splice(de, 1);
+      guardados.splice(para, 0, movido);
+      gravar(CHAVE_TIMES, guardados);
+      desenhar();
+      celebrar(`"${nome}" agora é o ${para + 1}º time.`);
+    };
+
     const desenhar = () => {
       const guardados = times();
       lista.innerHTML = '';
@@ -918,7 +932,7 @@ PPX.modulo(
         lista.append(vazio);
         return;
       }
-      for (const time of guardados) {
+      for (const [indice, time] of guardados.entries()) {
         const item = document.createElement('li');
         const rotulo = document.createElement('div');
         rotulo.className = 'rotulo';
@@ -934,6 +948,20 @@ PPX.modulo(
         usar.type = 'button';
         usar.textContent = 'Usar';
         usar.addEventListener('click', () => void usarTime(time));
+        const subir = document.createElement('button');
+        subir.type = 'button';
+        subir.dataset.mover = '';
+        subir.textContent = '↑';
+        subir.title = `Mover "${time.nome}" para cima`;
+        subir.disabled = indice === 0;
+        subir.addEventListener('click', () => moverTime(time.nome, -1));
+        const descer = document.createElement('button');
+        descer.type = 'button';
+        descer.dataset.mover = '';
+        descer.textContent = '↓';
+        descer.title = `Mover "${time.nome}" para baixo`;
+        descer.disabled = indice === guardados.length - 1;
+        descer.addEventListener('click', () => moverTime(time.nome, 1));
         // Regravar este time com a equipe que esta' na tela. Em dois cliques, de proposito: e'
         // uma gravacao por cima, e um toque errado aqui apagaria um time inteiro sem aviso.
         const atualizar = document.createElement('button');
@@ -974,7 +1002,7 @@ PPX.modulo(
           desenhar();
           dizer(`"${time.nome}" esquecido.`);
         });
-        item.append(rotulo, usar, atualizar, apagar);
+        item.append(rotulo, subir, descer, usar, atualizar, apagar);
         lista.append(item);
       }
     };

@@ -43,6 +43,25 @@ test('esconder duas vezes nao apaga a lista', () => {
   assert.match(volta.slice(0, volta.indexOf('\n  }')), /if \(!Array\.isArray\(sumico\)\) return;/);
 });
 
+test('Alt+X restaura o chat para o jogo recriar o botao Votar', () => {
+  // Medido no jogo em 18/10/2026: minimizar o chat remove completamente o botão Votar do DOM e
+  // deixa apenas um botão acessível como "Restaurar chat". Logo, mostrar não é trocar `display`:
+  // é pedir ao próprio jogo que reabra o chat. Isso vale mesmo sem um Alt+Z anterior.
+  const volta = nucleo.slice(nucleo.indexOf('const restaurarChatParaVotar'));
+  const corpo = volta.slice(0, volta.indexOf('\n  };'));
+  assert.match(corpo, /document\.querySelectorAll\('button'\)/);
+  assert.match(corpo, /\^votar!\?\$/i);
+  assert.match(corpo, /restaurar chat/i);
+  assert.match(corpo, /restaurar\?\.click\(\)/);
+  const mostrar = nucleo.slice(nucleo.indexOf('function mostrarTudo()'));
+  const dentro = mostrar.slice(0, mostrar.indexOf('\n  }'));
+  assert.ok(
+    dentro.indexOf('restaurarChatParaVotar();') <
+      dentro.indexOf('if (!Array.isArray(sumico)) return;'),
+    'o chat é restaurado até quando não havia janelas do pacote escondidas',
+  );
+});
+
 test('as ferramentas de efeito ficam de fora', () => {
   // "Ocultar popups" e "Sem gráfico" não têm janela nenhuma na tela: o botão delas liga e desliga
   // o que fazem com a página. Apagá-las aqui não limparia a tela — mudaria o jogo.

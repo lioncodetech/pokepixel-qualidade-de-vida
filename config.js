@@ -35,6 +35,25 @@
   /** A versao do **formato**, nao a da extensao: so' muda se o formato mudar. */
   const FORMATO = 1;
 
+  /** Configurações que já têm coletor e importador próprios, registradas ao montar seus botões. */
+  const registros = new Map();
+
+  /**
+   * Ferramentas simples que ainda não têm painel de Exportar/Importar. Só estas chaves reconhecidas
+   * viajam. Estado da conta (placares, tarefas, catálogos) e toda a extensão Times ficam de fora.
+   */
+  const CHAVES_SIMPLES = [
+    'lioncode:pokepixel:modulos',
+    'lioncode:pokepixel:visiveis',
+    'lmi-ocultar-popups',
+    'pp-sem-grafico',
+    'pp-senha',
+    'pp-usuario',
+    'lioncode:gym:escolhas',
+    'lioncode:gym:agenda',
+    'lioncode:raridades:faixa',
+  ];
+
   const dois = (n) => String(n).padStart(2, '0');
 
   /** `venda-rapida-config-2026-10-06.json` — a data no nome poupa abrir para saber qual e' qual. */
@@ -118,6 +137,10 @@
    * que e' quem sabe onde a frase cabe.
    */
   const montarBotoes = ({ id, nome, coletar, aplicar, avisar = () => {} }) => {
+    // O backup geral chama exatamente os mesmos coletores e importadores dos botões individuais.
+    // `times` é recusado aqui também: mesmo que um dia ganhe botões próprios, os IDs dos Pokémon
+    // daquela conta nunca entram no arquivo geral.
+    if (id !== 'times') registros.set(id, { id, nome, coletar, aplicar, avisar });
     const el = document.createElement('span');
     el.className = 'ppx-cfg';
     el.innerHTML = `
@@ -196,9 +219,99 @@
     return { el, arquivo };
   };
 
-  const API = { PACOTE, FORMATO, montarPacote, lerPacote, nomeDoArquivo, montarBotoes };
+  const coletarTudo = () => {
+    const ferramentas = {};
+    for (const [id, r] of registros) ferramentas[id] = r.coletar();
+    const simples = {};
+    for (const chave of CHAVES_SIMPLES) {
+      const valor = localStorage.getItem(chave);
+      if (valor !== null) simples[chave] = valor;
+    }
+    return { ferramentas, simples };
+  };
 
-  if (typeof globalThis.PPX === 'object' && globalThis.PPX) globalThis.PPX.config = API;
+  const aplicarTudo = (dados) => {
+    const ferramentas = ehObjeto(dados?.ferramentas) ? dados.ferramentas : {};
+    const simples = ehObjeto(dados?.simples) ? dados.simples : {};
+    const erros = [];
+    let aplicadas = 0;
+    for (const [id, valor] of Object.entries(ferramentas)) {
+      const r = registros.get(id);
+      if (!r || !ehObjeto(valor)) continue;
+      try {
+        r.aplicar(valor);
+        aplicadas += 1;
+      } catch (e) {
+        erros.push(`${r.nome}: ${e.message || e}`);
+      }
+    }
+    for (const chave of CHAVES_SIMPLES) {
+      if (typeof simples[chave] !== 'string') continue;
+      localStorage.setItem(chave, simples[chave]);
+      aplicadas += 1;
+    }
+    if (erros.length) throw new Error(`Importei ${aplicadas}; faltou ${erros.join(' · ')}`);
+    return `Configurações importadas (${aplicadas}). Recarregue a página para aplicar tudo.`;
+  };
+
+  const montarBotoesGerais = () => {
+    const el = document.createElement('div');
+    el.className = 'ppx-cfg-geral';
+    el.innerHTML = `
+      <button type="button" data-tudo-exportar>Exportar tudo</button>
+      <button type="button" data-tudo-importar>Importar tudo</button>
+      <small data-tudo-aviso>Times não entram; referências pelos nomes entram.</small>`;
+    const arquivo = document.createElement('input');
+    arquivo.type = 'file';
+    arquivo.accept = 'application/json,.json';
+    arquivo.hidden = true;
+    document.body.append(arquivo);
+    const aviso = el.querySelector('[data-tudo-aviso]');
+    el.querySelector('[data-tudo-exportar]').addEventListener('click', async () => {
+      const texto = JSON.stringify(
+        montarPacote('todas', 'Todas as ferramentas (sem Times)', coletarTudo()),
+        null,
+        2,
+      );
+      const feito = await baixar(nomeDoArquivo('pokepixel-todas'), texto);
+      aviso.textContent = feito.ok
+        ? `Tudo exportado para a ${feito.como}, sem os Times.`
+        : 'Não consegui exportar.';
+    });
+    el.querySelector('[data-tudo-importar]').addEventListener('click', () => {
+      arquivo.value = '';
+      if (!arquivo.isConnected) document.body.append(arquivo);
+      arquivo.click();
+    });
+    arquivo.addEventListener('change', async () => {
+      const escolhido = arquivo.files?.[0];
+      if (!escolhido) return;
+      const lido = lerPacote(await escolhido.text(), 'todas');
+      if (!lido.ok) return void (aviso.textContent = lido.erro);
+      try {
+        aviso.textContent = aplicarTudo(lido.dados);
+      } catch (e) {
+        aviso.textContent = e.message || 'Não consegui importar tudo.';
+      }
+    });
+    return el;
+  };
+
+  const API = {
+    PACOTE,
+    FORMATO,
+    montarPacote,
+    lerPacote,
+    nomeDoArquivo,
+    montarBotoes,
+    coletarTudo,
+    aplicarTudo,
+  };
+
+  if (typeof globalThis.PPX === 'object' && globalThis.PPX) {
+    globalThis.PPX.config = API;
+    globalThis.PPX.colocarConfigGeral?.(montarBotoesGerais());
+  }
   // Para o teste de mesa: `new Function('module', fonte)`. Ver `testes/config.test.mjs`.
   if (typeof module === 'object' && module) module.exports = API;
 })();

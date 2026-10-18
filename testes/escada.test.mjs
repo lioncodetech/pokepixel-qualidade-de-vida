@@ -619,7 +619,7 @@ test('nao agir e uma decisao, e e dita', () => {
     /scolha o Pokémon que tem a pedra/,
     /scolha os times de onde vêm os que rodam/,
     // E, com mais de uma pedra no rodízio, o impasse diz de qual delas se trata.
-    /Crie um turno e escolha o Pokémon principal e os times que ele vai upar/,
+    /Crie um turno e escolha os times que vão entrar na rotação/,
     /a caçada é a última da fila/,
     /apagaria o grupo/,
     /o Pokémon principal não está mais na coleção/,
@@ -951,15 +951,14 @@ test('turnos com e sem pedra revezam-se, e qual esta a correr nao se guarda', ()
   // Acabados todos, fica o primeiro: alguém tem de continuar a caçar, e a escolha tem de ser sempre
   // a mesma ou a equipe ficava a dançar entre as pedras sem ninguém a upar.
   assert.match(codigo, /const turno = correndo \|\| turnos\[0\];/);
-  // Com pedra, o principal fica fora da conta. Sem pedra, o avulso entra na piscina e roda como os
-  // membros dos times atribuídos ao turno.
-  assert.match(codigo, /const semPedra = turno\.tipo === 'rotacao';/);
-  assert.match(codigo, /if \(semPedra && turno\.fixo\) \{/);
-  assert.match(codigo, /if \(principal\) piscina\.push\(principal\);/);
-  assert.match(codigo, /else if \(turno\.fixo\) vistos\.add\(turno\.fixo\);/);
-  // Sem pedra, o mais atrasado vira líder; o escolhido não permanece fixo na frente.
+  // Com pedra, o principal fica fora da conta. Sem pedra não há avulso nem fixo: a piscina nasce
+  // exclusivamente de todos os membros dos times escolhidos.
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao' && turno\.fixo\) vistos\.add\(turno\.fixo\);/);
+  assert.doesNotMatch(codigo, /if \(semPedra && turno\.fixo\)/);
+  // Sem pedra, o mais atrasado de todos os times vira líder.
   assert.match(codigo, /const lider = semPedra/);
   assert.match(codigo, /b\.nivel < menor\.nivel/);
+  assert.match(codigo, /\|\|\s*piscina\[0\]/);
   assert.match(codigo, /if \(bicho\.id === lider\.id\) continue;/);
   assert.match(codigo, /m\.lider\.id/);
   // A região NÃO é conferida, e de propósito: quem diz qual Pokémon é de qual pedra é o dono, ao
@@ -976,10 +975,12 @@ test('turnos com e sem pedra revezam-se, e qual esta a correr nao se guarda', ()
 test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
   assert.match(
     codigo,
-    /new Option\('com pedra', 'pedra'\), new Option\('sem pedra · entra na rotação', 'rotacao'\)/,
+    /new Option\('com pedra', 'pedra'\), new Option\('sem pedra · times em rotação', 'rotacao'\)/,
   );
   assert.match(codigo, /cfg\.grupo\.turnos\.push\(\{ tipo: 'pedra', fixo: '', times: \[''\] \}\)/);
   assert.match(codigo, /turno\.tipo = tipo\.value/);
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem\)/);
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao' && !turno\.fixo\)/);
   // Configurações salvas antes desta opção conservam exatamente o comportamento original.
   assert.match(codigo, /tipo: t\?\.tipo === 'rotacao' \? 'rotacao' : 'pedra'/);
 });

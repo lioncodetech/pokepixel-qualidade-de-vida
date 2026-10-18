@@ -111,7 +111,7 @@ test('o modo compacto some com o que nao e nome nem Usar, e e lembrado', () => {
   assert.match(codigo, /#lioncode-times\.compacto li small,/);
   assert.match(codigo, /#lioncode-times\.compacto li \[data-apagar\],/);
   // Regravar e esquecer sao os dois botoes de administrar a lista: os dois somem no compacto.
-  assert.match(codigo, /#lioncode-times\.compacto li \[data-atualizar\] \{ display: none; \}/);
+  assert.match(codigo, /#lioncode-times\.compacto li \[data-atualizar\],[\s\S]*?\[data-mover\] \{ display: none; \}/);
   // O tamanho proprio do modo compacto esta' no teste do retrair, logo abaixo.
   assert.match(codigo, /gravar\(CHAVE_COMPACTO, compacto\)/);
 });
@@ -188,6 +188,18 @@ test('um time guardado pode ser regravado sem sair do lugar na lista', () => {
   // E é em dois cliques: uma gravação por cima apaga um time inteiro, não pode sair de um toque.
   assert.match(codigo, /atualizar\.textContent = '\?';/);
   assert.match(codigo, /Clique no \? outra vez para regravar/);
+});
+
+test('os times guardados podem subir e descer sem mudar a composicao', () => {
+  const mover = codigo.slice(codigo.indexOf('const moverTime ='));
+  const corpo = mover.slice(0, mover.indexOf('\n    };'));
+  assert.match(corpo, /guardados\.splice\(de, 1\)/);
+  assert.match(corpo, /guardados\.splice\(para, 0, movido\)/);
+  assert.match(corpo, /gravar\(CHAVE_TIMES, guardados\)/);
+  assert.match(codigo, /subir\.addEventListener\('click', \(\) => moverTime\(time\.nome, -1\)\)/);
+  assert.match(codigo, /descer\.addEventListener\('click', \(\) => moverTime\(time\.nome, 1\)\)/);
+  assert.match(codigo, /subir\.disabled = indice === 0/);
+  assert.match(codigo, /descer\.disabled = indice === guardados\.length - 1/);
 });
 
 test('renomear avisa o ginasio, que guarda os times pelo nome', () => {

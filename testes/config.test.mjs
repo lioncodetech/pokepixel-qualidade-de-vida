@@ -124,3 +124,22 @@ test('o que chega de fora e lido como se viesse de fora', () => {
   const loja = trecho(ler('loja-rapida.js'), 'aplicar: (dados)', 'avisar: (frase)');
   assert.match(loja, /Number\.isFinite\(alvo\) && alvo >= 0/, 'alvo tem de ser número não negativo');
 });
+
+test('o backup geral usa os validadores das ferramentas e nunca leva os Times', () => {
+  assert.match(fonte, /const registros = new Map\(\)/);
+  assert.match(fonte, /if \(id !== 'times'\) registros\.set/);
+  assert.match(fonte, /ferramentas\[id\] = r\.coletar\(\)/);
+  assert.match(fonte, /r\.aplicar\(valor\)/);
+  const de = fonte.indexOf('const CHAVES_SIMPLES');
+  const simples = fonte.slice(de, fonte.indexOf('];', de));
+  assert.doesNotMatch(simples, /lioncode:times/);
+  assert.match(simples, /lioncode:gym:escolhas/);
+});
+
+test('o menu oferece um arquivo unico para exportar e importar', () => {
+  assert.match(fonte, /data-tudo-exportar>Exportar tudo/);
+  assert.match(fonte, /data-tudo-importar>Importar tudo/);
+  assert.match(fonte, /montarPacote\('todas', 'Todas as ferramentas \(sem Times\)'/);
+  assert.match(ler('nucleo.js'), /colocarConfigGeral\(el\)/);
+  assert.match(ler('nucleo.js'), /data-config-geral/);
+});
