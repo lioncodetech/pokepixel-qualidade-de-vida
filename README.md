@@ -1,6 +1,16 @@
 # PokePixel — qualidade de vida
 
-Na 1.26.5, o turno sem pedra nunca cai na caçada fixa do time com pedra: procura a melhor hunt segura para o nível do líder e, se não encontrar, usa o degrau daquele nível. Sem nenhum dos dois, para e avisa. O **Alt+Z** também minimiza o chat/Votar, e o **Exportar tudo** deixa Times e Escada de fora.
+Na 1.27.1, o painel **Ilhas Lendárias** pode ser arrastado pelo cabeçalho e guarda a posição; os campos de caçada e time também ficam contidos dentro da caixa. Ele lê do próprio jogo quando as ilhas abrem, entra com a hunt e o time escolhidos e tenta restaurar a caçada e o time anteriores quando elas fecham.
+
+## Ilhas Lendárias
+
+O monitor consulta a disponibilidade real do mundo **Ilhas Lendárias**; não depende de assumir que
+é fim de semana, portanto também reconhece liberações de eventos. A verificação acontece a cada dois
+minutos e também pelo botão **Verificar agora**. A entrada passa pela fila comum das automações.
+
+Você escolhe a caçada da ilha e um time salvo. Se o atalho dessa caçada já tiver outro time ligado,
+o painel recusa e explica o conflito, em vez de entrar com a equipe errada. **Pausar** conserva o
+estado sem trocar caçada ou time; **Desligar** encerra o monitoramento.
 
 ## Rampage automático
 
@@ -15,7 +25,7 @@ O painel também tem **Atacar agora** e **Parar ciclo**. A expedição nunca é 
 configuração inválida ou um botão indisponível faz a rotina parar sem repetir o clique que consome a
 tentativa.
 
-As treze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As quinze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -34,6 +44,7 @@ janela em que você está.
 | Caçadas | guarda atalhos para as caçadas que você usa, cada uma com o seu time | Alt+W esconde · Alt+E mostra |
 | Raridades | procura na coleção por raridade, nível, IV, espécie, tipo e lugar, e espelha o filtro na mochila do jogo | Alt+A esconde · Alt+S mostra |
 | Escada de caçadas | troca de caçada sozinha quando o aluno sobe de nível, e leva o derrotado à enfermeira | Alt+U esconde · Alt+I mostra |
+| Ilhas Lendárias | usa uma caçada e um time escolhidos enquanto as ilhas estiverem abertas | configuração pelo menu (Alt+Q) |
 
 As cinco primeiras são as mesmas de sempre, com as mesmas telas e as mesmas configurações — inclusive
 as que você já tinha. As escolhas continuam guardadas nas mesmas chaves, então raridades, teto de nível, lote,

@@ -901,6 +901,17 @@ PPX.modulo(
         });
     };
 
+    /** Releitura imediata para eventos temporários, cujo `locked` pode mudar antes das 24 horas. */
+    const relerCatalogo = async () => {
+      const lido = await pedirZonas();
+      if (!lido?.ok || !lido.zonas?.length)
+        return { ok: false, erro: lido?.erro || 'o jogo não devolveu as caçadas' };
+      gravar(CHAVE_CATALOGO, { quando: Date.now(), zonas: lido.zonas });
+      insistencias = 0;
+      desenhar();
+      return { ok: true, quantas: lido.zonas.length };
+    };
+
     /**
      * **A PRIMEIRA LEITURA FALHA, E ELA TEM DE INSISTIR SOZINHA.**
      *
@@ -1485,6 +1496,7 @@ PPX.modulo(
             minha: c.doJogo !== true,
           })),
         atual: () => cacadaAtiva(),
+        atualizar: relerCatalogo,
 
         /**
          * Que time esta caçada monta ao chegar — `''` quando ela nao monta nenhum.

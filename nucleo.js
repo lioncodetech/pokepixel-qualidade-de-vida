@@ -248,6 +248,7 @@
     { id: 'arena', nome: 'Arena de Defesa', atalhos: 'Alt+M esconde · Alt+Shift+M mostra' },
     { id: 'rampage', nome: 'Rampage', atalhos: 'configuração pelo menu (Alt+Q)' },
     { id: 'eventos', nome: 'Eventos', atalhos: 'configuração pelo menu (Alt+Q)' },
+    { id: 'ilhas', nome: 'Ilhas Lendárias', atalhos: 'configuração pelo menu (Alt+Q)' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

@@ -114,6 +114,7 @@ const NA_FILA = [
   'arena.js',
   'rampage.js',
   'eventos.js',
+  'ilhas.js',
 ];
 
 /**
