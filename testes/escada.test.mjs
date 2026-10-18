@@ -255,9 +255,20 @@ test('a cura e tres passos em ordem, e a ordem foi medida', () => {
   // pegar — que é exactamente o defeito que a ordem existe para evitar.
   assert.match(ponte, /if \(typeof api\.stopHunt === 'function'\) \{/);
   assert.match(ponte, /if \(typeof nav\?\.goToCity !== 'function'\)/);
+  // `goToCity()` responde antes de o mapa terminar de desenhar em algumas contas. A cura não pode
+  // depender de 1,5 s adivinhados: espera a cidade confirmar-se e tenta a Nurse Joy novamente se
+  // a primeira chamada cair enquanto os NPCs ainda estão entrando.
+  assert.match(ponte, /await esperarAte\(naCidade, ATE_CIDADE\)/);
+  assert.match(ponte, /tentativa <= TENTATIVAS_DE_CURA/);
+  assert.match(ponte, /await esperarAte\(\(\) => !estaDerrotada\(criatura\), 2500\)/);
+  assert.doesNotMatch(ponte, /ATE_ASSENTAR/);
   // E ela nunca gasta item do jogador: `reviveHunt` também ressuscita, de graça para a ferramenta
   // e caro para quem joga. A enfermeira é de graça.
   assert.doesNotMatch(ponte, /reviveHunt\(/);
+  // Depois de três falhas da Nurse Joy, usa exactamente um Max Revive no derrotado. Como a caçada
+  // já parou, isto é uso de item na criatura e não a rota de revive da caçada.
+  assert.match(codigo, /pedirCidade\(alvo\.id\)/);
+  assert.match(ponte, /api\.useItem\('revive_max', criatura, 1\)/);
   // Parar uma caçada que não existe não é erro: é o estado que se queria.
   assert.match(ponte, /await api\.stopHunt\(\);\s*\n\s*\} catch \{/);
 });
@@ -608,10 +619,10 @@ test('nao agir e uma decisao, e e dita', () => {
     /scolha o Pokémon que tem a pedra/,
     /scolha os times de onde vêm os que rodam/,
     // E, com mais de uma pedra no rodízio, o impasse diz de qual delas se trata.
-    /Escolha quem tem a pedra e os times que ela vai upar/,
+    /Crie um turno e escolha o Pokémon principal e os times que ele vai upar/,
     /a caçada é a última da fila/,
     /apagaria o grupo/,
-    /o Pokémon fixo não está mais na coleção/,
+    /o Pokémon principal não está mais na coleção/,
     /Ainda não li a coleção/,
     /Pausada\./,
   ])
@@ -757,10 +768,12 @@ test('o grupo e uma composicao para agora, e nao uma fila de entradas e saidas',
   // diferença entre ela e o HUD.
   const bloco = codigo.slice(codigo.indexOf('const montagemDoGrupo ='));
   const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
-  // O fixo primeiro, e é ele o líder: o jogo recusa remover o Pokémon ativo, então pôr a liderança
-  // em quem roda daria uma troca travada a cada volta.
-  assert.match(corpo, /const escolhidos = \[fixo\];/);
-  assert.match(codigo, /m\.fixo\.id,/);
+  // Com pedra, o escolhido continua como líder fixo. Sem pedra, o mais atrasado da piscina lidera
+  // e entra de verdade na rotação, que é justamente a diferença entre os dois tipos de turno.
+  assert.match(corpo, /const lider = semPedra/);
+  assert.match(corpo, /: escolhidoDoTurno;/);
+  assert.match(corpo, /const escolhidos = \[lider\];/);
+  assert.match(codigo, /m\.lider\.id,/);
   // A equipe trava em 6, e espécie não repete na equipe — as duas regras são do jogo, medidas nos
   // Times. Um rodante de espécie já presente é SALTADO, não tentado.
   assert.match(corpo, /escolhidos\.length >= 6/);
@@ -918,7 +931,7 @@ test('o lugar do grupo e uma lista em ordem, e estar numa delas basta', () => {
   assert.match(codigo, /if \(!cfg\.grupo\.cacadas\.length && cfg\.grupo\.cacada\)/);
 });
 
-test('as pedras revezam-se, e qual esta a correr nao se guarda', () => {
+test('turnos com e sem pedra revezam-se, e qual esta a correr nao se guarda', () => {
   // Pedido em 12/10/2026: cada pedra da XP só divide com Pokémon da sua região (hoje Kanto e
   // Johto) e **só o Pokémon ativo divide** — medido pelo dono. Logo, duas pedras na equipe ao mesmo
   // tempo seriam um slot gasto à toa: elas têm de se revezar.
@@ -938,8 +951,17 @@ test('as pedras revezam-se, e qual esta a correr nao se guarda', () => {
   // Acabados todos, fica o primeiro: alguém tem de continuar a caçar, e a escolha tem de ser sempre
   // a mesma ou a equipe ficava a dançar entre as pedras sem ninguém a upar.
   assert.match(codigo, /const turno = correndo \|\| turnos\[0\];/);
-  // A piscina de um turno não inclui a própria pedra.
-  assert.match(codigo, /const vistos = new Set\(\[turno\.fixo\]\);/);
+  // Com pedra, o principal fica fora da conta. Sem pedra, o avulso entra na piscina e roda como os
+  // membros dos times atribuídos ao turno.
+  assert.match(codigo, /const semPedra = turno\.tipo === 'rotacao';/);
+  assert.match(codigo, /if \(semPedra && turno\.fixo\) \{/);
+  assert.match(codigo, /if \(principal\) piscina\.push\(principal\);/);
+  assert.match(codigo, /else if \(turno\.fixo\) vistos\.add\(turno\.fixo\);/);
+  // Sem pedra, o mais atrasado vira líder; o escolhido não permanece fixo na frente.
+  assert.match(codigo, /const lider = semPedra/);
+  assert.match(codigo, /b\.nivel < menor\.nivel/);
+  assert.match(codigo, /if \(bicho\.id === lider\.id\) continue;/);
+  assert.match(codigo, /m\.lider\.id/);
   // A região NÃO é conferida, e de propósito: quem diz qual Pokémon é de qual pedra é o dono, ao
   // pôr os times certos no turno certo. Adivinhar pelo `species_id` seria apostar que o jogo numera
   // como a Pokédex nacional, e isso não foi medido.
@@ -947,8 +969,19 @@ test('as pedras revezam-se, e qual esta a correr nao se guarda', () => {
   // O fixo e os times soltos de antes viram o primeiro turno.
   assert.match(
     codigo,
-    /cfg\.grupo\.turnos = \[\{ fixo: cfg\.grupo\.fixo \|\| '', times: cfg\.grupo\.times \|\| \[\] \}\];/,
+    /\{ tipo: 'pedra', fixo: cfg\.grupo\.fixo \|\| '', times: cfg\.grupo\.times \|\| \[\] \}/,
   );
+});
+
+test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
+  assert.match(
+    codigo,
+    /new Option\('com pedra', 'pedra'\), new Option\('sem pedra · entra na rotação', 'rotacao'\)/,
+  );
+  assert.match(codigo, /cfg\.grupo\.turnos\.push\(\{ tipo: 'pedra', fixo: '', times: \[''\] \}\)/);
+  assert.match(codigo, /turno\.tipo = tipo\.value/);
+  // Configurações salvas antes desta opção conservam exatamente o comportamento original.
+  assert.match(codigo, /tipo: t\?\.tipo === 'rotacao' \? 'rotacao' : 'pedra'/);
 });
 
 test('a pedra de um turno escolhe-se entre a equipe e os times dele', () => {
@@ -1393,12 +1426,15 @@ test('a pedra nao viaja: ela e um bicho desta conta', () => {
   // bicho. Levá-lo seria apontar para o Pokémon errado sem dizer nada.
   const bloco = codigo.slice(codigo.indexOf("id: 'escada',"));
   const coletar = bloco.slice(bloco.indexOf('coletar:'), bloco.indexOf('aplicar:'));
-  assert.match(coletar, /turnos: cfg\.grupo\.turnos\.map\(\(t\) => \(\{ times: t\.times \}\)\)/);
-  assert.ok(!/fixo/.test(coletar), 'a pedra não entra no pacote');
+  assert.match(
+    coletar,
+    /turnos: cfg\.grupo\.turnos\.map\(\(t\) => \(\{ tipo: t\.tipo === 'rotacao' \? 'rotacao' : 'pedra', times: t\.times \}\)\)/,
+  );
+  assert.ok(!/fixo/.test(coletar), 'o Pokémon principal não entra no pacote');
   const aplicar = bloco.slice(bloco.indexOf('aplicar:'), bloco.indexOf('avisar: diz'));
   assert.match(aplicar, /fixo: '',/, 'a pedra chega vazia, e não com o id de outra conta');
   // E diz-se: uma pedra em falta é calada no painel de quem não sabe que ela não viaja.
-  assert.match(aplicar, /vieram sem o Pokémon/);
+  assert.match(aplicar, /vieram sem os Pokémon principais/);
 });
 
 test('o exportar e importar da escada esta no painel, e e o do config.js', () => {

@@ -467,7 +467,11 @@ recusa carregar `../times.js`.
 
 Sai da caçada, troca para o time de ginásio, desafia o ginásio marcado **HOJE**, volta ao time de
 caçada e reentra na mesma caçada de onde saiu. Uma região por vez — Kanto e Johto têm times
-diferentes. A **Elite Four fica de fora**, por pedido.
+diferentes. A **Elite Four fica fora da automação de combate**, mas o painel tem dois botões
+manuais — Kanto e Johto — para marcar se cada uma já foi feita no dia. As marcas usam o mesmo
+horário de reset do placar e voltam automaticamente para “não feita” no dia seguinte. No modo
+minimizado, a linha **Elite 4** continua mostrando `K ✓/○` e `J ✓/○`; os indicadores também podem
+ser clicados ali.
 
 ```
 guardar a caçada → VOLTAR À CIDADE → time do ginásio → F5 → NPC GYM
@@ -1475,8 +1479,15 @@ derrotado"**. A caçada guarda o próprio estado de combate. Então:
 
 **parar a caçada → ir para a cidade → curar**, que é o caminho que você faria a pé até a enfermeira.
 
-Ela nunca usa `reviveHunt`, que também ressuscita e **gasta um item seu**. A enfermeira é de graça;
-gastar o seu inventário para poupar um passo seria decidir por você uma coisa que é sua.
+`goToCity()` às vezes responde antes de o mapa e a Nurse Joy terminarem de aparecer. A ponte não
+usa mais uma espera fixa de 1,5 segundo: confirma por até 15 segundos que o mapa da cidade carregou,
+chama a cura e confere no próprio HUD se a marca de derrotado sumiu. Se não sumir, dá até três
+tentativas curtas à Nurse Joy. Assim, chegar à cidade ainda com o Pokémon derrotado não deixa a
+escada estacionada ali para sempre.
+
+Se, mesmo depois das três tentativas, o Pokémon continuar derrotado, a extensão usa **um Max
+Revive** (`revive_max`) diretamente naquele Pokémon e confere novamente o HUD. Ela não usa
+`reviveHunt`: a caçada já foi encerrada nesse ponto; o fallback correto é o uso de item na criatura.
 
 Duas coisas que a banca pegou e que o código sozinho não mostrava:
 
@@ -1518,22 +1529,27 @@ A listbox no topo do painel escolhe **como** ela upa:
 | Modo | O que faz |
 | --- | --- |
 | escada de caçadas | um aluno de cada vez à frente, viajando os degraus (o resto desta secção) |
-| grupo até o nível X | um Pokémon fixo com a pedra da XP e os outros a rodar, até um nível |
+| grupo até o nível X | turnos com pedra ou sem pedra, nivelando os times até um nível |
 | grupo subindo de N em N | o mesmo, mas o alvo sobe sozinho a cada rodada fechada |
 
 É uma escolha e não três interruptores de propósito: os três mexem na **mesma** equipe e na **mesma**
 caçada, e dois a correr tirariam da equipe o que o outro acabou de pôr.
 
-### O modo de grupo: um fixo, cinco a rodar
+### O modo de grupo: turnos com pedra e sem pedra
 
 A pedra da XP divide o que o Pokémon ativo ganha com o resto da equipe. Então o jeito de upar muitos
 Pokémon é ter **um fixo** — quem tem a pedra, e que nunca sai — e trocar os outros cinco à medida que
 cada um chega onde você quer.
 
-Você escolhe: a **caçada** onde se fica, o **fixo**, os **times** de onde vêm os que rodam, e o nível
-em que eles saem do grupo. Quem chega ao alvo sai; quem ainda falta entra no lugar. Quando não falta
-mais ninguém, ficam todos fora e ela **continua a farmar** com o fixo — o que você pediu: "ficam fora
-do grupo até eu olhar e mudar".
+Em cada turno você escolhe o tipo, o **Pokémon principal**, os **times** de onde vêm os que rodam e o
+nível alvo. No turno **com pedra**, continua exatamente como antes: o principal fica fixo e não
+conta para concluir o alvo. No turno **sem pedra**, o Pokémon escolhido não é fixo: ele entra na
+mesma rotação dos times, assume a frente quando for a vez dele e também precisa chegar ao alvo.
+Assim os dois tipos podem ficar misturados na mesma fila.
+
+Quem chega ao alvo sai; quem ainda falta entra no lugar. Quando não falta mais ninguém, a ferramenta
+passa ao próximo turno. Se todos terminaram, ela continua a farmar com o principal ou abre a próxima
+rodada do modo `subindo de N em N`.
 
 No modo `subindo de N em N`, o alvo de cada rodada é **mínimo + N × rodada**. Com o seu exemplo —
 três Pokémon em Lv 10, 13 e 16, mínimo 20 e 5 níveis — as rodadas são **25, 30, 35**: o mínimo é o
@@ -1556,9 +1572,10 @@ Pokémon ativo divide**, medido pelo dono em 12/10/2026. Essas duas coisas junta
 duas pedras na equipe ao mesmo tempo seriam um slot gasto à toa, porque só uma delas estaria a
 trabalhar. Elas têm de se revezar.
 
-Por isso o modo de grupo tem **turnos**, em ordem: cada turno é uma pedra com os seus times. Corre o
+Por isso o modo de grupo tem **turnos**, em ordem. Um turno pode ser **com pedra**, com o principal
+fora da contagem, ou **sem pedra**, com o principal nivelando junto com os seus times. Corre o
 primeiro que ainda tenha alguém abaixo do alvo; acabado esse, entra o seguinte; acabados todos, a
-rodada fecha e tudo recomeça do primeiro com o alvo novo. O alvo é o mesmo para todas as pedras.
+rodada fecha e tudo recomeça do primeiro com o alvo novo. O alvo é o mesmo para todos os turnos.
 
 **Qual turno está a correr não se guarda.** O nível dos Pokémon já diz — guardar "vai no turno 2"
 seria uma segunda verdade, pronta a mentir depois de um F5 ou de uma troca feita à mão. É a mesma
@@ -1904,6 +1921,35 @@ semanas.
 
 Quem já tem uma agenda montada não perde nada: campo de dias vazio é todo dia, que é exatamente
 como as três ferramentas se comportavam antes.
+
+## Eventos: resgate diário num só lugar
+
+O painel **Eventos** recebe uma hora no formato `HH:MM`. Ligado, ele consulta todos os eventos
+suportados uma vez por dia naquele minuto e resgata cada missão concluída que ainda mostre
+**Resgatar**. Também há **Resgatar agora** para conferir manualmente sem esperar o relógio.
+O resgate é visível: abre a janela do evento, entra em **Missões diárias** e espera o intervalo
+configurado (1,5 segundo por padrão) entre cada clique.
+
+O primeiro adaptador é o **Halloween 2026**. Ele lê as três missões diárias — abates, capturas e
+captura fantasiada — inclusive dias anteriores que continuem dentro do prazo de resgate. Cada
+pedido leva uma chave de idempotência própria, para uma resposta repetida da rede não gastar ou
+resgatar duas vezes.
+
+Eventos futuros entram como novos adaptadores em `eventos-main.js`. O painel, a agenda diária, a
+fila e o histórico de execução continuam únicos; assim a próxima automação de evento é construída
+em cima desta, sem nascer outro relógio disputando o jogo.
+
+### World Boss
+
+Com **entrar no World Boss quando abrir** marcado e o módulo Eventos iniciado, a extensão consulta
+o estado oficial da raid a cada 30 segundos. Ela não depende do fuso horário do computador: só age
+quando o jogo publicar o World Boss como agendado, em preparação, aguardando jogador ou ativo.
+
+A ordem é fixa: **pausa a caçada → confirma a chegada à cidade → monta o time salvo escolhido →
+abre o World Boss → confirma a participação ou entra na fila**. Com *equipe atual*, nenhuma troca é
+feita. Uma participação já confirmada e uma posição já ocupada na fila
+não são clicadas novamente. Quando a vaga for liberada, o próprio sistema de fila do jogo conclui a
+entrada. Quando a raid termina, a extensão restaura o time anterior e retoma a mesma caçada.
 
 ## A fila: uma ferramenta de cada vez
 

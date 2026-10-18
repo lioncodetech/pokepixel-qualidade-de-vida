@@ -35,16 +35,34 @@
   const PEDIDO = 'lioncode:escada:pedido';
   const RESPOSTA = 'lioncode:escada:resposta';
 
-  /** Quanto se espera para o jogo assentar na cidade antes de falar com a enfermeira. */
-  const ATE_ASSENTAR = 1500;
+  /** Limite para o mapa confirmar que a cidade terminou de carregar. */
+  const ATE_CIDADE = 15000;
+  /** A Nurse Joy pode aparecer depois do mapa; a cura ganha algumas tentativas curtas. */
+  const TENTATIVAS_DE_CURA = 3;
 
   const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+
+  const esperarAte = async (condicao, limite) => {
+    const fim = Date.now() + limite;
+    while (Date.now() < fim) {
+      if (condicao()) return true;
+      await espera(200);
+    }
+    return condicao();
+  };
 
   const naCidade = () => {
     const cidade = globalThis.PokeIdle?.Nav?.CITY_MAP_ID;
     const agora = globalThis.$gameMap?.mapId?.();
     return Number.isFinite(agora) && agora === cidade;
   };
+
+  const estaDerrotada = (id) =>
+    [...document.querySelectorAll('.pokeidle-team-card[data-creature-id]')].some(
+      (el) =>
+        el.getAttribute('data-creature-id') === String(id || '') &&
+        (el.classList.contains('is-fainted') || /derrotado/i.test(el.getAttribute('title') || '')),
+    );
 
   /**
    * Parar a caçada, ir para a cidade, curar.
@@ -63,9 +81,10 @@
    * que estoura nao interrompe a cura: quem nao esta' em caçada nenhuma ja' esta' pronto para a
    * enfermeira.
    */
-  const irParaCidadeECurar = async () => {
+  const irParaCidadeECurar = async (pedido = {}) => {
     const api = globalThis.PokeIdle?.Api;
     const nav = globalThis.PokeIdle?.Nav;
+    const criatura = String(pedido?.criatura || '');
     if (typeof api?.healTeam !== 'function')
       return {
         erro: 'o jogo ainda não publicou a API — espere a tela carregar',
@@ -89,18 +108,49 @@
           erro: `não consegui ir para a cidade: ${String(e?.message || e)}`,
         };
       }
-      // `goToCity` devolve `false` quando nao conseguiu sair de onde estava — pescaria a meio, por
-      // exemplo. Dizer isso e' melhor do que curar fora da cidade e a cura nao pegar.
-      if (foi === false) return { erro: 'o jogo não me deixou sair para a cidade agora' };
-      await espera(ATE_ASSENTAR);
+      // `goToCity()` pode responder antes de o mapa e os NPCs terminarem de carregar. Era aqui que
+      // a escada chegava visualmente a' cidade, chamava a enfermeira cedo demais e ficava parada
+      // com um derrotado. O mapa, e nao um cronometro fixo, passa a dizer quando se pode curar.
+      const chegou = await esperarAte(naCidade, ATE_CIDADE);
+      if (!chegou)
+        return {
+          erro:
+            foi === false
+              ? 'o jogo não me deixou sair para a cidade agora'
+              : 'a cidade não terminou de carregar',
+        };
     }
 
-    try {
-      await api.healTeam();
-    } catch (e) {
-      return { erro: `a enfermeira não atendeu: ${String(e?.message || e)}` };
+    let ultimaFalha = null;
+    for (let tentativa = 1; tentativa <= TENTATIVAS_DE_CURA; tentativa += 1) {
+      try {
+        await api.healTeam();
+        // A resposta HTTP pode chegar antes de o jogo redesenhar a equipe. So' terminou quando o
+        // proprio HUD deixou de marcar derrotado; caso contrario a Nurse Joy ganha nova tentativa.
+        if (await esperarAte(() => !estaDerrotada(criatura), 2500)) return { ok: true };
+        ultimaFalha = new Error('o Pokémon continua derrotado no HUD');
+      } catch (e) {
+        ultimaFalha = e;
+      }
+      if (tentativa < TENTATIVAS_DE_CURA) await espera(750);
     }
-    return { ok: true };
+
+    // Pedido do dono em 18/10/2026: se a Nurse Joy nao conseguir retirar a derrota, gasta-se um
+    // Max Revive **nesse Pokemon**, e so' nesse caso. A caçada ja' foi encerrada, portanto a rota
+    // correcta e' a de uso de item na criatura — `reviveHunt` exige uma caçada corrente e aqui ja'
+    // nao existe. O id vem do catálogo público do próprio jogo: `revive_max`.
+    if (!criatura || typeof api.useItem !== 'function')
+      return { erro: `a enfermeira não atendeu: ${String(ultimaFalha?.message || ultimaFalha)}` };
+    try {
+      await api.useItem('revive_max', criatura, 1);
+      if (await esperarAte(() => !estaDerrotada(criatura), 5000))
+        return { ok: true, maxRevive: true };
+      return { erro: 'usei o Max Revive, mas o Pokémon continua derrotado no HUD' };
+    } catch (e) {
+      return {
+        erro: `a enfermeira não atendeu e não consegui usar o Max Revive: ${String(e?.message || e)}`,
+      };
+    }
   };
 
   /**

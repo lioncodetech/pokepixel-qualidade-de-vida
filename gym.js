@@ -52,6 +52,7 @@ PPX.modulo(
     const CHAVE_MIN = 'lioncode:gym:minimizado';
     const CHAVE_AGENDA = 'lioncode:gym:agenda';
     const CHAVE_PLACAR = 'lioncode:gym:placar';
+    const CHAVE_ELITE4 = 'lioncode:gym:elite4';
 
     const REGIOES = ['KANTO', 'JOHTO'];
 
@@ -876,6 +877,22 @@ PPX.modulo(
       pintarPlacar();
     };
 
+    // A Elite 4 fica fora da automação de ginásios. Estes dois estados são somente uma memória
+    // diária que o dono corrige à mão; não iniciam luta, não alteram agenda e respeitam o mesmo
+    // horário de reset usado pelo placar.
+    const elite4 = () => ler(CHAVE_ELITE4, {}) || {};
+    const elite4Feita = (regiao) => elite4()[regiao]?.dia === diaDoServidor();
+    const marcarElite4 = (regiao) => {
+      const todos = elite4();
+      const feita = !elite4Feita(regiao);
+      if (feita) todos[regiao] = { dia: diaDoServidor(), quando: Date.now() };
+      else delete todos[regiao];
+      gravar(CHAVE_ELITE4, todos);
+      pintarElite4();
+      pintarResumo();
+      dizer(`Elite 4 de ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}: ${feita ? 'marcada como feita' : 'marcada como não feita'}.`);
+    };
+
     // ------------------------------------------------------------------ painel
 
     const painel = document.createElement('div');
@@ -903,6 +920,13 @@ PPX.modulo(
         </label>
         <button type="button" class="ir" data-ir>Fazer o ginásio de hoje</button>
         <button type="button" class="volta" data-voltar>Voltar para a caçada</button>
+        <div class="elite4">
+          <span>Elite 4 feita hoje</span>
+          <div>
+            <button type="button" data-elite4="KANTO">○ Kanto</button>
+            <button type="button" data-elite4="JOHTO">○ Johto</button>
+          </div>
+        </div>
         <div class="agenda">
           <div class="linha">
             <span class="sinal" data-sinal="KANTO" data-marcar="KANTO"></span>
@@ -961,6 +985,14 @@ PPX.modulo(
       }
       #lioncode-gym button.ir:hover, #lioncode-gym button.volta:hover { background: #26344c; }
       #lioncode-gym button.volta { border-color: #2a3244; color: #9aa6b8; }
+      #lioncode-gym .elite4 { display: grid; gap: 5px; padding: 7px 0;
+        border-top: 1px solid #202835; border-bottom: 1px solid #202835; color: #9aa6b8;
+        font-size: 12px; }
+      #lioncode-gym .elite4 > div { display: flex; gap: 6px; }
+      #lioncode-gym .elite4 button { flex: 1; background: #1a2130; color: #9aa6b8;
+        border: 1px solid #2a3244; border-radius: 6px; padding: 5px; font: inherit; cursor: pointer; }
+      #lioncode-gym .elite4 button.feita { background: #173522; border-color: #327343;
+        color: #7ddba0; font-weight: 600; }
       #lioncode-gym button:disabled { opacity: .5; cursor: default; }
       #lioncode-gym .agenda { display: flex; flex-direction: column; gap: 5px;
         border-top: 1px solid #202835; padding-top: 7px; }
@@ -1017,6 +1049,12 @@ PPX.modulo(
       #lioncode-gym.minimizado .resumo .linha { display: flex; align-items: center; gap: 6px; }
       #lioncode-gym.minimizado .resumo .linha b { color: #e7edf6; font-weight: 600; }
       #lioncode-gym.minimizado .resumo .linha .quando { margin-left: auto; white-space: nowrap; }
+      #lioncode-gym.minimizado .resumo .elite4-resumo { border-top: 1px solid #202835;
+        margin-top: 2px; padding-top: 4px; }
+      #lioncode-gym.minimizado .resumo .elite4-resumo .elite4-mini { background: none;
+        color: #8b97a8; border: 0; padding: 0 2px; font: inherit; cursor: pointer; }
+      #lioncode-gym.minimizado .resumo .elite4-resumo .elite4-mini.feita { color: #7ddba0;
+        font-weight: 700; }
       #lioncode-gym.minimizado .resumo .proxima { margin: 1px 0 0; color: #8b97a8; }
       /* Largura pelo conteudo, com um minimo: "Vitória 22:24" e' a linha mais comprida que aqui
          aparece, e uma etiqueta que muda de largura a cada resultado saltaria na tela. */
@@ -1145,6 +1183,17 @@ PPX.modulo(
       pintarResumo();
     };
 
+    const pintarElite4 = () => {
+      for (const regiao of REGIOES) {
+        const botao = campo(`[data-elite4="${regiao}"]`);
+        if (!botao) continue;
+        const feita = elite4Feita(regiao);
+        botao.classList.toggle('feita', feita);
+        botao.textContent = `${feita ? '✓' : '○'} ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}`;
+        botao.title = feita ? 'Clique para marcar como não feita' : 'Clique para marcar como feita';
+      }
+    };
+
     /**
      * O resumo que o painel minimizado mostra.
      *
@@ -1199,6 +1248,22 @@ PPX.modulo(
         linha.append(ponto, nome, diz, ja);
         caixa.append(linha);
       }
+      const elite = document.createElement('div');
+      elite.className = 'linha elite4-resumo';
+      const tituloElite = document.createElement('b');
+      tituloElite.textContent = 'Elite 4';
+      elite.append(tituloElite);
+      for (const regiao of REGIOES) {
+        const feita = elite4Feita(regiao);
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = `elite4-mini${feita ? ' feita' : ''}`;
+        botao.dataset.elite4 = regiao;
+        botao.textContent = `${regiao === 'KANTO' ? 'K' : 'J'} ${feita ? '✓' : '○'}`;
+        botao.title = `Elite 4 de ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}: ${feita ? 'feita' : 'não feita'}. Clique para alterar.`;
+        elite.append(botao);
+      }
+      caixa.append(elite);
       const proxima = campo('[data-proxima]')?.textContent || '';
       if (!proxima) return;
       const p = document.createElement('p');
@@ -1720,6 +1785,11 @@ PPX.modulo(
     });
 
     painel.addEventListener('click', (evento) => {
+      const botao = evento.target.closest?.('[data-elite4]');
+      if (botao) marcarElite4(botao.dataset.elite4);
+    });
+
+    painel.addEventListener('click', (evento) => {
       const botao = evento.target.closest?.('[data-ir-regiao]');
       if (!botao) return;
       const regiao = botao.dataset.irRegiao;
@@ -1835,15 +1905,18 @@ PPX.modulo(
       guardarAgenda(nova);
       // A hora do reset muda o que conta como "hoje": os sinais podem acender ou apagar com isto.
       pintarPlacar();
+      pintarElite4();
     });
 
     for (const regiao of REGIOES) agendarRegiao(regiao);
     pintarPlacar();
+    pintarElite4();
     // Um minuto: a linha do "próximo" tem de envelhecer sozinha, e os sinais tem de voltar a
     // cinza na hora do reset mesmo com a aba aberta a noite toda.
     setInterval(() => {
       pintarAgenda();
       pintarPlacar();
+      pintarElite4();
     }, 60000);
 
     /**

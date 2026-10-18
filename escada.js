@@ -331,11 +331,19 @@ PPX.modulo(
     // O fixo e os times soltos viram o primeiro turno. `.filter(Boolean)` e nao `semVazios`: a
     // migracao corre antes de o modulo ter funcoes.
     if (!Array.isArray(cfg.grupo.turnos)) cfg.grupo.turnos = [];
+    // Configurações antigas são todas do modelo original: Pokémon com pedra, fora da contagem.
+    // O tipo explícito permite misturar esses turnos com outros em que o principal também upa.
+    cfg.grupo.turnos = cfg.grupo.turnos.map((t) => ({
+      ...t,
+      tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
+    }));
     if (
       !cfg.grupo.turnos.length &&
       (cfg.grupo.fixo || (cfg.grupo.times || []).filter(Boolean).length)
     )
-      cfg.grupo.turnos = [{ fixo: cfg.grupo.fixo || '', times: cfg.grupo.times || [] }];
+      cfg.grupo.turnos = [
+        { tipo: 'pedra', fixo: cfg.grupo.fixo || '', times: cfg.grupo.times || [] },
+      ];
     delete cfg.grupo.fixo;
     delete cfg.grupo.times;
     if (!cfg.times.length && cfg.time) cfg.times = [cfg.time];
@@ -1054,11 +1062,14 @@ PPX.modulo(
       if (!cacadasDoGrupo().length)
         return 'Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência.';
       const turnos = turnosDoGrupo();
-      if (!turnos.length) return 'Escolha quem tem a pedra e os times que ela vai upar.';
+      if (!turnos.length) return 'Crie um turno e escolha o Pokémon principal e os times que ele vai upar.';
       const sabidos = globalThis.PPX?.times?.nomes?.();
       for (const [i, turno] of turnos.entries()) {
-        const qual = turnos.length > 1 ? `Pedra ${i + 1}: e` : 'E';
-        if (!turno.fixo) return `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
+        const qual = turnos.length > 1 ? `Turno ${i + 1}: e` : 'E';
+        if (!turno.fixo)
+          return turno.tipo === 'rotacao'
+            ? `${qual}scolha o Pokémon avulso — sem pedra, ele entra na rotação até o alvo.`
+            : `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
         const meus = semVazios(turno.times);
         if (!meus.length) return `${qual}scolha os times de onde vêm os que rodam.`;
         // **Um time que nao existe nesta conta nao e' um time.** Acontece a quem leva a configuracao
@@ -1122,12 +1133,23 @@ PPX.modulo(
      */
     const turnosDoGrupo = () => (cfg.grupo.turnos || []).filter(Boolean);
 
-    /** Quem um turno upa: os membros dos times dele, menos o proprio fixo e sem repetidos. */
+    /**
+     * Quem um turno upa.
+     *
+     * Com pedra, o principal fica fora da conta como sempre ficou. Sem pedra, o Pokémon escolhido
+     * entra na mesma piscina dos times e roda como qualquer outro: ele não fica preso à liderança.
+     */
     const piscinaDoTurno = (turno, todos) => {
       const membrosDe = globalThis.PPX?.times?.membrosDe;
       if (typeof membrosDe !== 'function') return [];
-      const vistos = new Set([turno.fixo]);
+      const semPedra = turno.tipo === 'rotacao';
+      const vistos = new Set();
       const piscina = [];
+      if (semPedra && turno.fixo) {
+        vistos.add(turno.fixo);
+        const principal = todos.get(turno.fixo);
+        if (principal) piscina.push(principal);
+      } else if (turno.fixo) vistos.add(turno.fixo);
       for (const nome of semVazios(turno.times || []))
         for (const id of membrosDe(nome)) {
           if (vistos.has(id)) continue;
@@ -1158,24 +1180,32 @@ PPX.modulo(
       // Acabados todos, fica o primeiro: alguem tem de continuar a caçar, e a escolha tem de ser
       // sempre a mesma ou a equipe ficava a dançar entre as pedras sem ninguem a upar.
       const turno = correndo || turnos[0];
-      if (!turno) return { erro: 'nenhuma pedra configurada' };
+      if (!turno) return { erro: 'nenhum turno configurado' };
       const numero = turnos.indexOf(turno) + 1;
 
-      const fixo = todos.get(turno.fixo);
-      if (!fixo)
+      const escolhidoDoTurno = todos.get(turno.fixo);
+      if (!escolhidoDoTurno)
         return {
           erro:
             turnos.length > 1
-              ? `o Pokémon da pedra ${numero} não está mais na coleção — escolha outro`
-              : 'o Pokémon fixo não está mais na coleção — escolha outro na lista do fixo',
+              ? `o Pokémon principal do turno ${numero} não está mais na coleção — escolha outro`
+              : 'o Pokémon principal não está mais na coleção — escolha outro na lista',
         };
 
       const piscina = piscinaDoTurno(turno, todos);
       const faltam = piscina.filter((b) => b.nivel < alvo);
-      const especies = new Set([fixo.especie]);
-      const escolhidos = [fixo];
+      const semPedra = turno.tipo === 'rotacao';
+      // Sem pedra, quem está mais atrasado fica à frente e ganha XP. Empates conservam a ordem da
+      // piscina, portanto duas batidas não ficam trocando de líder sem ninguém subir.
+      const lider = semPedra
+        ? faltam.reduce((menor, b) => (!menor || b.nivel < menor.nivel ? b : menor), null) ||
+          escolhidoDoTurno
+        : escolhidoDoTurno;
+      const especies = new Set([lider.especie]);
+      const escolhidos = [lider];
       const saltados = [];
       for (const bicho of faltam) {
+        if (bicho.id === lider.id) continue;
         if (escolhidos.length >= 6) break;
         if (especies.has(bicho.especie)) {
           saltados.push(bicho);
@@ -1185,7 +1215,8 @@ PPX.modulo(
         escolhidos.push(bicho);
       }
       return {
-        fixo,
+        fixo: escolhidoDoTurno,
+        lider,
         piscina,
         faltam,
         escolhidos,
@@ -1216,7 +1247,8 @@ PPX.modulo(
       const onde = lugar.aqui ? `em "${lugar.aqui}"` : `fora da lista`;
       // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
       // entre "ela parou" e "ela esta' na segunda".
-      const pedra = m.quantos > 1 ? `Pedra ${m.numero}/${m.quantos} (${m.fixo.nome}). ` : '';
+      const tipo = m.turno.tipo === 'rotacao' ? 'Sem pedra' : 'Com pedra';
+      const pedra = m.quantos > 1 ? `Turno ${m.numero}/${m.quantos} · ${tipo} (${m.fixo.nome}). ` : '';
       if (!m.faltam.length) {
         const quantos = m.acabou
           ? turnosDoGrupo().reduce((n, t) => n + piscinaDoTurno(t, colecao).length, 0)
@@ -1230,13 +1262,14 @@ PPX.modulo(
         .slice(1)
         .map((b) => `${b.nome} Lv ${b.nivel}`)
         .join(', ');
-      const fora = m.faltam.length - (m.escolhidos.length - 1);
+      const escolhidosEmFalta = m.escolhidos.filter((b) => m.faltam.some((f) => f.id === b.id));
+      const fora = m.faltam.length - escolhidosEmFalta.length;
       const resto = fora > 0 ? ` Na fila: ${fora}.` : '';
       const pulados = m.saltados.length
         ? ` Saltei ${m.saltados.length} por repetir espécie do grupo.`
         : '';
       return (
-        `${pedra}Alvo Lv ${alvo}, ${onde} com ${m.fixo.nome} fixo. ` +
+        `${pedra}Alvo Lv ${alvo}, ${onde} com ${m.lider.nome} à frente${m.turno.tipo === 'rotacao' ? ' na rotação sem pedra' : ` e ${m.fixo.nome} com pedra`}. ` +
         `${grupo ? `Upando: ${grupo}.` : 'Grupo vazio.'}${resto}${pulados}`
       );
     };
@@ -1453,7 +1486,7 @@ PPX.modulo(
       });
 
     /** Parar a caçada, ir para a cidade e curar. Ver o cabeçalho de `escada-main.js`. */
-    const pedirCidade = () => pedirPonte({ acao: 'cidade' });
+    const pedirCidade = (criatura = '') => pedirPonte({ acao: 'cidade', criatura });
 
     /**
      * Todos os Pokemon da conta, com nivel: a lista de quem ainda falta upar.
@@ -1478,7 +1511,7 @@ PPX.modulo(
         };
       try {
         aviso(`${alvo.nome} está derrotado. Voltando à cidade para curar.`);
-        const r = await pedirCidade();
+        const r = await pedirCidade(alvo.id);
         if (r?.erro) return { espere: CASTIGO, diga: `Não consegui curar: ${r.erro}` };
         const limite = Date.now() + ATE_CURAR;
         while (Date.now() < limite) {
@@ -2029,12 +2062,11 @@ PPX.modulo(
               ? `Acertando o grupo: ${m.escolhidos.map((b) => b.nome).join(', ')}.`
               : `Todos chegaram ao Lv ${alvo}. Tirando-os do grupo.`,
           );
-          // Quem monta e' a ferramenta Times, com as tres regras do jogo medidas la'. E o fixo vai
-          // como lider de proposito: **o jogo recusa remover o Pokemon ativo**, e o fixo e' o unico
-          // que nunca sai — lideranca em quem roda daria uma troca travada a cada volta.
+          // Quem monta e' a ferramenta Times. Com pedra o fixo lidera; sem pedra o atrasado da vez
+          // lidera e, quando alcançar os outros, entra de novo na rotação em vez de ficar fixo.
           const r = await globalThis.PPX.times.montar(
             m.escolhidos.map((b) => ({ id: b.id, nome: b.nome })),
-            m.fixo.id,
+            m.lider.id,
             'o grupo',
           );
           if (!r?.ok) {
@@ -2518,9 +2550,9 @@ PPX.modulo(
           <p class="vazio">onde o grupo fica, em ordem:</p>
           <ul data-ondes></ul>
           <button type="button" class="mais" data-mais-onde>+ caçada</button>
-          <p class="vazio">quem tem a pedra, e os times que ela upa:</p>
+          <p class="vazio">turnos: com pedra ou com o principal subindo junto, e os times que ele upa:</p>
           <ul data-turnos></ul>
-          <button type="button" class="mais" data-mais-turno>+ pedra</button>
+          <button type="button" class="mais" data-mais-turno>+ turno</button>
           <label class="caixa" data-so-grupo>
             sai do grupo no Lv <input type="number" min="1" data-alvo placeholder="—">
           </label>
@@ -2606,10 +2638,11 @@ PPX.modulo(
       #lioncode-escada li [data-apagar] { background: none; border-color: transparent;
         color: #8b97a8; padding: 3px 4px; }
       #lioncode-escada li.agora { border-color: #35613f; }
-      /* Um turno e' uma pedra com os seus times: a pedra em cima, os times recuados por baixo. */
+      /* Um turno tem tipo, principal e times: os controles em cima, os times recuados por baixo. */
       #lioncode-escada li.turno { flex-direction: column; align-items: stretch; gap: 5px; }
       #lioncode-escada li.turno .cima { display: flex; align-items: center; gap: 5px; }
       #lioncode-escada li.turno .cima select { flex: 1; min-width: 0; }
+      #lioncode-escada li.turno .cima select:first-child { flex: 0 0 82px; }
       #lioncode-escada li.turno ul { padding-left: 9px; border-left: 2px solid #202835; }
       #lioncode-escada li.turno li { background: #11161f; padding: 3px 5px; }
       #lioncode-escada li.turno .mais { padding: 2px 7px; font-size: 11px; align-self: flex-start;
@@ -2886,7 +2919,9 @@ PPX.modulo(
       sel.innerHTML = '';
       const nada = document.createElement('option');
       nada.value = '';
-      nada.textContent = podem.length ? 'quem tem a pedra' : 'equipe ainda não lida';
+      nada.textContent = podem.length
+        ? turno.tipo === 'rotacao' ? 'Pokémon avulso (entra na rotação)' : 'quem tem a pedra'
+        : 'equipe ainda não lida';
       sel.append(nada);
       for (const p of podem) {
         const o = document.createElement('option');
@@ -2898,7 +2933,7 @@ PPX.modulo(
         const o = document.createElement('option');
         o.value = escolhido;
         const sabido = colecao.get(escolhido);
-        o.textContent = sabido ? `${sabido.nome} (fora da equipe)` : 'a pedra saiu da equipe';
+        o.textContent = sabido ? `${sabido.nome} (fora da equipe)` : 'o Pokémon saiu da equipe';
         sel.append(o);
       }
       sel.value = escolhido || '';
@@ -2959,7 +2994,7 @@ PPX.modulo(
       if (!turnos.length) {
         const vazio = document.createElement('p');
         vazio.className = 'vazio';
-        vazio.textContent = 'Nenhuma pedra. Clique em "+ pedra" para começar.';
+        vazio.textContent = 'Nenhum turno. Clique em "+ turno" para começar.';
         lugar.append(vazio);
       }
       for (const [i, turno] of turnos.entries()) {
@@ -2968,8 +3003,21 @@ PPX.modulo(
 
         const cima = document.createElement('div');
         cima.className = 'cima';
+        const tipo = document.createElement('select');
+        tipo.title = 'Com pedra: o principal fica fixo. Sem pedra: o escolhido entra na rotação.';
+        tipo.append(new Option('com pedra', 'pedra'), new Option('sem pedra · entra na rotação', 'rotacao'));
+        tipo.value = turno.tipo === 'rotacao' ? 'rotacao' : 'pedra';
+        tipo.addEventListener('change', () => {
+          turno.tipo = tipo.value;
+          cfg.grupo.rodada = 0;
+          gravar();
+          desenhar();
+          void conferir();
+        });
         const quem = document.createElement('select');
-        quem.title = 'O Pokémon que tem a pedra — ele nunca sai do grupo';
+        quem.title = turno.tipo === 'rotacao'
+          ? 'Um Pokémon avulso que entra na rotação junto com os times'
+          : 'O Pokémon que tem a pedra — ele nunca sai do grupo';
         desenharFixo(quem, turno);
         quem.addEventListener('change', () => {
           turno.fixo = quem.value;
@@ -2981,19 +3029,19 @@ PPX.modulo(
         forada.type = 'button';
         forada.dataset.apagar = '1';
         forada.textContent = '\u00d7';
-        forada.title = 'Tirar esta pedra do rodízio';
+        forada.title = 'Tirar este turno do rodízio';
         forada.addEventListener('click', () => {
           cfg.grupo.turnos.splice(i, 1);
           gravar();
           desenhar();
         });
-        cima.append(quem, forada);
+        cima.append(tipo, quem, forada);
 
         const times = document.createElement('ul');
         if (!semVazios(turno.times).length) {
           const conta = document.createElement('p');
           conta.className = 'conta';
-          conta.textContent = 'sem times: esta pedra não tem quem upar';
+          conta.textContent = 'sem times: este turno não tem grupo para upar';
           item.append(cima, conta);
         } else item.append(cima);
         for (const [j, nome] of (turno.times || []).entries()) {
@@ -3293,7 +3341,7 @@ PPX.modulo(
 
     campo('[data-mais-turno]').addEventListener('click', () => {
       cfg.grupo.turnos = turnosDoGrupo();
-      cfg.grupo.turnos.push({ fixo: '', times: [''] });
+      cfg.grupo.turnos.push({ tipo: 'pedra', fixo: '', times: [''] });
       gravar();
       desenhar();
     });
@@ -3569,7 +3617,7 @@ PPX.modulo(
         sempre: cfg.sempre,
         grupo: {
           cacadas: cfg.grupo.cacadas,
-          turnos: cfg.grupo.turnos.map((t) => ({ times: t.times })),
+          turnos: cfg.grupo.turnos.map((t) => ({ tipo: t.tipo === 'rotacao' ? 'rotacao' : 'pedra', times: t.times })),
           alvo: cfg.grupo.alvo,
           minimo: cfg.grupo.minimo,
           passo: cfg.grupo.passo,
@@ -3606,6 +3654,7 @@ PPX.modulo(
         cfg.grupo.turnos = lista(grupo.turnos)
           .slice(0, 20)
           .map((t) => ({
+            tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
             fixo: '',
             times: lista(t?.times)
               .slice(0, 50)
@@ -3627,11 +3676,11 @@ PPX.modulo(
         desenhar(false);
         // Dizer o que **nao** veio e' parte de importar: uma pedra em falta e' calada no painel
         // de quem nao sabe que ela nao viaja.
-        const pedras = cfg.grupo.turnos.length;
-        if (!pedras) return 'Escada importada.';
-        return pedras === 1
-          ? 'Escada importada. A pedra veio sem o Pokémon: escolha quem a tem nesta conta.'
-          : `Escada importada. As ${pedras} pedras vieram sem o Pokémon: escolha quem as tem aqui.`;
+        const turnos = cfg.grupo.turnos.length;
+        if (!turnos) return 'Escada importada.';
+        return turnos === 1
+          ? 'Escada importada. O turno veio sem o Pokémon principal: escolha-o nesta conta.'
+          : `Escada importada. Os ${turnos} turnos vieram sem os Pokémon principais: escolha-os aqui.`;
       },
       avisar: diz,
     });

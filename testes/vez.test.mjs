@@ -113,6 +113,7 @@ const NA_FILA = [
   'escada.js',
   'arena.js',
   'rampage.js',
+  'eventos.js',
 ];
 
 /**
@@ -145,6 +146,8 @@ const FORA = {
     'só lê o estado da arena pela API — atacar e atualizar são cliques, em arena.js, que pede a vez',
   'rampage-main.js':
     'peça: lê o evento, abre a tela e movimenta o treinador só quando rampage.js pede — e ele já tem a vez',
+  'eventos-main.js':
+    'peça: lê e resgata os eventos só quando eventos.js pede — e eventos.js já tem a vez',
 };
 
 test('toda ferramenta nova escolhe um lado da fila', () => {

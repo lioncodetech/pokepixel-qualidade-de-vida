@@ -247,6 +247,7 @@
     // isso esta usa a mesma tecla com e sem Shift, e e' a unica que o faz.
     { id: 'arena', nome: 'Arena de Defesa', atalhos: 'Alt+M esconde · Alt+Shift+M mostra' },
     { id: 'rampage', nome: 'Rampage', atalhos: 'configuração pelo menu (Alt+Q)' },
+    { id: 'eventos', nome: 'Eventos', atalhos: 'configuração pelo menu (Alt+Q)' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

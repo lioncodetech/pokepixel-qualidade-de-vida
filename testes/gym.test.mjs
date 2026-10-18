@@ -154,6 +154,26 @@ test('a Elite Four fica de fora', () => {
   assert.match(codigo, /!h\.className\.includes\('gym-hotspot--league'\)/);
 });
 
+test('Elite 4 de Kanto e Johto pode ser marcada manualmente por dia', () => {
+  assert.match(codigo, /const CHAVE_ELITE4 = 'lioncode:gym:elite4';/);
+  assert.match(codigo, /data-elite4="KANTO"/);
+  assert.match(codigo, /data-elite4="JOHTO"/);
+  assert.match(codigo, /const elite4Feita = \(regiao\) => elite4\(\)\[regiao\]\?\.dia === diaDoServidor\(\);/);
+  assert.match(codigo, /if \(feita\) todos\[regiao\] = \{ dia: diaDoServidor\(\), quando: Date\.now\(\) \};/);
+  const marcar = codigo.slice(codigo.indexOf('const marcarElite4 = (regiao)'));
+  const corpo = marcar.slice(0, marcar.indexOf('\n    };'));
+  assert.doesNotMatch(corpo, /comecar\(|continuarTarefa|guardarAgenda/, 'a marca não inicia nem agenda combate');
+  assert.match(codigo, /botao\.classList\.toggle\('feita', feita\)/);
+});
+
+test('o modo minimizado mostra e permite corrigir as duas Elite 4', () => {
+  assert.match(codigo, /elite\.className = 'linha elite4-resumo';/);
+  assert.match(codigo, /tituloElite\.textContent = 'Elite 4';/);
+  assert.match(codigo, /botao\.dataset\.elite4 = regiao;/);
+  assert.match(codigo, /`\$\{regiao === 'KANTO' \? 'K' : 'J'\} \$\{feita \? '✓' : '○'\}`/);
+  assert.match(codigo, /\.elite4-mini\.feita/);
+});
+
 test('uma falha nao recomeca do zero', () => {
   // A tarefa fica guardada na etapa em que parou. Sair da caçada duas vezes não faria sentido.
   const bloco = codigo.slice(codigo.indexOf('async function falhou'));
