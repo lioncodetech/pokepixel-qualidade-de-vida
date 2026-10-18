@@ -845,14 +845,26 @@ PPX.modulo(
       degrauAutomatico(aluno) || (aluno ? degrauPara(aluno.nivel) : null);
 
     /**
-     * Sem pedra, o lider da rotacao e' o aluno e leva consigo a mesma escolha segura da escada:
-     * nivel proximo, sem levar vantagem de tipo e com o melhor ataque disponivel. Se nenhuma
-     * caçada passar no filtro, a lista do grupo continua a ser a rede escrita pelo dono.
+     * Sem pedra, o lider da rotacao e' o aluno e segue a escada de caçadas dele: primeiro a melhor
+     * escolha segura por nivel e tipo; sem candidata, o degrau escrito para aquele nivel. A lista
+     * fixa do grupo pertence aos turnos com pedra e nunca pode receber este aluno por acidente.
      */
-    const cacadaAutomaticaDoTurno = (montagem) =>
-      montagem?.turno?.tipo === 'rotacao'
-        ? degrauAutomatico(montagem.lider, true)?.cacada || ''
-        : '';
+    const cacadaDoTurno = (montagem) => {
+      if (montagem?.turno?.tipo !== 'rotacao') return '';
+      return (
+        degrauAutomatico(montagem.lider, true)?.cacada ||
+        degrauPara(montagem.lider?.nivel)?.cacada ||
+        ''
+      );
+    };
+
+    const lugarDoTurno = (montagem) => {
+      if (montagem?.turno?.tipo !== 'rotacao') return lugarDoGrupo();
+      const destino = cacadaDoTurno(montagem);
+      // Sem destino nao se cai na lista fixa: parar e explicar e' mais seguro do que mandar um
+      // Pokémon sem pedra para a hunt escolhida para o carregador com pedra.
+      return destino ? lugarDoGrupo(destino) : { aqui: null, ir: null };
+    };
 
     // ------------------------------------------ a piscina (os times da fila como um conjunto so')
 
@@ -1254,8 +1266,7 @@ PPX.modulo(
       if (!colecao.size) return `Alvo Lv ${alvo}. Ainda não li a coleção.`;
       const m = montagemDoGrupo(colecao, alvo);
       if (m.erro) return m.erro;
-      const automatica = cacadaAutomaticaDoTurno(m);
-      const lugar = lugarDoGrupo(automatica);
+      const lugar = lugarDoTurno(m);
       const onde = lugar.aqui ? `em "${lugar.aqui}"` : `fora da lista`;
       // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
       // entre "ela parou" e "ela esta' na segunda".
@@ -1992,13 +2003,12 @@ PPX.modulo(
         const especie = m.lider.especie || colecao.get(m.lider.id)?.especie || '';
         if (especie) await garantirMundo([especie]);
       }
-      const automatica = cacadaAutomaticaDoTurno(m);
-      const lugar = lugarDoGrupo(automatica);
+      const lugar = lugarDoTurno(m);
       if (!lugar.aqui) {
         if (!lugar.ir) {
           aviso(
             m.turno.tipo === 'rotacao'
-              ? 'Não achei uma caçada automática segura para este Pokémon e também não consigo entrar nas caçadas alternativas do grupo.'
+              ? 'Não achei uma caçada automática segura nem um degrau para o nível deste Pokémon. Não vou usar a caçada fixa do turno com pedra.'
               : 'Estou fora da lista e não consigo entrar sozinha em nenhuma delas. Ponha na lista uma caçada guardada, ou entre você.',
           );
           return 'sem porta';

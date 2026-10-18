@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.26.4, o **Alt+Z** também minimiza o chat e esconde com ele o botão Votar que o Alt+X restaura. O **Exportar tudo** deixa de fora tanto os Times quanto a Escada.
+Na 1.26.5, o turno sem pedra nunca cai na caçada fixa do time com pedra: procura a melhor hunt segura para o nível do líder e, se não encontrar, usa o degrau daquele nível. Sem nenhum dos dois, para e avisa. O **Alt+Z** também minimiza o chat/Votar, e o **Exportar tudo** deixa Times e Escada de fora.
 
 ## Rampage automático
 

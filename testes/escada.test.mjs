@@ -979,17 +979,19 @@ test('o turno sem pedra leva o lider para a melhor cacada da escada', () => {
   assert.match(codigo, /\(!cfg\.auto && !forcar\)/);
   assert.match(
     codigo,
-    /montagem\?\.turno\?\.tipo === 'rotacao'[\s\S]*degrauAutomatico\(montagem\.lider, true\)\?\.cacada/,
+    /degrauAutomatico\(montagem\.lider, true\)\?\.cacada \|\|[\s\S]*degrauPara\(montagem\.lider\?\.nivel\)\?\.cacada/,
   );
   // A ficha do líder é carregada antes da decisão e o destino automático entra na mesma viagem do
   // grupo. Sem resultado seguro, a lista escrita pelo dono continua sendo a alternativa.
   const conferir = codigo.slice(codigo.indexOf('async function conferirGrupo'));
   assert.ok(
     conferir.indexOf('await garantirMundo([especie])') <
-      conferir.indexOf('const automatica = cacadaAutomaticaDoTurno(m);'),
+      conferir.indexOf('const lugar = lugarDoTurno(m);'),
   );
   assert.match(codigo, /const lugarDoGrupo = \(destinoAutomatico = ''\) =>/);
-  assert.match(codigo, /const lugar = lugarDoGrupo\(automatica\);/);
+  assert.match(codigo, /if \(montagem\?\.turno\?\.tipo !== 'rotacao'\) return lugarDoGrupo\(\);/);
+  assert.match(codigo, /return destino \? lugarDoGrupo\(destino\) : \{ aqui: null, ir: null \};/);
+  assert.match(codigo, /Não vou usar a caçada fixa do turno com pedra/);
 });
 
 test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
