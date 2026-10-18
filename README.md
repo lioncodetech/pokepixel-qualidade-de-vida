@@ -1,6 +1,6 @@
 # PokePixel — qualidade de vida
 
-Na 1.27.1, o painel **Ilhas Lendárias** pode ser arrastado pelo cabeçalho e guarda a posição; os campos de caçada e time também ficam contidos dentro da caixa. Ele lê do próprio jogo quando as ilhas abrem, entra com a hunt e o time escolhidos e tenta restaurar a caçada e o time anteriores quando elas fecham.
+Na 1.27.3, ao entrar numa Ilha Lendária o módulo suspende temporariamente a Escada sem perder o ponto dela; depois de restaurar a caçada e o time anteriores, libera a Escada para continuar. As Ilhas funcionam como automação de fundo: cedem a vez para Arena, Ginásio, Rampage, Eventos, venda, loja ou qualquer outra automação da fila e voltam a verificar a ilha assim que o trabalho prioritário termina. O painel pode ser arrastado, guarda a posição e mantém os campos dentro da caixa.
 
 ## Ilhas Lendárias
 

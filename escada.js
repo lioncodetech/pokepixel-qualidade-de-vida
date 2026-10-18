@@ -1318,6 +1318,8 @@ PPX.modulo(
         return cfg.modo === 'escada'
           ? 'Pausada. Clique em Retomar quando quiser.'
           : 'Pausada. A caçada continua; eu é que não mexo em nada.';
+      if (suspensoesExternas.size)
+        return `Suspensa temporariamente por ${[...suspensoesExternas].map((id) => globalThis.PPX?.vez?.nome?.(id) || id).join(', ')}.`;
       // Antes dos dois modos, como no `conferir`: ceder a vez e esperar a expedição calam tudo o
       // resto, e calam-no igual nos tres modos.
       const outra = cedendo();
@@ -1462,6 +1464,8 @@ PPX.modulo(
     // ------------------------------------------------------------- o motor
 
     let correndo = false;
+    // Outros módulos suspendem sem alterar a pausa do dono nem apagar o ponto da Escada.
+    const suspensoesExternas = new Set();
     let esperaAte = 0;
     /** A unica batida pendente. Ver `batidaEm`. */
     let proximaBatida = 0;
@@ -2133,6 +2137,10 @@ PPX.modulo(
       if (cfg.pausada) {
         aviso(diagnostico());
         return 'pausada';
+      }
+      if (suspensoesExternas.size) {
+        aviso(diagnostico());
+        return 'suspensa';
       }
       // Aba oculta: o jogo nao desenha, as janelas dele nao abrem e a viagem nao tem por onde
       // passar. O nivel tambem nao sobe, entao nao ha' o que perder em esperar a aba voltar.
@@ -3805,7 +3813,7 @@ PPX.modulo(
     // esta' a' frente pode nem mexer. Sem isto, ela cederia a vez e ficava a' espera para sempre.
     // Vale para os dois modos desde 13/10/2026, pelo mesmo motivo que o `cedendo` vale.
     globalThis.PPX?.vez?.aoMudar?.(() => {
-      if (!cfg.ligada || cfg.pausada) return;
+      if (!cfg.ligada || cfg.pausada || suspensoesExternas.size) return;
       if (cedendo()) {
         diz(diagnostico());
         return;
@@ -3822,6 +3830,21 @@ PPX.modulo(
     void conferir();
 
     if (globalThis.PPX) {
+      globalThis.PPX.escada = {
+        suspender: (dono) => {
+          if (!dono) return;
+          suspensoesExternas.add(String(dono));
+          diz(diagnostico());
+          desenhar(false);
+        },
+        liberar: (dono) => {
+          suspensoesExternas.delete(String(dono || ''));
+          diz(diagnostico());
+          desenhar(false);
+          if (!suspensoesExternas.size && cfg.ligada && !cfg.pausada) retomar();
+        },
+        suspensaPor: (dono) => suspensoesExternas.has(String(dono || '')),
+      };
       globalThis.PPX.controlar?.('escada', mostrarPainel);
       mostrarPainel(globalThis.PPX.visivel?.('escada') !== false);
     }

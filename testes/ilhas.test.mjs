@@ -49,3 +49,26 @@ test('a automacao pede a vez e nao atropela time de atalho', () => {
   assert.match(codigo, /const timeDaCacada = globalThis\.PPX\?\.cacadas\?\.timeDe/);
   assert.match(codigo, /timeDaCacada && timeDaCacada !== cfg\.time/);
 });
+
+test('ilhas cedem prioridade a qualquer outra automacao e retomam ao fim', () => {
+  assert.match(codigo, /const outraAutomacao = \(\) =>/);
+  assert.match(codigo, /vez\?\.dono\?\.\(\)/);
+  assert.match(codigo, /vez\?\.esperando\?\.\(\)/);
+  const espera = codigo.slice(codigo.indexOf('const esperarAVez = async'), codigo.indexOf('const ate = async'));
+  assert.ok(espera.indexOf('outraAutomacao()') < espera.indexOf('vez.pedir(MINHA_VEZ)'));
+  assert.match(codigo, /Ilhas pausadas para .* Retomo quando terminar/);
+  assert.match(codigo, /vez\?\.aoMudar\?\.\(\(\) =>/);
+  assert.match(codigo, /setTimeout\(\(\) => void verificar\(\), 1000\)/);
+});
+
+test('as ilhas suspendem a escada e liberam depois da volta', () => {
+  assert.match(codigo, /PPX\?\.escada\?\.suspender\?\.\(MINHA_VEZ\)/);
+  assert.match(codigo, /PPX\?\.escada\?\.liberar\?\.\(MINHA_VEZ\)/);
+  const entrada = codigo.slice(codigo.indexOf('const entrar = async'), codigo.indexOf('const voltar = async'));
+  assert.match(entrada, /suspenderEscada\(\)/);
+  const volta = codigo.slice(codigo.indexOf('const voltar = async'), codigo.indexOf('const verificar = async'));
+  assert.match(volta, /liberarEscada\(\)/);
+  assert.match(ler('escada.js'), /const suspensoesExternas = new Set\(\)/);
+  assert.match(ler('escada.js'), /suspender: \(dono\) =>/);
+  assert.match(ler('escada.js'), /liberar: \(dono\) =>/);
+});

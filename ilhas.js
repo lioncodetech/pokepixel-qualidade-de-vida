@@ -19,6 +19,7 @@ PPX.modulo(
     let cfg = { ...PADRAO, ...(ler(CHAVE, null) || {}) };
     let sessao = ler(CHAVE_SESSAO, null);
     let correndo = false;
+    let retomadaPendente = 0;
     let ultima = [];
     let texto = 'Aguardando a primeira verificação.';
     const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -27,6 +28,8 @@ PPX.modulo(
     const todasIlhas = () => (globalThis.PPX?.cacadas?.todas?.() || []).filter(ehIlha);
     const abertas = () => todasIlhas().filter((c) => c.trancada !== true);
     const atual = () => globalThis.PPX?.cacadas?.atual?.() || null;
+    const suspenderEscada = () => globalThis.PPX?.escada?.suspender?.(MINHA_VEZ);
+    const liberarEscada = () => globalThis.PPX?.escada?.liberar?.(MINHA_VEZ);
 
     const painel = document.createElement('div');
     painel.id = 'lioncode-ilhas';
@@ -76,11 +79,20 @@ PPX.modulo(
       hunt.value = huntAtual;
       time.value = timeAtual;
     };
+    const outraAutomacao = () => {
+      const vez = globalThis.PPX?.vez;
+      const dono = vez?.dono?.();
+      if (dono && dono.id !== MINHA_VEZ) return dono.id;
+      return (vez?.esperando?.() || []).find((id) => id !== MINHA_VEZ) || '';
+    };
     const esperarAVez = async () => {
       const vez = globalThis.PPX?.vez;
       if (!vez?.pedir) return () => {};
-      const dono = vez.dono();
-      if (dono && dono.id !== MINHA_VEZ) dizer(`Esperando ${vez.nome(dono.id)} terminar…`);
+      const prioridade = outraAutomacao();
+      if (prioridade) {
+        dizer(`Ilhas pausadas para ${vez.nome(prioridade)}. Retomo quando terminar.`);
+        return null;
+      }
       return vez.pedir(MINHA_VEZ);
     };
     const ate = async (fn, limite = 20000) => {
@@ -113,13 +125,16 @@ PPX.modulo(
       if (timeDaCacada && timeDaCacada !== cfg.time)
         return dizer(`A caçada "${alvo.nome}" está ligada ao time "${timeDaCacada}" nas Caçadas. Escolha esse time aqui ou retire-o do atalho.`, true);
       const aqui = atual();
-      if (aqui?.nome === alvo.nome) return dizer(`Caçando em "${alvo.nome}" enquanto as ilhas estão abertas.`);
+      if (aqui?.nome === alvo.nome) {
+        suspenderEscada();
+        return dizer(`Caçando em "${alvo.nome}" enquanto as ilhas estão abertas. Escada suspensa.`);
+      }
       if (!sessao) {
         sessao = { cacada: aqui?.tipo === 'cacada' ? aqui.nome : '', time: globalThis.PPX?.times?.qual?.() || '' };
         gravarSessao();
       }
       const soltar = await esperarAVez();
-      if (!soltar) return dizer('Não consegui a vez para entrar nas ilhas.', true);
+      if (!soltar) return;
       correndo = true;
       desenharResumo();
       try {
@@ -129,6 +144,7 @@ PPX.modulo(
         if (!r?.ok) return dizer(`Não consegui montar o time: ${r?.erro || 'falhou'}`, true);
         r = await globalThis.PPX?.cacadas?.ir?.(alvo.nome);
         if (!r?.ok) return dizer(`Não consegui entrar em "${alvo.nome}": ${r?.erro || 'falhou'}`, true);
+        suspenderEscada();
         dizer(`Entrei em "${alvo.nome}" com o time "${cfg.time}".`);
       } finally { correndo = false; soltar(); desenharResumo(); }
     };
@@ -137,7 +153,7 @@ PPX.modulo(
       if (!sessao) return;
       const destino = sessao;
       const soltar = await esperarAVez();
-      if (!soltar) return dizer('Não consegui a vez para voltar da ilha.', true);
+      if (!soltar) return;
       correndo = true;
       desenharResumo();
       try {
@@ -151,12 +167,17 @@ PPX.modulo(
         }
         sessao = null;
         gravarSessao();
+        liberarEscada();
         dizer(destino.cacada ? `Voltei para "${destino.cacada}".` : 'As ilhas fecharam; fiquei na cidade.');
       } finally { correndo = false; soltar(); desenharResumo(); }
     };
 
     const verificar = async () => {
       if (correndo) return;
+      const prioridade = outraAutomacao();
+      if (cfg.ligada && !cfg.pausada && prioridade) {
+        return dizer(`Ilhas pausadas para ${globalThis.PPX?.vez?.nome?.(prioridade) || prioridade}. Retomo quando terminar.`);
+      }
       const r = await globalThis.PPX?.cacadas?.atualizar?.();
       if (r && !r.ok) dizer(`Não consegui verificar as ilhas: ${r.erro}`, true);
       ultima = abertas();
@@ -173,6 +194,7 @@ PPX.modulo(
     campo('[data-ligar]').addEventListener('click', () => {
       cfg.ligada = !cfg.ligada;
       if (!cfg.ligada) cfg.pausada = false;
+      if (!cfg.ligada) liberarEscada();
       gravar(); desenharResumo();
       dizer(cfg.ligada ? 'Monitoramento ligado.' : 'Monitoramento desligado.');
       if (cfg.ligada) void verificar();
@@ -212,6 +234,16 @@ PPX.modulo(
       if (p) escrever(CHAVE_POS, p);
     });
     addEventListener('resize', recolocar);
+    globalThis.PPX?.vez?.aoMudar?.(() => {
+      if (!cfg.ligada || cfg.pausada || correndo) return;
+      const prioridade = outraAutomacao();
+      if (prioridade) {
+        dizer(`Ilhas pausadas para ${globalThis.PPX?.vez?.nome?.(prioridade) || prioridade}. Retomo quando terminar.`);
+        return;
+      }
+      clearTimeout(retomadaPendente);
+      retomadaPendente = setTimeout(() => void verificar(), 1000);
+    });
     globalThis.PPX?.controlar?.('ilhas', (sim) => { painel.style.display = sim ? 'block' : 'none'; });
     painel.style.display = globalThis.PPX?.visivel?.('ilhas') === false ? 'none' : 'block';
     recolocar();
