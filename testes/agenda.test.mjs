@@ -10,7 +10,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const fonte = readFileSync(new URL('../agenda.js', import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const fonte = readFileSync(new URL('../agenda.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const caixa = { exports: {} };
 new Function('module', fonte)(caixa);
 const agenda = caixa.exports;
@@ -202,7 +204,8 @@ test('o resumo diz a agenda em uma linha, em portugues', () => {
 // O guarda da regra: ninguém volta a ter o calendário em casa.
 
 test('o calendario e um so, e as tres ferramentas usam ele', () => {
-  const ler = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  const ler = (f) =>
+    readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   for (const arquivo of ['venda-rapida.js', 'loja-rapida.js', 'gym.js']) {
     const fonte = ler(arquivo);
     assert.match(fonte, /PPX\?\.agenda/, `${arquivo} não usa o calendário partilhado`);

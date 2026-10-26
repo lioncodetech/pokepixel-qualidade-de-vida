@@ -10,7 +10,10 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const ler = (nome) => readFileSync(new URL(`../${nome}`, import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const ler = (nome) =>
+  readFileSync(new URL(`../${nome}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const nucleo = ler('nucleo.js');
 
 test('a volta mostra so o que estava a vista, e nao tudo', () => {

@@ -14,7 +14,9 @@ import test from 'node:test';
 
 // `times.js` e' um content script: roda inteiro quando carregado e chama `PPX.modulo`. Aqui ele e'
 // avaliado com um `PPX` de mentira e um `module` para a funcao sair pelo `module.exports` do fim.
-const fonte = readFileSync(new URL('../times.js', import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const fonte = readFileSync(new URL('../times.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const caixa = { exports: {} };
 new Function('PPX', 'module', fonte)({ modulo: () => {} }, caixa);
 const { planoDeTroca } = caixa.exports;

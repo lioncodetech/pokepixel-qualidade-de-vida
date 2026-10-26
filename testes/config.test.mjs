@@ -17,12 +17,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const fonte = readFileSync(new URL('../config.js', import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const fonte = readFileSync(new URL('../config.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const caixa = { exports: {} };
 new Function('module', fonte)(caixa);
 const config = caixa.exports;
 
-const ler = (nome) => readFileSync(new URL(`../${nome}`, import.meta.url), 'utf8');
+const ler = (nome) =>
+  readFileSync(new URL(`../${nome}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 /** O corpo de uma propriedade do objeto passado a `montarBotoes`, do nome dela até o próximo. */
 const trecho = (codigo, de, ate) =>
   codigo.slice(codigo.indexOf(de), codigo.indexOf(ate, codigo.indexOf(de)));

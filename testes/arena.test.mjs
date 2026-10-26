@@ -14,7 +14,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const ler = (arquivo) => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const ler = (arquivo) =>
+  readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 // Os comentários citam de propósito as coisas que o código não pode conter.
 const semComentarios = (texto) =>
@@ -61,8 +64,12 @@ test('ninguem ataca sem tentativa, e quem conta e o jogo', () => {
   assert.match(corpo, /if \(estado\.tentativas\.restantes <= 0\)/);
   // A contagem é relida a cada volta, e a sobra depois do ataque vem do estado que o próprio
   // ataque leu. Uma contagem desta ferramenta divergia no primeiro ataque feito à mão.
-  assert.match(corpo, /const sobra = r\.estado \? r\.estado\.tentativas\.restantes : 0;/);
-  assert.match(corpo, /if \(sobra <= 0\)/);
+  assert.match(corpo, /const sobra = r\.estado \? r\.estado\.tentativas\.restantes : null;/);
+  // **A condicao inteira, e nao so' o `<= 0`.** `null` quer dizer "o jogo nao disse quantas
+  // sobram" e `0` quer dizer "disse que nao sobra nenhuma", e as duas nao levam ao mesmo lado:
+  // `null <= 0` e' verdadeiro em JavaScript, logo um `if (sobra <= 0)` solto parava a rodada a
+  // cada ataque em que a resposta viesse sem estado. A guarda antiga pedia exatamente essa versao.
+  assert.match(corpo, /if \(sobra !== null && sobra <= 0\)/);
 });
 
 test('a vez e pedida por ataque, e nao pela rodada inteira', () => {
