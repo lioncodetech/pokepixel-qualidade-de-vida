@@ -1592,18 +1592,35 @@ um defeito que o dono descreveu assim — *"se o outro time for mto fraco, vai m
 lista é escolhida a pensar no carregador com pedra, que costuma ser o mais forte da conta; um time
 de Pokémon atrasados herdava-a e ia morrer lá.
 
-Agora cada turno **com pedra** tem, ao lado da pedra, um seletor com duas opções:
+Agora cada turno tem, no cabeçalho dele, um seletor com três opções:
 
 - **caçada fixa** — a lista desse turno, em ordem de preferência, com as mesmas regras da lista do
   grupo: fica-se na primeira onde se consiga estar, e estar na terceira basta. **Deixar a lista do
   turno vazia quer dizer "uso a do grupo"** — que é exatamente o que todos os turnos faziam antes
   desta opção existir, e é por isso que ela nasce sem mudar nada para ninguém;
-- **escada · pelo nível da pedra** — a caçada é escolhida pela escada, pelo nível e pelo tipo do
-  Pokémon que tem a pedra. Serve o segundo caso do pedido: o portador a subir nas caçadas que
-  servem o nível **dele**, em vez de ficar preso a uma lista escrita à mão.
+- **escada · a da ferramenta** — a caçada sai do automático e dos degraus que valem para todos, pelo
+  nível e pelo tipo do líder do turno. Serve o segundo caso do pedido: o portador a subir nas
+  caçadas que servem o nível **dele**, em vez de ficar preso a uma lista escrita à mão;
+- **escada · só deste turno** — o bloco ganha, dentro dele, os mesmos dois mecanismos do modo
+  *escada de caçadas*: a caixinha **escolher a caçada sozinha** com a sua janela de níveis, e a sua
+  própria lista de degraus `nível → caçada`. É o que permite ao time fraco ter a tabela de níveis
+  dele sem mexer na de toda a gente.
 
-O turno **sem pedra** não tem esse seletor, e de propósito: ali cada Pokémon da rotação já segue a
-escada dele, que é o que a rotação é. Oferecer a escolha seria oferecer o que não se cumpre.
+O turno **sem pedra** não tem a "caçada fixa", e de propósito: ali cada Pokémon da rotação segue uma
+escada, que é o que a rotação é — oferecer uma caçada só seria oferecer o que não se cumpre. Mas
+**qual** escada ele segue passou a ser escolha dele também, e por isso o seletor aparece lá com as
+duas opções de escada.
+
+Três coisas que valem a pena saber sobre a escada só do turno:
+
+- **ela nasce vazia e desligada em todo turno que já existia.** Quem não a escolheu continua na
+  escada da ferramenta, que é onde ele já estava — a mudança não mexe na caçada de ninguém;
+- **o automático ali é a caixinha dele.** Na escada da ferramenta o turno força o automático mesmo
+  com a caixa geral desmarcada, porque aquela caixa governa o modo de degraus e não os turnos. Na
+  escada própria, forçar na mesma tornaria o campo que você pediu um enfeite;
+- **vazia e desligada, ela trava e diz.** Sem automático, sem degrau e sem rede o turno não tem para
+  onde ir; o diagnóstico diz isso **antes** da viagem, em vez de o grupo montar, viajar e só então
+  parar calado.
 
 Duas consequências que vale a pena saber:
 
@@ -1612,8 +1629,8 @@ Duas consequências que vale a pena saber:
 - **quem segue a escada nunca cai na lista fixa de outro turno.** Mandar o time para a hunt
   escolhida para outro é precisamente o defeito que isto veio consertar;
 - **a lista escrita num turno na escada é a rede dela, não uma alternativa.** A escada escolhe
-  primeiro, pelo nível e pelo tipo; só quando não achar caçada para aquele nível é que a lista
-  desse turno entra. É a mesma regra que os degraus já tinham no automático, e pela mesma razão:
+  primeiro, pelo nível e pelo tipo; só quando não achar caçada para aquele nível — nem no
+  automático, nem nos degraus — é que a lista desse turno entra. É a mesma regra que os degraus já tinham no automático, e pela mesma razão:
   com janela estreita e filtro de tipo há níveis em que nenhuma caçada passa, e um turno que
   parasse ali ficava pior do que estava. **Com rede não para; sem rede para e diz** — e o painel
   escreve, debaixo da lista, qual dos dois casos é o seu.

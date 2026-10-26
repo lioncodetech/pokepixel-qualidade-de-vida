@@ -338,8 +338,13 @@ PPX.modulo(
     cfg.grupo.turnos = cfg.grupo.turnos.map((t) => ({
       ...t,
       tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
-      onde: t?.onde === 'escada' ? 'escada' : 'fixa',
+      onde: ['escada', 'propria'].includes(t?.onde) ? t.onde : 'fixa',
       cacadas: Array.isArray(t?.cacadas) ? t.cacadas : [],
+      // A escada propria nasce vazia e desligada em todo turno que ja' existia: quem nao a
+      // escolheu continua na escada da ferramenta, que e' onde ele ja' estava.
+      auto: t?.auto === true,
+      janela: Number.isFinite(t?.janela) ? t.janela : null,
+      degraus: Array.isArray(t?.degraus) ? t.degraus : [],
     }));
     if (
       !cfg.grupo.turnos.length &&
@@ -360,7 +365,8 @@ PPX.modulo(
     delete cfg.time;
     const gravar = () => gravarChave(CHAVE, cfg);
 
-    const ordenar = () => cfg.degraus.sort((a, b) => a.nivel - b.nivel);
+    const ordenarDegraus = (lista) => lista.sort((a, b) => a.nivel - b.nivel);
+    const ordenar = () => ordenarDegraus(cfg.degraus);
 
     // ------------------------------------------------------------- ler o jogo
 
@@ -750,10 +756,10 @@ PPX.modulo(
      * aparece ao ligar a escada com o lider ja' no Lv 80: o certo e' ir para o degrau de 80, e nao
      * ficar a' espera de passar pelo de 20.
      */
-    const degrauPara = (n) => {
+    const degrauPara = (n, degraus = cfg.degraus) => {
       if (n === null) return null;
       let achado = null;
-      for (const d of cfg.degraus)
+      for (const d of degraus)
         if (d.nivel <= n && (!achado || d.nivel > achado.nivel)) achado = d;
       return achado;
     };
@@ -825,15 +831,42 @@ PPX.modulo(
       }
     };
 
+    /** A escada da ferramenta: a caixinha, a janela e os degraus que valem para toda a gente. */
+    const escadaDaFerramenta = () => ({
+      auto: cfg.auto === true,
+      janela: cfg.janela,
+      degraus: cfg.degraus,
+      propria: false,
+    });
+
+    /**
+     * A escada que manda neste turno.
+     *
+     * **`propria` nao e' so' outra fonte de degraus: e' quem decide o automatico.** Na escada da
+     * ferramenta o turno força o automatico mesmo com a caixinha desmarcada — e' assim desde
+     * 26/10/2026 e nao se mexe, porque a caixinha ali governa o modo de degraus, nao os turnos.
+     * Na escada propria, o automatico e' a caixinha DELE: foi para isso que o dono a pediu, e um
+     * automatico que corresse na mesma tornaria a caixinha um enfeite.
+     */
+    const escadaDoTurno = (turno) =>
+      turno?.onde === 'propria'
+        ? {
+            auto: turno.auto === true,
+            janela: turno.janela,
+            degraus: turno.degraus || [],
+            propria: true,
+          }
+        : escadaDaFerramenta();
+
     /**
      * A caçada que o automatico escolhe para este aluno, ou `null`.
      *
      * Devolve um **degrau**, da mesma forma que os escritos a' mao: quem o recebe la' em baixo nao
      * precisa de saber de onde ele veio, e e' por isso que o automatico cabe no motor sem o abrir.
      */
-    const degrauAutomatico = (aluno, forcar = false) => {
+    const degrauAutomatico = (aluno, forcar = false, escada = escadaDaFerramenta()) => {
       const conta = globalThis.PPX?.tipos;
-      if (!conta || (!cfg.auto && !forcar) || !aluno || aluno.nivel === null) return null;
+      if (!conta || (!escada.auto && !forcar) || !aluno || aluno.nivel === null) return null;
       const especie = aluno.especie || colecao.get(aluno.id)?.especie || '';
       const ficha = especie ? mundo.especies.get(especie) : null;
       if (!ficha) return null;
@@ -842,7 +875,7 @@ PPX.modulo(
         golpes: conta.golpesDe(ficha.progressao, aluno.nivel, mundo.golpes),
         nivel: aluno.nivel,
       };
-      const boas = conta.escolher(quem, mundo.cacadas, { janela: Number(cfg.janela) || 0 });
+      const boas = conta.escolher(quem, mundo.cacadas, { janela: Number(escada.janela) || 0 });
       if (!boas.length) return null;
       const escolhida = boas[0];
       return {
@@ -873,7 +906,8 @@ PPX.modulo(
      * descreveu: "se o outro time for mto fraco, vai morrer todo mundo". A caçada vinha da lista
      * do grupo, escolhida a pensar no carregador, e o time fraco herdava-a.
      */
-    const naEscadaDoTurno = (turno) => turno?.tipo === 'rotacao' || turno?.onde === 'escada';
+    const naEscadaDoTurno = (turno) =>
+      turno?.tipo === 'rotacao' || turno?.onde === 'escada' || turno?.onde === 'propria';
 
     /**
      * A caçada que a escada escolhe para este turno: primeiro a melhor escolha segura por nivel e
@@ -886,9 +920,10 @@ PPX.modulo(
      */
     const cacadaDoTurno = (montagem) => {
       if (!naEscadaDoTurno(montagem?.turno)) return '';
+      const escada = escadaDoTurno(montagem.turno);
       return (
-        degrauAutomatico(montagem.lider, true)?.cacada ||
-        degrauPara(montagem.lider?.nivel)?.cacada ||
+        degrauAutomatico(montagem.lider, !escada.propria, escada)?.cacada ||
+        degrauPara(montagem.lider?.nivel, escada.degraus)?.cacada ||
         ''
       );
     };
@@ -1156,6 +1191,18 @@ PPX.modulo(
         // fixo pode ter a sua. Exigi-la de quem nao precisa dela travava a escada por nada.
         if (!naEscadaDoTurno(turno) && !cacadasDoTurno(turno).length)
           return `${qual}scolha onde este turno caça — a lista dele, ou a do grupo.`;
+        // Uma escada propria vazia e desligada nao escolhe nada, e sem rede o turno nao tem para
+        // onde ir. Travar aqui e' dizer isso antes da viagem, em vez de o turno parar calado la'.
+        if (
+          turno.onde === 'propria' &&
+          turno.auto !== true &&
+          !(turno.degraus || []).some((d) => d?.cacada) &&
+          !cacadasProprias(turno).length
+        )
+          return (
+            `${qual}ste turno tem escada só dele, mas não há nada nela — ligue o automático, ` +
+            `escreva um degrau, ou dê-lhe uma caçada de rede.`
+          );
         const meus = semVazios(turno.times);
         if (!meus.length) return `${qual}scolha os times de onde vêm os que rodam.`;
         // **Um time que nao existe nesta conta nao e' um time.** Acontece a quem leva a configuracao
@@ -1332,7 +1379,13 @@ PPX.modulo(
       const tipo =
         m.turno.tipo === 'rotacao'
           ? 'Sem pedra'
-          : `Com pedra${m.turno.onde === 'escada' ? ' · na escada' : ''}`;
+          : `Com pedra${
+              m.turno.onde === 'propria'
+                ? ' · escada só dele'
+                : m.turno.onde === 'escada'
+                  ? ' · na escada'
+                  : ''
+            }`;
       const detalhe = m.fixo ? ` (${m.fixo.nome})` : '';
       const pedra = m.quantos > 1 ? `Turno ${m.numero}/${m.quantos} · ${tipo}${detalhe}. ` : '';
       if (!m.faltam.length) {
@@ -3145,17 +3198,33 @@ PPX.modulo(
         const onde = document.createElement('select');
         onde.title =
           'Caçada fixa: a lista deste turno, ou a do grupo se ele não tiver a sua. ' +
-          'Escada: a caçada é escolhida pelo nível e pelo tipo do Pokémon com a pedra.';
-        for (const [valor, texto] of [
-          ['fixa', 'caçada fixa'],
-          ['escada', 'escada · pelo nível da pedra'],
-        ]) {
+          'Escada da ferramenta: a caçada sai do automático e dos degraus que valem para todos. ' +
+          'Escada só deste turno: ele tem o seu automático e os seus degraus, e ninguém mais os usa.';
+        // Sem pedra nao ha' "caçada fixa": a rotacao E' a escada, e oferecer o que nao se cumpre
+        // seria mentir. Mas QUAL escada ele segue passou a ser escolha dele tambem.
+        for (const [valor, texto] of (
+          turno.tipo === 'rotacao'
+            ? [
+                ['escada', 'escada · a da ferramenta'],
+                ['propria', 'escada · só deste turno'],
+              ]
+            : [
+                ['fixa', 'caçada fixa'],
+                ['escada', 'escada · a da ferramenta'],
+                ['propria', 'escada · só deste turno'],
+              ]
+        )) {
           const o = document.createElement('option');
           o.value = valor;
           o.textContent = texto;
           onde.append(o);
         }
-        onde.value = turno.onde === 'escada' ? 'escada' : 'fixa';
+        onde.value =
+          turno.onde === 'propria'
+            ? 'propria'
+            : turno.tipo === 'rotacao' || turno.onde === 'escada'
+              ? 'escada'
+              : 'fixa';
         onde.addEventListener('change', () => {
           turno.onde = onde.value;
           gravar();
@@ -3165,6 +3234,7 @@ PPX.modulo(
 
         cima.append(tipo);
         if (turno.tipo !== 'rotacao') cima.append(quem, onde);
+        else cima.append(onde);
         cima.append(forada);
 
         const times = document.createElement('ul');
@@ -3174,6 +3244,87 @@ PPX.modulo(
           conta.textContent = 'sem times: este turno não tem grupo para upar';
           item.append(cima, conta);
         } else item.append(cima);
+
+        /**
+         * A escada so' deste turno: a caixinha do automatico, a janela e os degraus dele.
+         *
+         * Pedida em 26/10/2026, depois de a escolha por turno ja' existir: "coloca por level
+         * automatico ou eu posso escolher onde caçar que nem tem o modo escada de caçadas". Sao
+         * os mesmos dois mecanismos do modo de degraus, mas dentro do bloco — e' o que permite ao
+         * time fraco ter a tabela de niveis dele sem mexer na de toda a gente.
+         */
+        if (turno.onde === 'propria') {
+          const cxAuto = document.createElement('label');
+          cxAuto.className = 'caixa';
+          cxAuto.title =
+            'Em vez de seguir os degraus deste turno, escolho a caçada pelo tipo do líder dele';
+          const auto = document.createElement('input');
+          auto.type = 'checkbox';
+          auto.checked = turno.auto === true;
+          auto.addEventListener('change', () => {
+            turno.auto = auto.checked;
+            gravar();
+            desenhar();
+            void conferir();
+          });
+          cxAuto.append(auto, document.createTextNode(' escolher a caçada sozinha'));
+          item.append(cxAuto);
+
+          if (turno.auto === true) {
+            const cxJanela = document.createElement('label');
+            cxJanela.className = 'caixa';
+            cxJanela.title = 'De quantos níveis para cada lado procuro caçada';
+            const janela = document.createElement('input');
+            janela.type = 'number';
+            janela.min = '1';
+            janela.placeholder = '5';
+            janela.value = turno.janela ?? '';
+            janela.addEventListener('change', () => {
+              const v = Number(janela.value);
+              turno.janela =
+                janela.value === '' || !Number.isFinite(v) || v < 1 ? null : Math.round(v);
+              gravar();
+              desenhar();
+              void conferir();
+            });
+            cxJanela.append(
+              document.createTextNode('dentro de '),
+              janela,
+              document.createTextNode(' níveis'),
+            );
+            item.append(cxJanela);
+          }
+
+          const meusDegraus = document.createElement('ul');
+          turno.degraus = turno.degraus || [];
+          if (!turno.degraus.length) {
+            const vazio = document.createElement('p');
+            vazio.className = 'vazio';
+            vazio.textContent = turno.auto
+              ? 'Sem degraus próprios: se o automático não achar caçada, entra a rede abaixo.'
+              : 'Sem degraus próprios e sem automático: este turno ainda não sabe onde caçar.';
+            meusDegraus.append(vazio);
+          }
+          for (const degrau of turno.degraus)
+            meusDegraus.append(linhaDeDegrau(degrau, turno.degraus));
+          const maisDegrau = document.createElement('button');
+          maisDegrau.type = 'button';
+          maisDegrau.className = 'mais';
+          maisDegrau.textContent = '+ degrau deste turno';
+          maisDegrau.addEventListener('click', () => {
+            turno.degraus = turno.degraus || [];
+            // O primeiro nasce no Lv 1 pela mesma razao da escada da ferramenta: um degrau mais
+            // alto do que o lider nao faz nada, e o turno passaria a noite parado.
+            const nivel = turno.degraus.length
+              ? turno.degraus.reduce((m, d) => Math.max(m, d.nivel), 0) + 10
+              : 1;
+            turno.degraus.push({ nivel, cacada: '' });
+            ordenarDegraus(turno.degraus);
+            gravar();
+            desenhar();
+          });
+          item.append(meusDegraus, maisDegrau);
+        }
 
         /**
          * A lista de caçadas deste turno.
@@ -3186,7 +3337,7 @@ PPX.modulo(
           // Na escada ela e' a rede; no fixo e' quem manda. O que nao pode e' ficar guardada e
           // escondida: uma caçada escrita que nao se ve nem age e' uma decisao do dono apagada
           // sem aviso. Por isso desenha-se sempre, e a frase diz qual dos dois papeis ela tem.
-          const naEscada = turno.tipo === 'rotacao' || turno.onde === 'escada';
+          const naEscada = naEscadaDoTurno(turno);
           const nota = document.createElement('p');
           nota.className = 'conta';
           if (naEscada)
@@ -3227,10 +3378,9 @@ PPX.modulo(
           const maisCacada = document.createElement('button');
           maisCacada.type = 'button';
           maisCacada.className = 'mais';
-          maisCacada.textContent =
-            turno.tipo === 'rotacao' || turno.onde === 'escada'
-              ? '+ caçada de rede'
-              : '+ caçada deste turno';
+          maisCacada.textContent = naEscadaDoTurno(turno)
+            ? '+ caçada de rede'
+            : '+ caçada deste turno';
           maisCacada.addEventListener('click', () => {
             turno.cacadas = turno.cacadas || [];
             turno.cacadas.push('');
@@ -3394,62 +3544,75 @@ PPX.modulo(
       const n = nivelLider();
       const emCurso = degrauPara(n);
       lista.innerHTML = '';
+      // A escada da ferramenta e a de um turno desenham a MESMA linha. Era copia-e-cola ate'
+      // 26/10/2026, quando o turno ganhou degraus proprios: duas copias divergiriam no primeiro
+      // conserto, e a que ninguem olhasse e' que ficaria errada.
       if (!cfg.degraus.length) {
         const vazio = document.createElement('p');
         vazio.className = 'vazio';
         vazio.textContent = 'Nenhum degrau. Um degrau é "a partir do nível N, caçar aqui".';
         lista.append(vazio);
       }
-      for (const degrau of cfg.degraus) {
-        const item = document.createElement('li');
-        if (emCurso === degrau) item.classList.add('agora');
-
-        const nivel = document.createElement('input');
-        nivel.type = 'number';
-        nivel.min = '1';
-        nivel.value = degrau.nivel;
-        nivel.title = 'A partir deste nível do líder';
-        nivel.addEventListener('change', () => {
-          const v = Number(nivel.value);
-          if (!Number.isFinite(v) || v < 1) {
-            nivel.value = degrau.nivel;
-            return;
-          }
-          degrau.nivel = Math.round(v);
-          ordenar();
-          gravar();
-          desenhar();
-        });
-
-        const onde = campoDeCacada();
-        encherCacadas(onde, degrau.cacada, 'escolha a caçada');
-        onde.addEventListener('change', () => {
-          degrau.cacada = onde.value.trim();
-          gravar();
-          desenhar();
-        });
-
-        const ir = document.createElement('button');
-        ir.type = 'button';
-        ir.textContent = '▸';
-        ir.title = 'Ir agora para esta caçada';
-        ir.addEventListener('click', () => void irAMao(degrau));
-
-        const apagar = document.createElement('button');
-        apagar.type = 'button';
-        apagar.dataset.apagar = '1';
-        apagar.textContent = '×';
-        apagar.title = 'Apagar este degrau';
-        apagar.addEventListener('click', () => {
-          cfg.degraus = cfg.degraus.filter((d) => d !== degrau);
-          gravar();
-          desenhar();
-        });
-
-        item.append(nivel, onde, ir, apagar);
-        lista.append(item);
-      }
+      for (const degrau of cfg.degraus) lista.append(linhaDeDegrau(degrau, cfg.degraus, emCurso));
       if (dizerPorque) diz(diagnostico());
+    };
+
+    /**
+     * Uma linha de degrau: `nivel`, caçada, ir-agora e apagar.
+     *
+     * `degraus` e' o array a que ela pertence — o da ferramenta ou o de um turno. Mexe-se nele no
+     * lugar (`sort`, `splice`) de proposito: quem o guarda e' quem chamou, e trocar a referencia
+     * aqui deixaria o dono do array a olhar para a lista velha.
+     */
+    const linhaDeDegrau = (degrau, degraus, emCurso = null) => {
+      const item = document.createElement('li');
+      if (emCurso === degrau) item.classList.add('agora');
+
+      const nivel = document.createElement('input');
+      nivel.type = 'number';
+      nivel.min = '1';
+      nivel.value = degrau.nivel;
+      nivel.title = 'A partir deste nível do líder';
+      nivel.addEventListener('change', () => {
+        const v = Number(nivel.value);
+        if (!Number.isFinite(v) || v < 1) {
+          nivel.value = degrau.nivel;
+          return;
+        }
+        degrau.nivel = Math.round(v);
+        ordenarDegraus(degraus);
+        gravar();
+        desenhar();
+      });
+
+      const onde = campoDeCacada();
+      encherCacadas(onde, degrau.cacada, 'escolha a caçada');
+      onde.addEventListener('change', () => {
+        degrau.cacada = onde.value.trim();
+        gravar();
+        desenhar();
+      });
+
+      const ir = document.createElement('button');
+      ir.type = 'button';
+      ir.textContent = '▸';
+      ir.title = 'Ir agora para esta caçada';
+      ir.addEventListener('click', () => void irAMao(degrau));
+
+      const apagar = document.createElement('button');
+      apagar.type = 'button';
+      apagar.dataset.apagar = '1';
+      apagar.textContent = '×';
+      apagar.title = 'Apagar este degrau';
+      apagar.addEventListener('click', () => {
+        const i = degraus.indexOf(degrau);
+        if (i >= 0) degraus.splice(i, 1);
+        gravar();
+        desenhar();
+      });
+
+      item.append(nivel, onde, ir, apagar);
+      return item;
     };
 
     /** Um clique de cada vez no ▸: o segundo so' atrapalharia o primeiro. */
@@ -3548,7 +3711,16 @@ PPX.modulo(
 
     campo('[data-mais-turno]').addEventListener('click', () => {
       cfg.grupo.turnos = turnosDoGrupo();
-      cfg.grupo.turnos.push({ tipo: 'pedra', fixo: '', times: [''] });
+      cfg.grupo.turnos.push({
+        tipo: 'pedra',
+        onde: 'fixa',
+        cacadas: [],
+        auto: false,
+        janela: null,
+        degraus: [],
+        fixo: '',
+        times: [''],
+      });
       gravar();
       desenhar();
     });
@@ -3828,8 +4000,11 @@ PPX.modulo(
           // caçadas sao escolhas do dono e viajam, como a lista do grupo sempre viajou.
           turnos: cfg.grupo.turnos.map((t) => ({
             tipo: t.tipo === 'rotacao' ? 'rotacao' : 'pedra',
-            onde: t.onde === 'escada' ? 'escada' : 'fixa',
+            onde: ['escada', 'propria'].includes(t.onde) ? t.onde : 'fixa',
             cacadas: t.cacadas || [],
+            auto: t.auto === true,
+            janela: t.janela,
+            degraus: t.degraus || [],
             times: t.times,
           })),
           alvo: cfg.grupo.alvo,
@@ -3869,10 +4044,16 @@ PPX.modulo(
           .slice(0, 20)
           .map((t) => ({
             tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
-            onde: t?.onde === 'escada' ? 'escada' : 'fixa',
+            onde: ['escada', 'propria'].includes(t?.onde) ? t.onde : 'fixa',
             cacadas: lista(t?.cacadas)
               .slice(0, 50)
               .map((c) => limparTexto(c, 80)),
+            auto: t?.auto === true,
+            janela: limparNivel(t?.janela),
+            degraus: lista(t?.degraus)
+              .slice(0, 100)
+              .map((d) => ({ nivel: limparNivel(d?.nivel), cacada: limparTexto(d?.cacada, 80) }))
+              .filter((d) => d.nivel !== null),
             fixo: '',
             times: lista(t?.times)
               .slice(0, 50)

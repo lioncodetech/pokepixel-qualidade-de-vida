@@ -982,11 +982,20 @@ test('turnos com e sem pedra revezam-se, e qual esta a correr nao se guarda', ()
 test('o turno sem pedra leva o lider para a melhor cacada da escada', () => {
   // A rotação inteira não fica presa na caçada escolhida para quem usa pedra: cada líder vira o
   // aluno da escada e força a escolha por nível e tipo, mesmo com a caixa geral desligada.
-  assert.match(codigo, /const degrauAutomatico = \(aluno, forcar = false\) =>/);
-  assert.match(codigo, /\(!cfg\.auto && !forcar\)/);
+  // Desde 26/10/2026 ele recebe a escada que deve ler: a da ferramenta por omissao, a de um
+  // turno quando o turno tem a sua. Sem o parametro, a escada propria seria um campo no painel
+  // que nao muda caçada nenhuma.
   assert.match(
     codigo,
-    /degrauAutomatico\(montagem\.lider, true\)\?\.cacada \|\|[\s\S]*degrauPara\(montagem\.lider\?\.nivel\)\?\.cacada/,
+    /const degrauAutomatico = \(aluno, forcar = false, escada = escadaDaFerramenta\(\)\) =>/,
+  );
+  assert.match(codigo, /\(!escada\.auto && !forcar\)/);
+  // A ordem nao muda: o automatico primeiro, o degrau escrito como rede. O que mudou e' DE QUAL
+  // escada saem os dois — e saem da mesma, sempre: misturar o automatico de uma com os degraus da
+  // outra daria uma terceira escada que ninguem escreveu.
+  assert.match(
+    codigo,
+    /degrauAutomatico\(montagem\.lider, !escada\.propria, escada\)\?\.cacada \|\|[\s\S]*degrauPara\(montagem\.lider\?\.nivel, escada\.degraus\)\?\.cacada/,
   );
   // A ficha do líder é carregada antes da decisão e o destino automático entra na mesma viagem do
   // grupo. Sem resultado seguro, a lista escrita pelo dono continua sendo a alternativa.
@@ -1007,7 +1016,10 @@ test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
     codigo,
     /new Option\('com pedra', 'pedra'\), new Option\('sem pedra · times em rotação', 'rotacao'\)/,
   );
-  assert.match(codigo, /cfg\.grupo\.turnos\.push\(\{ tipo: 'pedra', fixo: '', times: \[''\] \}\)/);
+  assert.match(
+    codigo,
+    /cfg\.grupo\.turnos\.push\(\{\s+tipo: 'pedra',\s+onde: 'fixa',\s+cacadas: \[\],\s+auto: false,\s+janela: null,\s+degraus: \[\],\s+fixo: '',\s+times: \[''\],/,
+  );
   assert.match(codigo, /turno\.tipo = tipo\.value/);
   assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem, onde\)/);
   assert.match(codigo, /if \(turno\.tipo !== 'rotacao' && !turno\.fixo\)/);
@@ -1459,8 +1471,13 @@ test('a pedra nao viaja: ela e um bicho desta conta', () => {
   const coletar = bloco.slice(bloco.indexOf('coletar:'), bloco.indexOf('aplicar:'));
   assert.match(coletar, /tipo: t\.tipo === 'rotacao' \? 'rotacao' : 'pedra',/);
   // O `onde` e a lista de caçadas sao escolhas do dono, como a lista do grupo sempre foi: viajam.
-  assert.match(coletar, /onde: t\.onde === 'escada' \? 'escada' : 'fixa',/);
+  assert.match(coletar, /onde: \['escada', 'propria'\]\.includes\(t\.onde\) \? t\.onde : 'fixa',/);
   assert.match(coletar, /cacadas: t\.cacadas \|\| \[\],/);
+  // A escada propria e' configuracao como a lista: viaja inteira, senao o turno chega do outro
+  // lado a dizer "escada so' dele" e sem escada nenhuma dentro.
+  assert.match(coletar, /auto: t\.auto === true,/);
+  assert.match(coletar, /janela: t\.janela,/);
+  assert.match(coletar, /degraus: t\.degraus \|\| \[\],/);
   assert.ok(!/fixo/.test(coletar), 'o Pokémon principal não entra no pacote');
   const aplicar = bloco.slice(bloco.indexOf('aplicar:'), bloco.indexOf('avisar: diz'));
   assert.match(aplicar, /fixo: '',/, 'a pedra chega vazia, e não com o id de outra conta');
@@ -1722,9 +1739,11 @@ test('quem faz a conta de tipos e o tipos.js, e nao a escada', () => {
   // A escada decide **quando** trocar de caçada; para onde e conta pura, e mora sozinha para poder
   // ser exercitada sozinha. A escada nao conhece um unico multiplicador.
   assert.match(codigo, /const conta = globalThis\.PPX\?\.tipos;/);
+  // A janela lida e' a da escada que manda nesta escolha, e nao sempre a global: desde 26/10/2026
+  // um turno pode ter a sua, e com `cfg.janela` fixo aqui a dele nunca chegaria ao `tipos.js`.
   assert.match(
     codigo,
-    /conta\.escolher\(quem, mundo\.cacadas, \{ janela: Number\(cfg\.janela\) \|\| 0 \}\)/,
+    /conta\.escolher\(quem, mundo\.cacadas, \{ janela: Number\(escada\.janela\) \|\| 0 \}\)/,
   );
   assert.match(codigo, /conta\.golpesDe\(ficha\.progressao, aluno\.nivel, mundo\.golpes\)/);
   // Nenhuma tabela de tipos aqui dentro: duas copias divergiriam no primeiro mes.
@@ -1795,12 +1814,19 @@ test('cada turno com pedra escolhe onde caca: lista propria ou a escada', () => 
   // carregador com pedra — e o time fraco herdava-a. Agora o bloco escolhe.
   assert.match(
     codigo,
-    /const naEscadaDoTurno = \(turno\) => turno\?\.tipo === 'rotacao' \|\| turno\?\.onde === 'escada';/,
+    /const naEscadaDoTurno = \(turno\) =>\s+turno\?\.tipo === 'rotacao' \|\| turno\?\.onde === 'escada' \|\| turno\?\.onde === 'propria';/,
   );
-  // Sem pedra continua a ser SEMPRE a escada, e isso não é uma opção que se desmarque: cada
-  // Pokémon da rotação tem a escada dele. Só o turno com pedra é que escolhe.
-  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem, onde\)/);
-  assert.doesNotMatch(codigo, /if \(turno\.tipo === 'rotacao'\) cima\.append\(onde\)/);
+  // Sem pedra continua a não ter "caçada fixa": a rotação É a escada. O que mudou em 26/10/2026 é
+  // que ele passou a escolher QUAL escada segue, e por isso o seletor aparece lá também — com as
+  // duas opções de escada e sem a fixa, que ali seria oferecer o que não se cumpre.
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem, onde\);\s+else cima\.append\(onde\);/);
+  const seletor = codigo.slice(codigo.indexOf("turno.tipo === 'rotacao'\n            ? ["));
+  const opcoes = seletor.slice(0, seletor.indexOf('))'));
+  assert.doesNotMatch(
+    opcoes.slice(0, opcoes.indexOf(': [')),
+    /'fixa'/,
+    'o turno sem pedra não pode oferecer caçada fixa',
+  );
 });
 
 test('a lista vazia do turno quer dizer a do grupo, e nao caca nenhuma', () => {
@@ -1816,8 +1842,15 @@ test('a lista vazia do turno quer dizer a do grupo, e nao caca nenhuma', () => {
   // casava com essa. Medido em 26/10/2026: apagada a linha da migração, a suíte não mexia um dedo.
   const migracao = codigo.slice(codigo.indexOf('cfg.grupo.turnos = cfg.grupo.turnos.map('));
   const corpoDaMigracao = migracao.slice(0, migracao.indexOf('}));'));
-  assert.match(corpoDaMigracao, /onde: t\?\.onde === 'escada' \? 'escada' : 'fixa',/);
+  assert.match(
+    corpoDaMigracao,
+    /onde: \['escada', 'propria'\]\.includes\(t\?\.onde\) \? t\.onde : 'fixa',/,
+  );
   assert.match(corpoDaMigracao, /cacadas: Array\.isArray\(t\?\.cacadas\) \? t\.cacadas : \[\],/);
+  // A escada propria nasce vazia e DESLIGADA: um `auto` que viesse ligado por omissao mudava a
+  // caçada de toda a gente no dia em que isto entrasse, que e' o oposto de uma migracao invisivel.
+  assert.match(corpoDaMigracao, /auto: t\?\.auto === true,/);
+  assert.match(corpoDaMigracao, /degraus: Array\.isArray\(t\?\.degraus\) \? t\.degraus : \[\],/);
 });
 
 test('a lista do grupo deixou de ser obrigatoria para quem nao a usa', () => {
@@ -1838,7 +1871,12 @@ test('o turno com pedra na escada segue o nivel do portador', () => {
   const escolha = codigo.slice(codigo.indexOf('const cacadaDoTurno ='));
   const corpo = escolha.slice(0, escolha.indexOf('\n    };'));
   assert.match(corpo, /if \(!naEscadaDoTurno\(montagem\?\.turno\)\) return '';/);
-  assert.match(corpo, /degrauAutomatico\(montagem\.lider, true\)/);
+  // **O `forcar` e' o contrario de ter escada propria.** Na escada da ferramenta o turno força o
+  // automatico mesmo com a caixinha global desmarcada — essa caixinha governa o modo de degraus,
+  // nao os turnos, e e' assim desde que a escolha por turno existe. Na escada propria quem manda
+  // e' a caixinha DELE: forçar na mesma tornaria o campo que o dono pediu um enfeite.
+  assert.match(corpo, /degrauAutomatico\(montagem\.lider, !escada\.propria, escada\)/);
+  assert.match(corpo, /degrauPara\(montagem\.lider\?\.nivel, escada\.degraus\)/);
   assert.doesNotMatch(corpo, /turno\.fixo/);
   // E a espécie do líder é lida antes da escolha, senão o filtro por tipo decide sem dados.
   const conferir = codigo.slice(codigo.indexOf('async function conferirGrupo'));
@@ -1852,7 +1890,8 @@ test('o turno com pedra na escada segue o nivel do portador', () => {
 test('o HUD diz quando o turno com pedra esta na escada', () => {
   // Com dois turnos a alternar, "Com pedra" sozinho não distingue o que está na lista fixa do que
   // está a escolher caçada sozinho — e é justamente a diferença que o dono vai querer conferir.
-  assert.match(codigo, /Com pedra\$\{m\.turno\.onde === 'escada' \? ' · na escada' : ''\}/);
+  assert.match(codigo, /m\.turno\.onde === 'propria'\s+\? ' · escada só dele'/);
+  assert.match(codigo, /: m\.turno\.onde === 'escada'\s+\? ' · na escada'/);
 });
 
 test('a lista do turno e a rede da escada, e nao fica escondida', () => {
@@ -1886,4 +1925,71 @@ test('a caçada escrita num turno nunca fica guardada sem aparecer', () => {
   assert.match(desenho, /sem rede: se a escada não achar caçada, este turno para/);
   // E o impasse só se anuncia quando nem rede há.
   assert.match(codigo, /nem caçada escrita neste turno/);
+});
+
+test('a escada propria e do turno, e a da ferramenta fica como estava', () => {
+  // Pedido em 26/10/2026: "coloca por level automatico ou eu posso escolher onde caçar que nem tem
+  // o modo escada de caçadas". São os dois mecanismos do modo de degraus — o automático e os
+  // degraus escritos — mas dentro do bloco, para o time fraco ter a tabela de níveis dele.
+  assert.match(
+    codigo,
+    /const escadaDoTurno = \(turno\) =>\s+turno\?\.onde === 'propria'/,
+  );
+  // **A escolha é por turno e nunca mistura.** Um turno sem `propria` lê a da ferramenta inteira:
+  // misturar o automático de um com os degraus do outro daria uma terceira escada que ninguém
+  // escreveu, e que ninguém saberia ler no painel.
+  const bloco = codigo.slice(codigo.indexOf('const escadaDoTurno ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n\n'));
+  assert.match(corpo, /degraus: turno\.degraus \|\| \[\],/);
+  assert.match(corpo, /: escadaDaFerramenta\(\);/);
+  assert.match(
+    codigo,
+    /const escadaDaFerramenta = \(\) => \(\{\s+auto: cfg\.auto === true,\s+janela: cfg\.janela,\s+degraus: cfg\.degraus,/,
+  );
+});
+
+test('a linha de degrau e uma so para as duas escadas', () => {
+  // A da ferramenta e a de um turno desenham a mesma linha: nível, caçada, ▸ e ×. Eram duas cópias
+  // no primeiro esboço, e duas cópias divergem no primeiro conserto — a que ninguém olhar é que
+  // fica errada. Por isso o desenho dos degraus globais passa pela mesma função.
+  assert.match(
+    codigo,
+    /for \(const degrau of cfg\.degraus\) lista\.append\(linhaDeDegrau\(degrau, cfg\.degraus, emCurso\)\);/,
+  );
+  assert.match(codigo, /meusDegraus\.append\(linhaDeDegrau\(degrau, turno\.degraus\)\)/);
+  // **Ela mexe no array que recebe, e não devolve outro.** Quem guarda o array é quem chamou —
+  // `cfg` ou o turno —, e trocar a referência aqui deixava o dono a olhar para a lista velha.
+  const bloco = codigo.slice(codigo.indexOf('const linhaDeDegrau ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /ordenarDegraus\(degraus\);/);
+  assert.match(corpo, /const i = degraus\.indexOf\(degrau\);\s+if \(i >= 0\) degraus\.splice\(i, 1\);/);
+  assert.doesNotMatch(corpo, /cfg\.degraus/, 'a linha não pode saber que existe uma escada global');
+});
+
+test('uma escada propria vazia trava e diz, em vez de parar calada', () => {
+  // Automático desligado, nenhum degrau e nenhuma rede: o turno não tem para onde ir. Dizê-lo no
+  // diagnóstico é dizê-lo ANTES da viagem; sem isto, o grupo montava, viajava e só então parava,
+  // com o painel a falar de uma escada que aquele turno nunca ia ler.
+  const bloco = codigo.slice(codigo.indexOf('const faltaNoGrupo ='));
+  const corpo = bloco.slice(0, bloco.indexOf("return '';"));
+  assert.match(corpo, /turno\.onde === 'propria' &&\s+turno\.auto !== true &&/);
+  assert.match(corpo, /!\(turno\.degraus \|\| \[\]\)\.some\(\(d\) => d\?\.cacada\) &&/);
+  // A rede conta: com uma caçada escrita o turno sabe onde ir, e travar ali seria travar por nada.
+  assert.match(corpo, /!cacadasProprias\(turno\)\.length/);
+  assert.match(corpo, /\$\{qual\}ste turno tem escada só dele, mas não há nada nela/);
+});
+
+test('a janela so aparece com o automatico do turno ligado', () => {
+  // Um número de janela com o automático desligado é um campo que não governa nada — a mesma
+  // regra que a escada da ferramenta já segue com o `data-janela-linha`.
+  const bloco = codigo.slice(codigo.indexOf("if (turno.onde === 'propria') {"));
+  const corpo = bloco.slice(0, bloco.indexOf('item.append(meusDegraus, maisDegrau);'));
+  assert.match(corpo, /if \(turno\.auto === true\) \{/);
+  assert.ok(
+    corpo.indexOf('if (turno.auto === true) {') < corpo.indexOf("janela.type = 'number';"),
+    'a janela é desenhada dentro da condição do automático',
+  );
+  // E o primeiro degrau do turno nasce no Lv 1, pela razão da escada da ferramenta: um degrau
+  // acima do líder não faz nada, e o turno passaria a noite parado.
+  assert.match(corpo, /turno\.degraus\.length\s+\? turno\.degraus\.reduce\(\(m, d\) => Math\.max\(m, d\.nivel\), 0\) \+ 10\s+: 1;/);
 });
