@@ -1,0 +1,9 @@
+# O repositorio guarda tudo em LF, e o checkout nao converte para CRLF.
+# Sem isto o Windows devolve CRLF a cada checkout, o prettier reescreve, e cada
+# ficheiro tocado aparece inteiro no diff por causa de uma mudanca de uma linha.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.zip binary
+*.pdf binary
