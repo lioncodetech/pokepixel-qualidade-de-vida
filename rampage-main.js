@@ -65,6 +65,12 @@
   };
 
   const FAZ = { estado, abrir, mover };
+  /**
+   * A MARCA FICA NO DOM, PORQUE O DOM E' A UNICA COISA QUE OS DOIS MUNDOS PARTILHAM.
+   *
+   * Posta DEPOIS do ouvinte, de proposito: antes dele, ela mentiria. E um "ja' estou aqui" como
+   * evento teria o mesmo defeito ao contrario — perder-se-ia se o outro lado ainda nao escutasse.
+   */
   addEventListener(PEDIDO, (evento) => {
     const eco = evento?.detail?.eco;
     const acao = String(evento?.detail?.acao || '');
@@ -77,4 +83,5 @@
     );
   });
   addEventListener('pagehide', pararMovimento);
+  document.documentElement.dataset.lioncodeRampage = 'pronto';
 })();

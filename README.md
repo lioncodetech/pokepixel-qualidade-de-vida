@@ -2018,6 +2018,55 @@ Eventos futuros entram como novos adaptadores em `eventos-main.js`. O painel, a 
 fila e o histórico de execução continuam únicos; assim a próxima automação de evento é construída
 em cima desta, sem nascer outro relógio disputando o jogo.
 
+#### A ponte espera haver quem ouça antes de falar
+
+Medido no jogo logado em 26/10/2026, com **onze dias de recompensas por resgatar**: o painel dizia
+`0 recompensa(s) pronta(s)` e `Nenhum evento suportado respondeu` em **todo** carregamento da
+página. Não era a rede, nem o jogo: o `manifest` corre o bloco `ISOLATED` inteiro antes do bloco
+`MAIN` — os dois em `document_idle` —, então o pedido do arranque era disparado antes de
+`eventos-main.js` instalar o `addEventListener`. **Um `CustomEvent` sem ninguém a escutar não fica
+em fila: perde-se.** O painel esperava os 60 segundos, desistia, e só tentava outra vez na hora
+marcada.
+
+Reproduzido assim: recarregar a página dava sempre a falha, e disparar o mesmo pedido à mão segundos
+depois respondia na hora, com a lista completa.
+
+Agora `eventos-main.js` **marca o DOM** (`documentElement.dataset.lioncodeEventos`) depois de
+instalar o ouvinte, e todo pedido espera por essa marca antes de falar. Duas decisões aí dentro:
+
+- **a marca fica no DOM, e não num evento.** Um "já estou aqui" disparado como evento teria o mesmo
+  defeito ao contrário: perder-se-ia se o outro lado ainda não escutasse. Um atributo fica posto —
+  quem chegar depois lê-o na mesma. O DOM é a única coisa que os dois mundos partilham;
+- **espera-se, nunca se re-dispara.** Repetir o pedido até alguém responder resolveria a leitura,
+  mas um `resgatar` repetido resgataria duas vezes. Esperar serve todos os pedidos e não arrisca
+  nenhum.
+
+E o painel deixou de dizer zero quando não sabe: sem leitura nenhuma ele escreve **"ainda não li os
+eventos"**. Era essa frase que faltava para o defeito aparecer — `0 pronta(s)` com onze dias lá
+dentro não deixava ninguém desconfiar.
+
+#### A aba das missões chega depois da janela
+
+Com a ponte consertada, o resgate ainda morria — agora com outra frase: *"não achei a aba Missões
+diárias"*. O seletor estava certo o tempo todo. **Medido no jogo logado em 26/10/2026**, fechando e
+reabrindo a janela para cronometrar: a `.seasonal-window` aparece aos **46 ms** e o primeiro
+`.seasonal-nav button` só aos **409 ms**. O código procurava a aba na volta seguinte à janela e não
+achava nada.
+
+**Sexta ocorrência desta lição nesta extensão** — a loja do Mark, o inventário e as caçadas já
+tinham passado por ela; este adaptador nasceu sem ela. A janela e o conteúdo já eram esperados com
+`ate()`; a aba, no meio dos dois, é que não era. Agora é.
+
+Os dois defeitos juntos explicam o sintoma inteiro: o primeiro cegava o painel (dizia zero), o
+segundo matava o resgate. Encontrados com **onze dias de recompensas por resgatar**, todos resgatados
+depois da correção.
+
+A corrida da ponte não era só dos Eventos: **Raridades** e **Rampage** pedem no arranque pela mesma
+via e tinham o mesmo defeito — a Raridades chegou a mostrar "o jogo não respondeu — recarregue a
+página (F5)" com o jogo inteiro a funcionar. As três ponte levam agora a mesma marca no DOM
+(`lioncodeEventos`, `lioncodeRaridades`, `lioncodeRampage`), posta depois do ouvinte e esperada
+antes de cada pedido.
+
 ### World Boss
 
 Com **entrar no World Boss quando abrir** marcado e o módulo Eventos iniciado, a extensão consulta

@@ -61,7 +61,33 @@ PPX.modulo(
      * pacote desligada, pagina a meio de carregar —, ninguem responde nunca, e um painel que fica
      * para sempre em "procurando…" nao diz o que esta' errado.
      */
-    const pedirLista = (fresco) =>
+    /**
+     * A outra ponta da ponte ja' esta' a escutar?
+     *
+     * **MEDIDO NOS EVENTOS EM 26/10/2026, E A CORRIDA E' A MESMA AQUI.** O manifest corre o bloco
+     * ISOLATED inteiro antes do bloco MAIN — os dois em `document_idle` —, entao o pedido do
+     * arranque (`void buscar(false)`) sai antes de `raridades-main.js` instalar o ouvinte. Um
+     * `CustomEvent` sem ninguem a escutar nao fica em fila: perde-se, e o painel mostrava
+     * "o jogo nao respondeu — recarregue a pagina (F5)" sem o jogo ter nada de errado.
+     *
+     * Espera-se, nunca se re-dispara: re-disparar serviria a leitura e estragaria uma accao.
+     */
+    const pontePronta = async () => {
+      const fim = Date.now() + PACIENCIA;
+      while (Date.now() < fim) {
+        if (document.documentElement.dataset.lioncodeRaridades === 'pronto') return true;
+        await new Promise((ok) => setTimeout(ok, 200));
+      }
+      return document.documentElement.dataset.lioncodeRaridades === 'pronto';
+    };
+
+    const pedirLista = async (fresco) => {
+      if (!(await pontePronta()))
+        return { erro: 'a ponte com o jogo não carregou — recarregue a página (F5)' };
+      return pedirAoJogo(fresco);
+    };
+
+    const pedirAoJogo = (fresco) =>
       new Promise((resolver) => {
         const eco = `r${Date.now()}-${(proximoEco += 1)}`;
         let relogio = 0;

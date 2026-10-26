@@ -47,8 +47,28 @@ PPX.modulo(
       return Boolean(horarios && (calendario()?.valida({ horarios }) ?? true));
     };
 
+    /**
+     * A outra ponta da ponte ja' esta' a escutar?
+     *
+     * **MEDIDO NO JOGO EM 26/10/2026, E FALHAVA SEMPRE.** O manifest corre o bloco ISOLATED antes
+     * do bloco MAIN — os dois em `document_idle` —, entao o pedido do arranque era disparado antes
+     * de `eventos-main.js` instalar o `addEventListener`. Um `CustomEvent` sem ninguem a escutar
+     * nao fica em fila: perde-se. O painel esperava 60 s, dizia "nenhum evento respondeu", e so'
+     * tentava outra vez na hora marcada — com onze dias de recompensas por resgatar no jogo.
+     *
+     * Esperar pela marca conserta **todos** os pedidos de uma vez, e sem nenhum risco de repetir
+     * uma accao: nao se re-dispara nada: espera-se que haja quem ouça antes de falar.
+     */
+    const pontePronta = () =>
+      ate(() => document.documentElement.dataset.lioncodeEventos === 'pronto', 20000);
+
     let eco = 0;
-    const ponte = (acao, dados = {}) => new Promise((resolver) => {
+    const ponte = async (acao, dados = {}) => {
+      if (!(await pontePronta()))
+        return { erro: 'a ponte com o jogo não carregou — recarregue a página (F5)' };
+      return pedirAoJogo(acao, dados);
+    };
+    const pedirAoJogo = (acao, dados = {}) => new Promise((resolver) => {
       const id = `ev${Date.now()}-${++eco}`;
       let limite = 0;
       const ouvir = (e) => {
@@ -125,8 +145,16 @@ PPX.modulo(
     const desenhar = () => {
       const f = falta();
       const quando = !cfg.ligada ? 'parado' : correndo ? 'resgatando' : f === null ? 'horário inválido' : f <= 0 ? 'agora' : `em ${Math.ceil(f / 60000)} min`;
-      const pendentes = (estadoVisto?.eventos || []).reduce((n, e) => n + (e.pendentes?.length || 0), 0);
-      campo('[data-resumo]').textContent = `${pendentes} recompensa(s) pronta(s) · ${quando}`;
+      // **Sem leitura nenhuma, "0 pronta(s)" e' mentira, nao e' zero.** Era o que escondia o
+      // defeito da ponte: o painel dizia zero com onze dias de recompensas la' dentro, e nada
+      // naquela frase deixava desconfiar. Quem nao sabe diz que nao sabe.
+      const pendentes = estadoVisto
+        ? (estadoVisto.eventos || []).reduce((n, e) => n + (e.pendentes?.length || 0), 0)
+        : null;
+      campo('[data-resumo]').textContent =
+        pendentes === null
+          ? `ainda não li os eventos · ${quando}`
+          : `${pendentes} recompensa(s) pronta(s) · ${quando}`;
       campo('[data-ligar]').textContent = cfg.ligada ? 'Parar' : 'Iniciar';
       campo('[data-ligar]').classList.toggle('ativo', cfg.ligada);
       campo('[data-agora]').disabled = correndo;

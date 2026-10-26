@@ -76,3 +76,23 @@ test('configuração exportada não leva estado da conta', () => {
   assert.match(fim, /time/);
   assert.doesNotMatch(fim, /ultimoEvento|estadoVisto|restantes/);
 });
+
+test('a ponte espera haver quem ouca antes de falar', () => {
+  // **A MESMA CORRIDA DOS EVENTOS, ENCONTRADA NO JOGO LOGADO EM 26/10/2026.** O manifest corre o
+  // bloco ISOLATED inteiro antes do bloco MAIN — os dois em `document_idle` —, então o pedido do
+  // arranque sai antes de a outra ponta instalar o `addEventListener(PEDIDO)`. Um `CustomEvent`
+  // sem ninguém a escutar **não fica em fila**: perde-se, e o painel culpava o jogo por uma coisa
+  // que era de ordem de carregamento.
+  //
+  // **A marca fica no DOM, e não num evento**, porque o DOM é a única coisa que os dois mundos
+  // partilham; um "já estou aqui" disparado como evento teria o mesmo defeito ao contrário.
+  // **Espera-se, nunca se re-dispara**: re-disparar serviria a leitura e estragaria uma ação.
+  assert.match(codigo, /dataset\.lioncodeRampage === 'pronto'/);
+  assert.match(ponte, /document\.documentElement\.dataset\.lioncodeRampage = 'pronto';/);
+  const fim = ponte.slice(ponte.indexOf('addEventListener(PEDIDO'));
+  assert.ok(
+    fim.indexOf("dataset.lioncodeRampage = 'pronto'") > 0,
+    'a marca é posta DEPOIS de o ouvinte existir, senão ela mente',
+  );
+  assert.match(codigo, /a ponte com o jogo não carregou — recarregue a página \(F5\)/);
+});

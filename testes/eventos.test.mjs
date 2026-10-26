@@ -104,3 +104,64 @@ test('World Boss nao repete entrada confirmada nem posicao na fila', () => {
   assert.match(codigo, /if \(lido\.fila > 0\)/);
   assert.match(codigo, /setTimeout\(\(\) => void verificarWorldBoss\(\), 30000\)/);
 });
+
+test('a ponte espera haver quem ouca antes de falar', () => {
+  // **MEDIDO NO JOGO LOGADO EM 26/10/2026, E FALHAVA EM TODO CARREGAMENTO.** O manifest corre o
+  // bloco ISOLATED inteiro antes do bloco MAIN — os dois em `document_idle` —, então o pedido do
+  // arranque (`void atualizar()`) era disparado antes de `eventos-main.js` instalar o
+  // `addEventListener(PEDIDO)`. Um `CustomEvent` sem ninguém a escutar **não fica em fila**:
+  // perde-se. O painel esperava os 60 s, dizia "Nenhum evento suportado respondeu" e só tentava
+  // outra vez na hora marcada. Encontrado com onze dias de recompensas por resgatar no jogo.
+  //
+  // Reproduzido assim: recarregar a página dava sempre a falha; disparar o mesmo pedido à mão
+  // segundos depois respondia na hora, com a lista completa.
+  assert.match(
+    codigo,
+    /const pontePronta = \(\) =>\s+ate\(\(\) => document\.documentElement\.dataset\.lioncodeEventos === 'pronto', \d+\)/,
+  );
+  // **A marca fica no DOM, e não num evento.** Um "já estou aqui" disparado como evento teria o
+  // mesmo defeito ao contrário — perder-se-ia se o outro lado ainda não escutasse. Um atributo
+  // fica posto: quem chegar depois lê-o na mesma.
+  assert.match(ponte, /document\.documentElement\.dataset\.lioncodeEventos = 'pronto';/);
+  const fim = ponte.slice(ponte.indexOf('addEventListener(PEDIDO'));
+  assert.ok(
+    fim.indexOf("dataset.lioncodeEventos = 'pronto'") > 0,
+    'a marca é posta DEPOIS de o ouvinte existir, senão ela mente',
+  );
+  // E todo pedido passa pela espera — inclusive o `resgatar`. Por isso a correção é esperar, e
+  // nunca re-disparar: um `resgatar` repetido resgataria duas vezes.
+  assert.match(codigo, /const ponte = async \(acao, dados = \{\}\) => \{\s+if \(!\(await pontePronta\(\)\)\)/);
+  assert.match(codigo, /return pedirAoJogo\(acao, dados\);/);
+});
+
+test('sem ter lido os eventos o painel nao diz zero', () => {
+  // Era o que escondia o defeito da ponte: "0 recompensa(s) pronta(s)" com onze dias de
+  // recompensas lá dentro. Zero e "ainda não sei" são coisas diferentes, e só uma delas é
+  // verdade quando a leitura falhou. É a mesma regra das outras ferramentas: o número que se
+  // mostra é o que se leu, e o que não se leu não se inventa.
+  const bloco = codigo.slice(codigo.indexOf('const desenhar = () => {'));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(corpo, /const pendentes = estadoVisto\s+\? \(estadoVisto\.eventos \|\| \[\]\)\.reduce/);
+  assert.match(corpo, /: null;/);
+  assert.match(corpo, /pendentes === null\s+\? `ainda não li os eventos/);
+});
+
+test('a aba das missoes e procurada com paciencia, porque chega depois da janela', () => {
+  // **MEDIDO NO JOGO LOGADO EM 26/10/2026**, com a janela fechada e reaberta para cronometrar: a
+  // `.seasonal-window` aparece aos **46 ms** e o primeiro `.seasonal-nav button` só aos **409 ms**.
+  // O código procurava a aba na volta seguinte à janela, não achava nada, e o resgate morria com
+  // "não achei a aba Missões diárias" — com onze dias de recompensas por resgatar no jogo. O
+  // seletor estava certo o tempo todo; o que faltava era esperar.
+  //
+  // Sexta ocorrência desta lição nesta extensão: a loja do Mark, o inventário e as caçadas já
+  // tinham passado por ela. Este adaptador nasceu sem ela.
+  const abrir = ponte.slice(ponte.indexOf('async abrir()'));
+  const corpo = abrir.slice(0, abrir.indexOf('async resgatarVisivel'));
+  assert.match(
+    corpo,
+    /const missoes = await ate\(\(\) =>\s+\[\.\.\.janela\.querySelectorAll\('\.seasonal-nav button'\)\]\.find/,
+  );
+  // A janela e o conteúdo já esperavam; a aba, no meio dos dois, é que não esperava.
+  assert.match(corpo, /const janela = await ate\(\(\) => document\.querySelector\('\.seasonal-window'\)\)/);
+  assert.match(corpo, /const conteudo = await ate\(\(\) => janela\.querySelector\('\.seasonal-content'\)\)/);
+});

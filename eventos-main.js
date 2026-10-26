@@ -51,8 +51,18 @@
       evento.open();
       const janela = await ate(() => document.querySelector('.seasonal-window'));
       if (!janela) throw new Error('a janela do Halloween não abriu');
-      const missoes = [...janela.querySelectorAll('.seasonal-nav button')].find((b) =>
-        /missões|missions/i.test((b.textContent || '').trim()),
+      /**
+       * **AS ABAS CHEGAM DEPOIS DA JANELA.** Sexta vez que esta ferramenta aprende a mesma coisa —
+       * a loja do Mark, o inventario, as cacadas, todas ja' tinham passado por aqui, e este
+       * adaptador nasceu sem a licao. MEDIDO NO JOGO LOGADO EM 26/10/2026: a `.seasonal-window`
+       * aparece aos **46 ms** e o primeiro `.seasonal-nav button` so' aos **409 ms**. Procurar a
+       * aba na volta seguinte a' janela nao achava nada, e o resgate morria com
+       * "nao achei a aba Missoes diarias" — com onze dias de recompensas la' dentro.
+       */
+      const missoes = await ate(() =>
+        [...janela.querySelectorAll('.seasonal-nav button')].find((b) =>
+          /missões|missions/i.test((b.textContent || '').trim()),
+        ),
       );
       if (!missoes) throw new Error('não achei a aba Missões diárias');
       missoes.click();
@@ -213,6 +223,13 @@
     irCidadeWorldBoss: irParaCidade,
     entrarWorldBoss,
   };
+  /**
+   * A MARCA FICA NO DOM, PORQUE O DOM E' A UNICA COISA QUE OS DOIS MUNDOS PARTILHAM.
+   *
+   * Um `CustomEvent` de "ja' estou aqui" teria o mesmo defeito ao contrario: disparado antes de o
+   * outro lado escutar, perde-se, porque eventos nao ficam em fila. Um atributo fica — quem chegar
+   * depois le-o na mesma.
+   */
   addEventListener(PEDIDO, (evento) => {
     const eco = evento?.detail?.eco;
     const fazer = FAZ[String(evento?.detail?.acao || '')];
@@ -220,4 +237,5 @@
     if (!fazer) return responder({ erro: 'ação de eventos desconhecida' });
     Promise.resolve(fazer(evento.detail)).then(responder).catch((e) => responder({ erro: String(e?.message || e) }));
   });
+  document.documentElement.dataset.lioncodeEventos = 'pronto';
 })();

@@ -40,8 +40,26 @@ PPX.modulo(
       return null;
     };
 
+    /**
+     * A outra ponta da ponte ja' esta' a escutar?
+     *
+     * **MEDIDO NOS EVENTOS EM 26/10/2026, E A CORRIDA E' A MESMA AQUI.** O bloco ISOLATED corre
+     * inteiro antes do bloco MAIN, os dois em `document_idle`, e o pedido do arranque
+     * (`void bater()`) saia antes de `rampage-main.js` instalar o ouvinte. Um `CustomEvent` sem
+     * ninguem a escutar nao fica em fila: perde-se.
+     *
+     * Espera-se, nunca se re-dispara: um `abrir` ou um `mover` repetido mexeria no jogo duas vezes.
+     */
+    const pontePronta = () =>
+      ate(() => document.documentElement.dataset.lioncodeRampage === 'pronto', 20000);
+
     let eco = 0;
-    const ponte = (pedido) => new Promise((resolver) => {
+    const ponte = async (pedido) => {
+      if (!(await pontePronta()))
+        return { erro: 'a ponte com o jogo não carregou — recarregue a página (F5)' };
+      return pedirAoJogo(pedido);
+    };
+    const pedirAoJogo = (pedido) => new Promise((resolver) => {
       const id = `r${Date.now()}-${++eco}`;
       const ouvir = (e) => {
         if (e?.detail?.eco !== id) return;
