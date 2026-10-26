@@ -96,3 +96,58 @@ test('a ponte espera haver quem ouca antes de falar', () => {
   );
   assert.match(codigo, /a ponte com o jogo não carregou — recarregue a página \(F5\)/);
 });
+
+test('o dano de um ataque e a diferenca, porque o jogo nao da o do ataque', () => {
+  // **MEDIDO NA CONTA DO DONO EM 26/10/2026, NO ARTICUNO.** A API do Rampage dá `personal_damage`
+  // — o acumulado do dono NAQUELE evento — e `attempts_used`; não existe histórico por ataque.
+  // Na medição: `personal_damage` 0 antes do ataque e 575 depois, `attempts_used` 0 → 1, e o HP do
+  // chefe caiu **exatamente 575** no mesmo intervalo. Logo a diferença entre duas leituras é o
+  // dano daquele ataque, e é a única medida que existe.
+  //
+  // O `RampageLiveArena.result` foi considerado e **não serve**: naquele evento o modo era
+  // `cinematic_v1` e a arena ao vivo ficou inativa do princípio ao fim, com `result` nulo.
+  assert.match(ponte, /dano: Math\.max\(0, Number\(d\.personal_damage\) \|\| 0\),/);
+  assert.match(codigo, /const danoAntes = Number\(estadoVisto\?\.dano\);/);
+  // A leitura de ANTES fica antes de abrir o Rampage: daí para a frente todo caminho que acabe em
+  // ataque passa pelo mesmo ponto, e um ataque sem par de leituras fica sem dano em vez de ficar
+  // com um número errado.
+  const corpo = codigo.slice(codigo.indexOf('const danoAntes'), codigo.indexOf("dizer('Ataque registrado.')"));
+  assert.ok(
+    corpo.indexOf('const danoAntes') < corpo.indexOf("dizer('Abrindo o Rampage…')"),
+    'a leitura de antes acontece antes de abrir',
+  );
+  assert.match(corpo, /dano: mediu === null \? null : depois - danoAntes,/);
+});
+
+test('o numero pode demorar, entao espera-se por ele em vez de ler uma vez', () => {
+  // Medido: o `personal_damage` sobe depois de a luta fechar, não no instante do último golpe. Ler
+  // uma vez só daria zero de vez em quando — e um zero guardado como dano seria pior do que não
+  // guardar nada, porque ficaria no histórico a dizer que o ataque não fez nada.
+  const corpo = codigo.slice(codigo.indexOf('const danoAntes'), codigo.indexOf("dizer('Ataque registrado.')"));
+  assert.match(corpo, /const mediu = await ate\(async \(\) => \{/);
+  // **E relê-se o estado a cada volta.** Olhar sempre para a mesma leitura faria a espera passar o
+  // tempo todo a perguntar a uma fotografia.
+  assert.match(corpo, /const lido = await estado\(\);/);
+  assert.match(corpo, /if \(lido\?\.ok\) estadoVisto = lido;/);
+  // E o ajudante tem de aguardar a condição: uma Promise é sempre verdadeira, e sem o `await` a
+  // espera dava por cumprida a primeira pergunta que fizesse.
+  assert.match(codigo, /const r = await fn\(\);/);
+});
+
+test('um ataque sem medida fica "nao medi", e nunca zero', () => {
+  // Zero e "não sei" são coisas diferentes, e só uma delas é verdade quando a leitura não veio. É
+  // a mesma regra que o painel dos Eventos passou a seguir no mesmo dia, depois de ele ter dito
+  // "0 recompensas prontas" com onze dias por resgatar.
+  assert.match(codigo, /a\.dano === null \|\| a\.dano === undefined \? 'não medi' : danoEmTexto\(a\.dano\)/);
+  assert.match(codigo, /quanto\.className = 'semMedida'/);
+});
+
+test('o historico guarda dez, e nao cresce sem fim', () => {
+  // Dez é o que cabe no painel sem o tornar uma lista de rolar. O corte é feito **na escrita e na
+  // leitura**: só na escrita, uma chave que viesse de outra janela com cinquenta entradas passaria.
+  assert.match(codigo, /const QUANTOS_GUARDO = 10;/);
+  assert.match(codigo, /return Array\.isArray\(lido\) \? lido\.slice\(0, QUANTOS_GUARDO\) : \[\];/);
+  assert.match(codigo, /\[registo, \.\.\.historico\(\)\]\.slice\(0, QUANTOS_GUARDO\)/);
+  // O mais recente entra na frente: é o que se quer ver primeiro.
+  assert.match(codigo, /const todos = \[registo, \.\.\.historico\(\)\]/);
+});

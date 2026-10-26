@@ -8,6 +8,9 @@ PPX.modulo(
     const CHAVE_POS = 'lioncode:rampage:posicao';
     const CHAVE_MIN = 'lioncode:rampage:minimizado';
     const CHAVE_PLACAR = 'lioncode:rampage:placar';
+    const CHAVE_HISTORICO = 'lioncode:rampage:historico';
+    /** Dez, porque e' o que cabe no painel sem o tornar uma lista de rolar. */
+    const QUANTOS_GUARDO = 10;
     const PEDIDO = 'lioncode:rampage:pedido';
     const RESPOSTA = 'lioncode:rampage:resposta';
     const MINHA_VEZ = 'rampage';
@@ -30,10 +33,13 @@ PPX.modulo(
     let cfg = { ...PADRAO, ...(ler(CHAVE, null) || {}) };
     const gravar = () => gravarChave(CHAVE, cfg);
     const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));
+    // O `await` no `fn()` nao e' enfeite: uma condicao assincrona devolve uma Promise, e uma
+    // Promise e' sempre verdadeira — sem ele, `ate` daria por cumprida a primeira pergunta que
+    // fizesse. Esperar por um valor que nao e' Promise nao muda nada para quem ja' usava isto.
     const ate = async (fn, limite) => {
       const inicio = Date.now();
       while (Date.now() - inicio < limite) {
-        const r = fn();
+        const r = await fn();
         if (r) return r;
         await espera(250);
       }
@@ -98,6 +104,10 @@ PPX.modulo(
         <label>time salvo <select data-time><option value="">equipe atual</option></select><button type="button" data-recarregar-times title="Atualizar a lista de times">↻</button></label>
         <label class="marca"><input type="checkbox" data-movimento> movimentar durante a luta</label>
         <label class="marca"><input type="checkbox" data-voltar> voltar à caçada ao terminar</label>
+        <details data-historico-caixa>
+          <summary>últimos ataques</summary>
+          <ul data-historico></ul>
+        </details>
         <div data-config></div>
         <p data-estado></p>
       </div>`;
@@ -106,6 +116,8 @@ PPX.modulo(
       #lioncode-rampage,#lioncode-rampage *{box-sizing:border-box}#lioncode-rampage{position:fixed;z-index:2147483000;width:260px;background:#11161f;color:#e7edf6;border:1px solid #2a3244;border-radius:10px;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px #0008}
       #lioncode-rampage header{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #2a3244;cursor:move}#lioncode-rampage header strong{flex:1}#lioncode-rampage header button{border:0;background:none;color:#8b97a8;cursor:pointer}
       #lioncode-rampage .resumo{padding:6px 10px;color:#8b97a8;font-size:12px}#lioncode-rampage [data-status]{margin:0 10px 8px;width:calc(100% - 20px);cursor:pointer;font-weight:700}#lioncode-rampage [data-status].feito{border-color:#3fb950;color:#7ee787;background:#12251a}#lioncode-rampage .botoes{display:flex;gap:6px;padding:0 10px 10px}#lioncode-rampage button,#lioncode-rampage select,#lioncode-rampage input{border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}#lioncode-rampage .botoes button{flex:1;cursor:pointer}#lioncode-rampage .corpo{display:grid;gap:8px;padding:0 10px 10px}#lioncode-rampage.minimizado .corpo{display:none}#lioncode-rampage label{display:flex;align-items:center;gap:6px;color:#c3ccda}#lioncode-rampage label select{flex:1;min-width:0}#lioncode-rampage .marca input{width:auto}#lioncode-rampage p{margin:0;color:#8b97a8;font-size:12px}#lioncode-rampage p.mau{color:#f85149}#lioncode-rampage .campo-mau{border-color:#f85149}
+      #lioncode-rampage [data-historico-caixa]{color:#c3ccda;font-size:12px}#lioncode-rampage [data-historico-caixa] summary{cursor:pointer;color:#8b97a8}
+      #lioncode-rampage [data-historico]{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px}#lioncode-rampage [data-historico] li{display:flex;justify-content:space-between;gap:8px}#lioncode-rampage [data-historico] strong{color:#7fd38a}#lioncode-rampage [data-historico] strong.semMedida{color:#8b97a8;font-weight:400;font-style:italic}#lioncode-rampage [data-historico] li.vazio{color:#8b97a8}
     `;
     document.documentElement.append(estilo, painel);
     const campo = (s) => painel.querySelector(s);
@@ -146,6 +158,37 @@ PPX.modulo(
     let eventoVisto = '';
     let proxima = 0;
     const placar = () => ler(CHAVE_PLACAR, {}) || {};
+
+    /**
+     * Os ultimos ataques, do mais recente para o mais antigo.
+     *
+     * **O JOGO NAO GUARDA O DANO POR ATAQUE.** A API do Rampage da' `personal_damage`, que e' o
+     * acumulado do dono NAQUELE evento, e `attempts_used`. Medido na conta do dono em 26/10/2026,
+     * no Articuno: `personal_damage` 0 antes do ataque e 575 depois, com o HP do chefe a cair
+     * exactamente 575 no mesmo intervalo. Entao o dano de um ataque e' a **diferenca** entre a
+     * leitura de antes e a de depois, e isso so' da' para medir de dentro da propria rodada.
+     *
+     * O `RampageLiveArena.result` foi considerado e **nao serve**: neste evento o modo e'
+     * `cinematic_v1`, e a arena ao vivo ficou inactiva do principio ao fim, com `result` nulo.
+     */
+    const historico = () => {
+      const lido = ler(CHAVE_HISTORICO, []);
+      return Array.isArray(lido) ? lido.slice(0, QUANTOS_GUARDO) : [];
+    };
+
+    const anotarAtaque = (registo) => {
+      const todos = [registo, ...historico()].slice(0, QUANTOS_GUARDO);
+      gravarChave(CHAVE_HISTORICO, todos);
+      return todos;
+    };
+
+    /** `575` vira `575`; `1234567` vira `1,23 mi`, que e' o que cabe na linha. */
+    const danoEmTexto = (n) => {
+      if (!Number.isFinite(n)) return '—';
+      if (n >= 1e6) return `${(n / 1e6).toFixed(2)} mi`;
+      if (n >= 1e4) return `${(n / 1e3).toFixed(1)} mil`;
+      return String(n);
+    };
     const foiAtacado = (evento = estadoVisto?.evento) => Boolean(evento && placar()[evento]?.atacado);
     const sincronizarPlacar = () => {
       const evento = estadoVisto?.evento;
@@ -169,6 +212,40 @@ PPX.modulo(
       }
       return Math.max(0, proxima - Date.now());
     };
+    /**
+     * Os dez ultimos ataques: quando, contra quem, e quanto.
+     *
+     * Um ataque sem medida aparece como "nao medi" e **nao** como zero: sao coisas diferentes, e
+     * so' uma delas e' verdade. E' a mesma regra que o painel dos Eventos passou a seguir no mesmo
+     * dia, depois de ele ter dito "0 recompensas" com onze dias por resgatar.
+     */
+    function desenharHistorico() {
+      const lista = campo('[data-historico]');
+      if (!lista) return;
+      const todos = historico();
+      lista.innerHTML = '';
+      if (!todos.length) {
+        const vazio = document.createElement('li');
+        vazio.className = 'vazio';
+        vazio.textContent = 'Nenhum ataque registrado ainda.';
+        lista.append(vazio);
+        return;
+      }
+      for (const a of todos) {
+        const linha = document.createElement('li');
+        const quando = new Date(a.quando);
+        const dia = `${String(quando.getDate()).padStart(2, '0')}/${String(quando.getMonth() + 1).padStart(2, '0')}`;
+        const hora = `${String(quando.getHours()).padStart(2, '0')}:${String(quando.getMinutes()).padStart(2, '0')}`;
+        const quem = document.createElement('span');
+        quem.textContent = `${dia} ${hora} · ${a.nome || 'Rampage'}${a.nivel ? ` Lv ${a.nivel}` : ''}`;
+        const quanto = document.createElement('strong');
+        quanto.textContent = a.dano === null || a.dano === undefined ? 'não medi' : danoEmTexto(a.dano);
+        if (a.dano === null || a.dano === undefined) quanto.className = 'semMedida';
+        linha.append(quem, quanto);
+        lista.append(linha);
+      }
+    }
+
     function resumo() {
       const evento = estadoVisto?.ativo ? `${estadoVisto.nome} · ${estadoVisto.restantes} tentativa(s)` : 'evento indisponível';
       const f = falta();
@@ -260,6 +337,12 @@ PPX.modulo(
         }
         if (parar) return dizer('Ciclo parado.');
 
+        // A leitura de ANTES, guardada aqui e nao mais perto: daqui para a frente qualquer
+        // caminho que acabe em ataque passa pelo mesmo ponto, e um ataque sem par de leituras
+        // ficaria sem dano em vez de ficar com um numero errado.
+        const danoAntes = Number(estadoVisto?.dano);
+        const eventoDoAtaque = { evento: estadoVisto.evento, nome: estadoVisto.nome, nivel: estadoVisto.nivel };
+
         dizer('Abrindo o Rampage…');
         const abriu = await ponte({ acao: 'abrir' });
         if (!abriu?.ok) return dizer(abriu?.erro || 'não consegui abrir o Rampage', true);
@@ -287,7 +370,31 @@ PPX.modulo(
         const voltouDoRampage = await esperarVoltaDoRampage(estadoVisto.modo);
         if (!voltouDoRampage)
           return dizer('Ataque registrado, mas o jogo ainda não voltou do mapa do Rampage.', true);
+        /**
+         * **O DANO E' A DIFERENCA, E ELA PODE DEMORAR A APARECER.**
+         *
+         * Medido no Articuno em 26/10/2026: o `personal_damage` sobe depois de a luta fechar, nao
+         * no instante do ultimo golpe. Ler uma vez so' daria zero de vez em quando, e um zero
+         * guardado como dano seria pior do que nao guardar nada — ficaria no historico a dizer que
+         * o ataque nao fez nada. Entao espera-se o numero mexer, e se nao mexer anota-se que nao
+         * se mediu.
+         */
         estadoVisto = await estado();
+        if (Number.isFinite(danoAntes)) {
+          const mediu = await ate(async () => {
+            const lido = await estado();
+            if (lido?.ok) estadoVisto = lido;
+            const agora = Number(estadoVisto?.dano);
+            return Number.isFinite(agora) && agora > danoAntes ? agora : null;
+          }, 12000);
+          const depois = mediu === null ? Number(estadoVisto?.dano) : mediu;
+          anotarAtaque({
+            ...eventoDoAtaque,
+            quando: Date.now(),
+            dano: mediu === null ? null : depois - danoAntes,
+          });
+          desenharHistorico();
+        }
         dizer('Ataque registrado.');
 
         if (cfg.voltar && origem?.nome) {
@@ -410,6 +517,7 @@ PPX.modulo(
     dizer(cfg.ligada ? 'Ligado. Aguardando o Rampage e o horário.' : 'Parado.');
     globalThis.PPX?.controlar?.('rampage', mostrar);
     mostrar(globalThis.PPX?.visivel?.('rampage') !== false);
+    desenharHistorico();
     void bater();
     const relogio = setInterval(bater, 30000);
     addEventListener('pagehide', () => clearInterval(relogio));

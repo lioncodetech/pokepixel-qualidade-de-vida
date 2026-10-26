@@ -25,6 +25,35 @@ O painel também tem **Atacar agora** e **Parar ciclo**. A expedição nunca é 
 configuração inválida ou um botão indisponível faz a rotina parar sem repetir o clique que consome a
 tentativa.
 
+### Os dez últimos ataques, com o dano de cada um
+
+Dentro do painel, **últimos ataques** guarda os dez mais recentes: data, hora, contra quem, e quanto
+dano aquele ataque fez.
+
+**O jogo não guarda o dano por ataque.** A API do Rampage dá `personal_damage` — o acumulado do dono
+*naquele evento* — e `attempts_used`; não existe histórico. Então o dano de um ataque é a
+**diferença entre a leitura de antes e a de depois**, e isso só se consegue medir de dentro da
+própria rodada, que é onde a ferramenta já está.
+
+Medido na conta do dono em 26/10/2026, no Articuno: `personal_damage` **0 antes do ataque e 575
+depois**, `attempts_used` 0 → 1, e o HP do chefe caiu **exatamente 575** no mesmo intervalo — é o
+que prova que o número é mesmo o dano daquele ataque, e não outra coisa.
+
+Duas consequências medidas:
+
+- **o número demora a aparecer.** Ele sobe depois de a luta fechar, não no instante do último golpe.
+  Por isso a ferramenta espera o acumulado mexer, relendo o estado a cada volta, em vez de ler uma
+  vez só — ler uma vez daria zero de vez em quando;
+- **sem medida, fica "não medi", nunca zero.** Um zero guardado como dano seria pior do que não
+  guardar nada: ficaria no histórico a dizer que o ataque não fez nada. É a mesma regra que o painel
+  dos Eventos passou a seguir no mesmo dia.
+
+O `RampageLiveArena.result` foi considerado como fonte e **não serve**: naquele evento o modo era
+`cinematic_v1`, e a arena ao vivo ficou inativa do princípio ao fim, com `result` nulo.
+
+A banca `testes/banca-rampage.html` exercita o resto fora do jogo: o teto de dez, o "não medi", o
+formato dos números e o atraso do acumulado (`?lento=N` e `?nunca=1`).
+
 As quinze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
@@ -288,6 +317,54 @@ o time guardado usa — e não o nome.
 O motivo é concreto: na conta onde isto foi levantado havia **dois Tyranitar**, um Nv.203 no time e
 um Nv.151 na mochila. Guardar por nome teria trocado um pelo outro na primeira aplicação, e o time
 "certo" voltaria com o Pokémon errado dentro.
+
+### Quem está na equipe é o servidor que diz
+
+Não o HUD, e não o inventário. **Medido na conta do dono em 26/10/2026, com as três fontes lado a
+lado**, logo depois de uma remoção:
+
+| fonte | o que dizia |
+| --- | --- |
+| `Api.getTeam()` | Gyarados, Dragonite, Gengar |
+| inventário | Gyarados, Dragonite, Gengar |
+| HUD | Gyarados, Dragonite, Gengar **e Alakazam** |
+
+O Alakazam ficou no HUD durante minutos. Não era atraso: ele não se acertava sozinho.
+
+O inventário também não serve, e por um motivo diferente e já pago caro — ele pinta a grade em
+etapas, as células entram antes da classe `is-equipped`, e a mochila reabre na última categoria
+usada. Foi por isso que a ferramenta tinha passado a ler o HUD. Mas o outro lado do mesmo problema
+ficou por tratar: **cada um dos dois mente num momento diferente.** O inventário mente na abertura;
+o HUD mente *depois de uma ação* — que é precisamente quando esta ferramenta pergunta.
+
+Daí os quatro sintomas do mesmo dia, todos com uma raiz só:
+
+- *"o cartão de X não tem Desequipar"* — o HUD dizia que X estava na equipe; o cartão, que vem do
+  estado verdadeiro, oferecia Equipar;
+- *"o jogo não tirou X depois de 8 s"* — o jogo tinha tirado; o HUD é que não mudou;
+- *"não consegui tornar X ativo"* — a confirmação da liderança também era lida do HUD;
+- *"os Times disseram que montaram X, mas a equipe na tela não é nenhum time guardado"* — a porta
+  `qual`, que a Escada usa para saber em que ponto da fila está, lia o HUD com o fantasma dentro.
+
+Agora a composição e a liderança vêm de `Api.getTeam()`, pela ponte `times-main.js`, e o HUD fica
+para o que ele faz bem: dar nome e nível a quem a lista nomeia. Três detalhes que não são opcionais:
+
+- **a espera por uma ação pergunta ao servidor**, com meio segundo entre perguntas — a 60 ms, os 8 s
+  do `alternar` seriam mais de cem pedidos por troca;
+- **a equipe é lida antes de qualquer conta sobre ela.** Os leitores síncronos servem uma cópia da
+  última leitura, e uma cópia vazia tornaria "não há nada a fazer" indistinguível de "ainda não
+  perguntei" — o `A equipe já é essa` sairia com a equipe errada na tela;
+- **a porta `qual` continua síncrona**, de propósito: a Escada chama-a de dentro de um
+  `timeSeguinte` síncrono, e torná-la assíncrona arrastaria o `await` por toda a cadeia de chamadas
+  dela. Ela serve a resposta do servidor quando há uma, e o HUD só enquanto não há. A divisão vale
+  porque o HUD mente *depois de uma ação*: os dois lugares em que a Escada pergunta depois de uma
+  ação perguntam logo após um `usar`, que acaba de ler o servidor; o terceiro pergunta no arranque,
+  sem ação nenhuma antes, que é exatamente o caso em que o HUD não mente.
+
+E um defeito que veio de carona, igual ao que o Rampage tinha no mesmo dia: o ajudante de espera
+`ate` não aguardava a condição. **Uma condição assíncrona devolve uma Promise, e uma Promise é
+sempre verdadeira** — sem o `await`, toda espera por algo que se pergunta ao jogo se dava por
+cumprida na primeira volta.
 
 ### As três regras do jogo que mandam na ordem das operações
 

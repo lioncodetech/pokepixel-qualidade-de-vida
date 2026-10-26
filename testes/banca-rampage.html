@@ -1,0 +1,168 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do Rampage</title>
+<!--
+  Banca do historico de ataques do Rampage, fora do jogo.
+
+  O `PokeIdle` daqui e' de mentira, mas a FORMA dos dados nao e': os campos vieram da conta real em
+  26/10/2026, de `PokeIdle.Api.getRampage(true)` no evento do Articuno — inclusive o
+  `personal_damage`, que e' o acumulado do dono NAQUELE evento e nao o dano de um ataque. Naquela
+  medicao ele estava em 0 antes do ataque e em 575 depois, com o HP do chefe a cair exactamente 575.
+
+  O que ela prova: que o dano de um ataque e' a **diferenca** entre duas leituras; que a diferenca
+  continua certa quando o numero so' aparece uns segundos depois da luta; que um ataque sem medida
+  e' guardado como "nao medi" e **nao** como zero; e que a lista nunca passa de dez.
+
+  `?lento=N` faz o `personal_damage` so' subir N milissegundos depois do fim da luta. `?nunca=1`
+  nunca o faz subir — e' o caso em que a ferramenta tem de anotar "nao medi".
+
+  Abra pelo servidor estatico do projeto; por `file://` o navegador recusa carregar `../rampage.js`.
+-->
+<style>
+  body {
+    margin: 0;
+    padding: 16px 16px 16px 300px;
+    background: #0b0f16;
+    color: #e7edf6;
+    font: 14px/1.5 system-ui, sans-serif;
+  }
+  h1 {
+    font-size: 16px;
+    margin: 0 0 12px;
+  }
+  button {
+    border: 1px solid #2a3244;
+    border-radius: 6px;
+    background: #182030;
+    color: #e7edf6;
+    padding: 6px 10px;
+    cursor: pointer;
+    margin: 0 6px 6px 0;
+  }
+  pre {
+    background: #11161f;
+    border: 1px solid #2a3244;
+    border-radius: 8px;
+    padding: 10px;
+    white-space: pre-wrap;
+    font-size: 12px;
+  }
+  .ok {
+    color: #7fd38a;
+  }
+  .mau {
+    color: #f85149;
+  }
+</style>
+<h1>Banca do Rampage — o dano de cada ataque</h1>
+<p>
+  <button data-lutar>simular um ataque</button>
+  <button data-encher>encher com 12 ataques</button>
+  <button data-limpar>limpar o histórico</button>
+</p>
+<pre data-saida>—</pre>
+
+<script>
+  window.PPX = { modulo: (meta, fn) => fn() };
+
+  const args = new URLSearchParams(location.search);
+  const ATRASO = Number(args.get('lento') || 0);
+  const NUNCA = args.has('nunca');
+
+  // ---- o jogo de mentira, com a forma medida -------------------------------
+  const JOGO = {
+    personal_damage: 0,
+    attempts_used: 0,
+    attempts_remaining: 1,
+    remaining_hp: 959582470,
+  };
+
+  window.PokeIdle = {
+    Api: {
+      getRampage: async () => ({
+        data: {
+          active: true,
+          mode: 'cinematic_v1',
+          event: {
+            id: 'articuno:1792969200',
+            species_name: 'Articuno',
+            boss_level: 200,
+            ends_at: new Date(Date.now() + 36e5).toISOString(),
+            remaining_hp: JOGO.remaining_hp,
+          },
+          attempts_used: JOGO.attempts_used,
+          attempts_remaining: JOGO.attempts_remaining,
+          personal_damage: JOGO.personal_damage,
+        },
+      }),
+    },
+    RampageLiveArena: { active: false, result: null },
+  };
+
+  /** Um ataque: o dano entra no acumulado, com o atraso que a banca mandar. */
+  window.__lutar = (dano) => {
+    JOGO.attempts_used += 1;
+    JOGO.attempts_remaining = Math.max(0, JOGO.attempts_remaining - 1);
+    if (NUNCA) return;
+    setTimeout(() => {
+      JOGO.personal_damage += dano;
+      JOGO.remaining_hp -= dano;
+    }, ATRASO);
+  };
+
+  const CHAVE = 'lioncode:rampage:historico';
+  const saida = document.querySelector('[data-saida]');
+  const mostrar = (texto, mau) => {
+    saida.textContent = texto;
+    saida.className = mau ? 'mau' : 'ok';
+  };
+
+  const lido = () => JSON.parse(localStorage.getItem(CHAVE) || '[]');
+
+  document.querySelector('[data-lutar]').addEventListener('click', async () => {
+    const antes = JOGO.personal_damage;
+    const dano = 500 + Math.floor(Math.random() * 500);
+    window.__lutar(dano);
+    mostrar(`ataque disparado: ${dano} de dano, acumulado era ${antes}. Veja o painel.`);
+  });
+
+  document.querySelector('[data-encher]').addEventListener('click', () => {
+    const agora = Date.now();
+    const doze = Array.from({ length: 12 }, (_, i) => ({
+      evento: `evento-${i}`,
+      nome: ['Articuno', 'Zapdos', 'Moltres'][i % 3],
+      nivel: 200,
+      quando: agora - i * 36e5,
+      dano: i === 3 ? null : (i + 1) * 1234,
+    }));
+    localStorage.setItem(CHAVE, JSON.stringify(doze));
+    mostrar('12 ataques escritos na chave. Recarregue: o painel tem de mostrar só os 10 primeiros.');
+  });
+
+  document.querySelector('[data-limpar]').addEventListener('click', () => {
+    localStorage.removeItem(CHAVE);
+    mostrar('histórico limpo. Recarregue.');
+  });
+
+  window.__conferir = () => {
+    const todos = lido();
+    const linhas = [...document.querySelectorAll('#lioncode-rampage [data-historico] li')];
+    return {
+      guardados: todos.length,
+      desenhados: linhas.length,
+      textos: linhas.map((l) => l.textContent),
+      semMedida: linhas.filter((l) => l.querySelector('.semMedida')).length,
+    };
+  };
+
+  const carregarPainel = () => {
+    const painel = document.createElement('script');
+    painel.src = `../rampage.js?t=${Date.now()}`;
+    document.head.append(painel);
+  };
+
+  const script = document.createElement('script');
+  script.src = `../rampage-main.js?t=${Date.now()}`;
+  script.onload = carregarPainel;
+  document.head.append(script);
+</script>

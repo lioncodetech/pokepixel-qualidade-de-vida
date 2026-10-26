@@ -140,3 +140,97 @@ test('nenhum plano passa de seis nem remove o ativo, em 200 sorteios', () => {
     assert.equal(plano.resolvido, true);
   }
 });
+
+// ---------------------------------------------------------------------------------------------
+// A FONTE DE VERDADE DA EQUIPE
+//
+// **MEDIDO NA CONTA DO DONO EM 26/10/2026, COM AS TRES FONTES LADO A LADO**, depois de uma remocao:
+// o servidor e o inventario diziam Gyarados, Dragonite e Gengar; o HUD dizia os mesmos tres **e
+// Alakazam**, e ficou assim durante minutos — nao era atraso, ele nao se acertava sozinho. Dai os
+// quatro sintomas do mesmo dia, todos com uma raiz: "o cartao de X nao tem Desequipar", "o jogo nao
+// tirou X depois de 8 s", "nao consegui tornar X ativo" e "os Times disseram que montaram X, mas a
+// equipe na tela nao e' nenhum time guardado".
+//
+// O inventario tambem nao serve, e por um motivo diferente e ja' pago caro: pinta a grade em
+// etapas, as celulas entram antes da classe `is-equipped`, e a mochila reabre na ultima categoria
+// usada. Cada um dos dois mente num momento diferente — o inventario na abertura, o HUD **depois
+// de uma accao**, que e' precisamente quando esta ferramenta pergunta.
+
+const ponte = readFileSync(new URL('../times-main.js', import.meta.url), 'utf8').replace(
+  /\r\n/g,
+  '\n',
+);
+
+test('quem esta na equipe vem do getTeam, e nao do HUD nem do inventario', () => {
+  assert.match(ponte, /typeof api\?\.getTeam !== 'function'/);
+  assert.match(ponte, /ids: time\.member_ids\.map\(String\),/);
+  assert.match(ponte, /lider: String\(time\.leader_id \|\| ''\),/);
+  // Os leitores sincronos servem a ultima resposta do servidor. Se algum deles voltasse a chamar
+  // `doHud`, o Alakazam fantasma voltava com ele.
+  assert.match(fonte, /const idsNaEquipe = \(\) => equipeDoServidor\.ids;/);
+  assert.match(fonte, /const liderAgora = \(\) => equipeDoServidor\.lider;/);
+  assert.doesNotMatch(fonte, /const idsNaEquipe = \(\) => doHud\(\)/);
+  assert.doesNotMatch(fonte, /doHud\(\)\.find\(\(p\) => p\.lider\)\?\.id === id/);
+});
+
+test('as confirmacoes de uma accao esperam pelo servidor', () => {
+  // Era aqui que estourava o prazo com a accao ja' feita: o jogo tinha tirado o Pokemon e o HUD e'
+  // que nao mudava. A linha inteira, e nao so' o `esperarEquipe`: o que se afirma e' que **esta**
+  // confirmacao mudou de fonte.
+  assert.match(fonte, /const demorou = await esperarEquipe\(\(\) => noTime\(id\) === entrar, 8000\);/);
+  assert.match(fonte, /\(await esperarEquipe\(\(\) => liderAgora\(\) === id, 6000\)\) !== null\) return true;/);
+  assert.match(fonte, /const deu = \(await esperarEquipe\(\(\) => liderAgora\(\) === id, 6000\)\) !== null;/);
+});
+
+test('o ajudante de espera aguarda a condicao', () => {
+  // Uma condicao assincrona devolve uma Promise, e uma Promise e' **sempre** verdadeira: sem o
+  // `await`, toda espera por algo que se pergunta ao jogo dava-se por cumprida na primeira volta —
+  // e `esperarEquipe` passa precisamente uma condicao dessas. E' o mesmo defeito que o `rampage.js`
+  // tinha no mesmo dia.
+  assert.match(fonte, /if \(await condicao\(\)\) return Date\.now\(\) - inicio;/);
+  // E a espera pelo servidor tem cadencia propria: a 60 ms, os 8 s do `alternar` seriam mais de
+  // cem pedidos por troca.
+  assert.match(fonte, /const ate = async \(condicao, limite, passo = 60\) => \{/);
+  assert.match(fonte, /await espera\(passo\);/);
+  const espera = fonte.slice(
+    fonte.indexOf('const esperarEquipe'),
+    fonte.indexOf('const esperarEquipe') + 700,
+  );
+  assert.match(espera, /\n {8}500,\n/);
+});
+
+test('a equipe e lida antes de qualquer conta sobre ela', () => {
+  // Uma copia vazia tornaria "nao ha' nada a fazer" indistinguivel de "ainda nao perguntei" — e o
+  // `A equipe ja' e' essa` sairia com a equipe errada na tela.
+  const corpo = fonte.slice(fonte.indexOf('async function aplicar('), fonte.indexOf('const sobrando'));
+  assert.match(corpo, /const equipeLida = await relerEquipe\(\);/);
+  assert.match(corpo, /if \(equipeLida\?\.erro\) throw new Error\(equipeLida\.erro\);/);
+});
+
+test('a porta qual e sincrona, e serve o servidor quando ha resposta', () => {
+  // **Tem de continuar sincrona**: a escada chama-a de dentro de um `timeSeguinte` sincrono, e
+  // torna-la assincrona arrastaria o `await` por toda a cadeia de chamadas dela. A divisao vale
+  // porque o HUD mente *depois de uma accao*: os dois sitios em que a escada pergunta depois de
+  // uma accao perguntam logo apos um `usar`, que acaba de ler o servidor; o terceiro pergunta no
+  // arranque, sem accao nenhuma antes.
+  assert.match(
+    fonte,
+    /const agora = equipeDoServidor\.lida \? idsNaEquipe\(\) : doHud\(\)\.map\(\(p\) => p\.id\);/,
+  );
+});
+
+test('a ponte espera a marca no DOM em vez de redisparar', () => {
+  // O bloco ISOLATED corre inteiro antes do MAIN, os dois em `document_idle`, e um `CustomEvent`
+  // sem ninguem a escutar nao fica em fila: perde-se. Redisparar consertaria as leituras e
+  // **executaria as accoes duas vezes**, entao espera-se.
+  assert.match(ponte, /document\.documentElement\.dataset\.lioncodeTimes = 'pronto';/);
+  // A marca e' posta DEPOIS do ouvinte: antes dele, ela mentiria.
+  assert.ok(
+    ponte.indexOf('addEventListener(PEDIDO') < ponte.indexOf('dataset.lioncodeTimes'),
+    'a marca vem depois do ouvinte',
+  );
+  assert.match(
+    fonte,
+    /ate\(\(\) => document\.documentElement\.dataset\.lioncodeTimes === 'pronto', 20000\)/,
+  );
+});

@@ -162,12 +162,16 @@ PPX.modulo(
      * Devolver o tempo em vez de so' `true` permite que a falha diga "esperei 6 s e nada mudou",
      * que e' a diferenca entre um aviso util e um "nao funcionou".
      */
-    const ate = async (condicao, limite) => {
+    const ate = async (condicao, limite, passo = 60) => {
       const inicio = Date.now();
       for (;;) {
-        if (condicao()) return Date.now() - inicio;
+        // **Com `await`.** Uma condicao assincrona devolve uma Promise, e uma Promise e' sempre
+        // verdadeira: sem isto, qualquer espera por algo que se pergunta ao jogo dava-se por
+        // cumprida na primeira volta. O `await` de um valor sincrono nao muda nada, logo as
+        // condicoes de DOM que ja' estavam aqui seguem como seguiam.
+        if (await condicao()) return Date.now() - inicio;
         if (Date.now() - inicio >= limite) return null;
-        await espera(60);
+        await espera(passo);
       }
     };
 
@@ -211,28 +215,105 @@ PPX.modulo(
         lider: cartao.classList.contains('is-leader'),
       }));
 
+    const PEDIDO = 'lioncode:times:pedido';
+    const RESPOSTA = 'lioncode:times:resposta';
+
+    /**
+     * A outra ponta da ponte ja' esta' a escutar?
+     *
+     * O bloco ISOLATED corre inteiro antes do bloco MAIN, os dois em `document_idle`, e um
+     * `CustomEvent` sem ninguem a escutar nao fica em fila: perde-se. Espera-se a marca, nunca se
+     * re-dispara — e' a mesma regra dos Eventos, das Raridades e do Rampage.
+     */
+    const pontePronta = () =>
+      ate(() => document.documentElement.dataset.lioncodeTimes === 'pronto', 20000);
+
+    let ecoDaPonte = 0;
+    const pedirAoJogo = (acao) =>
+      new Promise((resolver) => {
+        const id = `t${Date.now()}-${(ecoDaPonte += 1)}`;
+        let relogio = 0;
+        const ouvir = (e) => {
+          if (e?.detail?.eco !== id) return;
+          clearTimeout(relogio);
+          removeEventListener(RESPOSTA, ouvir);
+          resolver(e.detail);
+        };
+        addEventListener(RESPOSTA, ouvir);
+        relogio = setTimeout(() => {
+          removeEventListener(RESPOSTA, ouvir);
+          resolver({ erro: 'o jogo não respondeu — recarregue a página (F5)' });
+        }, 15000);
+        dispatchEvent(new CustomEvent(PEDIDO, { detail: { eco: id, acao } }));
+      });
+
+    const ponte = async (acao) => {
+      if (!(await pontePronta()))
+        return { erro: 'a ponte com o jogo não carregou — recarregue a página (F5)' };
+      return pedirAoJogo(acao);
+    };
+
     const slotDoInventario = (id) =>
       document.querySelector(`${INVENTARIO}[data-creature-id="${CSS.escape(id)}"]`);
 
     /**
-     * Quem esta' na equipe, segundo o HUD — e nao segundo o inventario.
+     * QUEM ESTA' NA EQUIPE E' O SERVIDOR QUE DIZ.
      *
-     * Esta escolha e' o conserto de um defeito que custou um Pokemon do time numa prova real. O
-     * inventario pinta a grade em etapas: as celulas entram antes de a classe `is-equipped` ser
-     * aplicada, e a mochila ainda reabre na ultima categoria usada, escondendo parte da lista. Ler
-     * dali cedo demais fazia a ferramenta concluir que um Pokemon que ESTAVA na equipe estava fora.
+     * Nem o inventario, nem o HUD. **Medido na conta do dono em 26/10/2026, com as tres fontes
+     * lado a lado**, depois de uma remocao:
      *
-     * Isso seria inofensivo se o duplo clique adicionasse. Mas ele **alterna**: agir sobre essa
-     * conclusao errada tirou da equipe exatamente quem deveria ficar.
+     *   servidor   Gyarados, Dragonite, Gengar
+     *   inventario Gyarados, Dragonite, Gengar
+     *   HUD        Gyarados, Dragonite, Gengar **e Alakazam**
      *
-     * O HUD nao tem esse problema. Ele esta' sempre no DOM, nao tem abas, nao filtra, e foi
-     * conferido contra o inventario no levantamento: os mesmos seis ids, o mesmo `data-creature-id`.
-     * O inventario continua sendo necessario — e' onde se clica —, mas quem **manda** e' o HUD.
+     * O Alakazam ficou no HUD durante minutos. Nao era atraso — ele nao se acertava sozinho.
+     *
+     * O inventario tambem nao serve, e por um motivo diferente e ja' pago caro: ele pinta a grade
+     * em etapas, as celulas entram antes da classe `is-equipped`, e a mochila reabre na ultima
+     * categoria usada. Ler dali cedo demais dava um Pokemon da equipe por fora — e como o duplo
+     * clique **alterna**, agir sobre isso tirava exatamente quem devia ficar.
+     *
+     * Cada um dos dois mente num momento diferente: o inventario na abertura, o HUD **depois de
+     * uma accao** — que e' precisamente quando esta ferramenta pergunta. Dai os tres sintomas do
+     * mesmo dia: "o cartao de X nao tem Desequipar", "o jogo nao tirou X depois de 8 s" e "nao
+     * consegui tornar X ativo". Uma raiz so'.
+     *
+     * O `getTeam()` devolve o que a propria accao acabou de mudar. O HUD fica para o que ele faz
+     * bem: dar nome e nivel a quem a lista nomeia.
      */
-    const idsNaEquipe = () => doHud().map((p) => p.id);
-    /** O id do Pokemon ativo, ou vazio quando o HUD ainda nao desenhou. */
-    const liderAgora = () => doHud().find((p) => p.lider)?.id || '';
+    let equipeDoServidor = { ids: [], lider: '', lida: false };
+
+    /** Pergunta ao jogo e guarda. Devolve `{ erro }` quando a ponte nao respondeu. */
+    const relerEquipe = async () => {
+      const r = await ponte('equipe');
+      if (r?.erro) return r;
+      equipeDoServidor = { ids: r.ids || [], lider: r.lider || '', lida: true };
+      return r;
+    };
+
+    const idsNaEquipe = () => equipeDoServidor.ids;
+    /** O id do Pokemon ativo, ou vazio enquanto a equipe nao foi lida. */
+    const liderAgora = () => equipeDoServidor.lider;
     const noTime = (id) => idsNaEquipe().includes(id);
+
+    /**
+     * Espera o servidor mostrar o que a accao mudou.
+     *
+     * **Nao se espera pelo HUD.** Era o que estourava os 8 s do `alternar` com a accao ja' feita:
+     * o jogo tinha tirado o Pokemon e o HUD e' que nao mudava. Aqui pergunta-se a quem muda.
+     */
+    const esperarEquipe = (condicao, limite) =>
+      // **Meio segundo entre perguntas, e nao os 60 ms de omissao.** Cada volta desta e' uma
+      // chamada ao servidor; a 60 ms, os 8 s do `alternar` seriam mais de cem pedidos por troca.
+      ate(
+        async () => {
+          const r = await relerEquipe();
+          if (r?.erro) return false;
+          return condicao();
+        },
+        limite,
+        500,
+      );
 
     /**
      * Um clique como o jogo espera receber: a sequencia inteira de ponteiro, nao so' `click()`.
@@ -512,6 +593,12 @@ PPX.modulo(
         (slotDoInventario(id)?.getAttribute('aria-label') || '').split(',')[0] ||
         id.slice(0, 8);
 
+      // **A equipe e' lida antes de qualquer conta.** Os leitores sincronos servem uma copia da
+      // ultima leitura; sem isto, a primeira coisa a usar a copia seria o `A equipe ja' e' essa` —
+      // e uma copia vazia tornaria "nao ha' nada a fazer" indistinguivel de "ainda nao perguntei".
+      const equipeLida = await relerEquipe();
+      if (equipeLida?.erro) throw new Error(equipeLida.erro);
+
       const sobrando = () => idsNaEquipe().filter((id) => !desejados.includes(id));
       const faltam = () => desejados.filter((id) => !idsNaEquipe().includes(id));
 
@@ -551,8 +638,9 @@ PPX.modulo(
       //
       // Poderia ser calculado uma vez e seguido de ponta a ponta — e seria mais curto. Mas aí
       // qualquer diferenca entre o que a ferramenta imagina e o que o jogo fez se acumularia ate' o
-      // fim da fila. Replanejando contra o HUD a cada passo, um passo que nao saiu como esperado e'
-      // simplesmente recalculado na volta seguinte, com o estado real.
+      // fim da fila. Replanejando contra **o servidor** a cada passo, um passo que nao saiu como
+      // esperado e' simplesmente recalculado na volta seguinte, com o estado real — e o servidor e'
+      // lido de novo no fim de cada `alternar` e de cada `tornarLider`.
       for (let volta = 0; volta < 40; volta += 1) {
         if (cancelado) break;
         const { passos } = planoDeTroca(idsNaEquipe(), liderAgora(), desejados);
@@ -647,7 +735,10 @@ PPX.modulo(
 
       acao.click();
       // Tirar levou 1444 ms e por 953 ms na medicao; 8 s cobre uma conexao ruim sem travar a tela.
-      const demorou = await ate(() => noTime(id) === entrar, 8000);
+      //
+      // **Pergunta-se ao servidor, nao ao HUD.** Era exactamente aqui que estourava o prazo com a
+      // accao ja' feita: o jogo tinha tirado o Pokemon e o HUD e' que nao mudava.
+      const demorou = await esperarEquipe(() => noTime(id) === entrar, 8000);
       if (demorou === null) {
         await fecharCartoes();
         throw new Error(
@@ -670,12 +761,12 @@ PPX.modulo(
      * reserva pelo painel de equipe, que tem o botao "Tornar Pokémon ativo" em cada slot.
      */
     async function tornarLider(id) {
-      if (doHud().find((p) => p.lider)?.id === id) return true;
+      if (liderAgora() === id) return true;
 
       const cartao = document.querySelector(`${HUD}[data-creature-id="${CSS.escape(id)}"]`);
       if (cartao && cartao.getBoundingClientRect().width > 0) {
         cartao.click();
-        if ((await ate(() => doHud().find((p) => p.lider)?.id === id, 6000)) !== null) return true;
+        if ((await esperarEquipe(() => liderAgora() === id, 6000)) !== null) return true;
       }
 
       if (!(await abrirEquipe())) return false;
@@ -689,7 +780,7 @@ PPX.modulo(
       );
       if (!botao) return false;
       botao.click();
-      const deu = (await ate(() => doHud().find((p) => p.lider)?.id === id, 6000)) !== null;
+      const deu = (await esperarEquipe(() => liderAgora() === id, 6000)) !== null;
       await fechar(painelEquipe);
       return deu;
     }
@@ -1383,13 +1474,20 @@ PPX.modulo(
          * em `localStorage` desalinhava-se no primeiro F5, na primeira troca a' mao e na primeira
          * vez que a lista fosse reordenada.
          *
-         * Le' o HUD, como todo o resto desta ferramenta — nao o inventario, pelo motivo que
-         * `doHud` explica. Compara por **id**, nao por nome: dois Pokemon da mesma especie sao duas
-         * criaturas diferentes, e e' a criatura que esta' no time. A ordem nao conta e o lider nao
-         * conta: quem troca o lider (a escada troca-o a cada aluno) continua com o mesmo time.
+         * **Serve a resposta do servidor quando ha' uma, e o HUD so' enquanto nao ha'.** Esta
+         * porta e' sincrona e tem de continuar a ser: a escada chama-a de dentro de um
+         * `timeSeguinte` sincrono, e torna-la assincrona arrastaria o `await` por toda a cadeia de
+         * chamadas dela. A divisao funciona porque o HUD mente **depois de uma accao**, e os dois
+         * sitios em que a escada pergunta depois de uma accao perguntam logo apos um `usar` — que
+         * acaba de ler o servidor e deixa a resposta fresca. O terceiro sitio pergunta no arranque,
+         * sem accao nenhuma antes, que e' exactamente o caso em que o HUD nao mente.
+         *
+         * Compara por **id**, nao por nome: dois Pokemon da mesma especie sao duas criaturas
+         * diferentes, e e' a criatura que esta' no time. A ordem nao conta e o lider nao conta:
+         * quem troca o lider (a escada troca-o a cada aluno) continua com o mesmo time.
          */
         qual: () => {
-          const agora = doHud().map((p) => p.id);
+          const agora = equipeDoServidor.lida ? idsNaEquipe() : doHud().map((p) => p.id);
           if (!agora.length) return '';
           const casa = (time) =>
             time.membros.length === agora.length && time.membros.every((m) => agora.includes(m.id));

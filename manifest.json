@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokePixel - qualidade de vida",
-  "version": "1.30.1",
+  "version": "1.30.2",
   "description": "As quinze ferramentas de qualidade de vida do PokePixel num pacote so, com um menu para ligar e desligar cada uma. Alt+Q abre o menu.",
   "permissions": [
     "storage"
@@ -53,7 +53,8 @@
         "escada-main.js",
         "arena-main.js",
         "rampage-main.js",
-        "eventos-main.js"
+        "eventos-main.js",
+        "times-main.js"
       ],
       "run_at": "document_idle",
       "world": "MAIN"

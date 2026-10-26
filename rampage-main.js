@@ -24,6 +24,11 @@
         nome: String(evento.species_name || evento.name || 'Rampage'),
         nivel: Number(evento.boss_level) || 0,
         termina: Date.parse(evento.ends_at || d.ends_at) || 0,
+        // **O dano acumulado do EVENTO, nao do ataque — o jogo nao da' o do ataque.** Medido na
+        // conta do dono em 26/10/2026, no Articuno: antes do ataque `personal_damage` estava em 0
+        // e depois em 575, e o HP do chefe caiu exactamente 575 no mesmo intervalo. E' a diferenca
+        // entre duas leituras que da' o dano de um ataque, e e' por isso que ele viaja daqui.
+        dano: Math.max(0, Number(d.personal_damage) || 0),
         restantes: Math.max(0, Number(d.attempts_remaining) || 0),
         maximo: Math.max(0, Number(d.max_attempts) || 0),
         lutando: Boolean(d.active_attempt?.attempt_id),
