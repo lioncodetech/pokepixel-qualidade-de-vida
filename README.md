@@ -1585,6 +1585,39 @@ três Pokémon em Lv 10, 13 e 16, mínimo 20 e 5 níveis — as rodadas são **2
 chão de onde se parte, não o primeiro alvo. Fechada a rodada (todos no alvo), ela sobe o alvo e
 recomeça do primeiro.
 
+#### Cada turno escolhe onde caça
+
+Até 26/10/2026 a caçada era **uma só para todos os turnos com pedra**: a lista do grupo. Isso tinha
+um defeito que o dono descreveu assim — *"se o outro time for mto fraco, vai morrer todo mundo"*. A
+lista é escolhida a pensar no carregador com pedra, que costuma ser o mais forte da conta; um time
+de Pokémon atrasados herdava-a e ia morrer lá.
+
+Agora cada turno **com pedra** tem, ao lado da pedra, um seletor com duas opções:
+
+- **caçada fixa** — a lista desse turno, em ordem de preferência, com as mesmas regras da lista do
+  grupo: fica-se na primeira onde se consiga estar, e estar na terceira basta. **Deixar a lista do
+  turno vazia quer dizer "uso a do grupo"** — que é exatamente o que todos os turnos faziam antes
+  desta opção existir, e é por isso que ela nasce sem mudar nada para ninguém;
+- **escada · pelo nível da pedra** — a caçada é escolhida pela escada, pelo nível e pelo tipo do
+  Pokémon que tem a pedra. Serve o segundo caso do pedido: o portador a subir nas caçadas que
+  servem o nível **dele**, em vez de ficar preso a uma lista escrita à mão.
+
+O turno **sem pedra** não tem esse seletor, e de propósito: ali cada Pokémon da rotação já segue a
+escada dele, que é o que a rotação é. Oferecer a escolha seria oferecer o que não se cumpre.
+
+Duas consequências que vale a pena saber:
+
+- **a lista do grupo deixou de ser obrigatória.** Se nenhum turno precisar dela, a escada corre sem
+  ela. Antes, exigi-la de quem não a ia ler travava a escada por nada;
+- **quem segue a escada nunca cai na lista fixa de outro turno.** Mandar o time para a hunt
+  escolhida para outro é precisamente o defeito que isto veio consertar;
+- **a lista escrita num turno na escada é a rede dela, não uma alternativa.** A escada escolhe
+  primeiro, pelo nível e pelo tipo; só quando não achar caçada para aquele nível é que a lista
+  desse turno entra. É a mesma regra que os degraus já tinham no automático, e pela mesma razão:
+  com janela estreita e filtro de tipo há níveis em que nenhuma caçada passa, e um turno que
+  parasse ali ficava pior do que estava. **Com rede não para; sem rede para e diz** — e o painel
+  escreve, debaixo da lista, qual dos dois casos é o seu.
+
 #### Três regras que vêm do jogo, não desta ferramenta
 
 - **A equipe trava em 6**, então é o fixo mais cinco.

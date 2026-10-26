@@ -333,16 +333,26 @@ PPX.modulo(
     if (!Array.isArray(cfg.grupo.turnos)) cfg.grupo.turnos = [];
     // Configurações antigas são todas do modelo original: Pokémon com pedra, fora da contagem.
     // O tipo explícito permite misturar esses turnos com outros em que o principal também upa.
+    // Onde cada turno com pedra caça. Quem ja' tinha turnos cai em `'fixa'` com lista propria
+    // vazia, que e' exatamente o que ele tinha antes: a lista do grupo. Ver `lugarDoTurno`.
     cfg.grupo.turnos = cfg.grupo.turnos.map((t) => ({
       ...t,
       tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
+      onde: t?.onde === 'escada' ? 'escada' : 'fixa',
+      cacadas: Array.isArray(t?.cacadas) ? t.cacadas : [],
     }));
     if (
       !cfg.grupo.turnos.length &&
       (cfg.grupo.fixo || (cfg.grupo.times || []).filter(Boolean).length)
     )
       cfg.grupo.turnos = [
-        { tipo: 'pedra', fixo: cfg.grupo.fixo || '', times: cfg.grupo.times || [] },
+        {
+          tipo: 'pedra',
+          onde: 'fixa',
+          cacadas: [],
+          fixo: cfg.grupo.fixo || '',
+          times: cfg.grupo.times || [],
+        },
       ];
     delete cfg.grupo.fixo;
     delete cfg.grupo.times;
@@ -561,6 +571,20 @@ PPX.modulo(
      * um destino; e' um lugar que, estando-se la', se respeita. Acabada a expedição, o jogo
      * devolve o jogador a' caçada anterior e a lista segue para a primeira que da' para abrir.
      */
+    /**
+     * A mesma regra de preferencia, aplicada a uma lista qualquer.
+     *
+     * Extraida quando cada turno com pedra passou a poder ter a sua propria lista: a regra —
+     * estar na terceira basta, so' se escolhe quando se esta' fora — nao muda por ser a lista do
+     * grupo ou a do turno, e duas copias dela divergiriam no primeiro conserto.
+     */
+    const lugarEntre = (lista) => {
+      const porta = globalThis.PPX?.cacadas;
+      const aqui = lista.find((nome) => porta?.estouEm?.(nome));
+      if (aqui) return { aqui, ir: null };
+      return { aqui: null, ir: lista.find((nome) => porta?.daParaIr?.(nome) !== false) || null };
+    };
+
     const lugarDoGrupo = (destinoAutomatico = '') => {
       const porta = globalThis.PPX?.cacadas;
       if (destinoAutomatico) {
@@ -570,10 +594,7 @@ PPX.modulo(
           ir: porta?.daParaIr?.(destinoAutomatico) === false ? null : destinoAutomatico,
         };
       }
-      const lista = cacadasDoGrupo();
-      const aqui = lista.find((nome) => porta?.estouEm?.(nome));
-      if (aqui) return { aqui, ir: null };
-      return { aqui: null, ir: lista.find((nome) => porta?.daParaIr?.(nome) !== false) || null };
+      return lugarEntre(cacadasDoGrupo());
     };
 
     /**
@@ -845,12 +866,26 @@ PPX.modulo(
       degrauAutomatico(aluno) || (aluno ? degrauPara(aluno.nivel) : null);
 
     /**
-     * Sem pedra, o lider da rotacao e' o aluno e segue a escada de caçadas dele: primeiro a melhor
-     * escolha segura por nivel e tipo; sem candidata, o degrau escrito para aquele nivel. A lista
-     * fixa do grupo pertence aos turnos com pedra e nunca pode receber este aluno por acidente.
+     * O turno segue a escada, em vez de uma lista escrita.
+     *
+     * Sem pedra e' sempre assim e nao se escolhe: cada Pokemon em rotacao tem a escada dele. Com
+     * pedra passou a ser escolha do dono, em 26/10/2026, e e' o conserto do defeito que ele
+     * descreveu: "se o outro time for mto fraco, vai morrer todo mundo". A caçada vinha da lista
+     * do grupo, escolhida a pensar no carregador, e o time fraco herdava-a.
+     */
+    const naEscadaDoTurno = (turno) => turno?.tipo === 'rotacao' || turno?.onde === 'escada';
+
+    /**
+     * A caçada que a escada escolhe para este turno: primeiro a melhor escolha segura por nivel e
+     * tipo; sem candidata, o degrau escrito para aquele nivel.
+     *
+     * **Quem manda e' o lider, e o lider nao e' a mesma pessoa nos dois casos** — sem pedra e' o
+     * mais atrasado da piscina (ver `montagemDoGrupo`), com pedra e' o portador. E' o que o dono
+     * pediu: sem pedra protege-se quem esta' a upar; com pedra segue-se o nivel do portador,
+     * porque e' ele que a caçada tem de servir.
      */
     const cacadaDoTurno = (montagem) => {
-      if (montagem?.turno?.tipo !== 'rotacao') return '';
+      if (!naEscadaDoTurno(montagem?.turno)) return '';
       return (
         degrauAutomatico(montagem.lider, true)?.cacada ||
         degrauPara(montagem.lider?.nivel)?.cacada ||
@@ -858,12 +893,34 @@ PPX.modulo(
       );
     };
 
+    /** A lista escrita para este turno. Vazia quando ele nao tem a sua. */
+    const cacadasProprias = (turno) => semVazios(turno?.cacadas);
+
+    /** A lista que manda num turno fixo: a dele, ou a do grupo quando ele nao tem a sua. */
+    const cacadasDoTurno = (turno) => {
+      const minhas = cacadasProprias(turno);
+      return minhas.length ? minhas : cacadasDoGrupo();
+    };
+
+    /**
+     * Onde este turno vai caçar.
+     *
+     * **A LISTA DO TURNO E' A REDE DA ESCADA, E NAO UMA ALTERNATIVA A ELA.** E' a mesma regra que
+     * os degraus ja' tinham no modo automatico, e pela mesma razao: com janela estreita e filtro
+     * de tipo ha' niveis em que nenhuma caçada passa, e um turno que parasse ali seria pior do
+     * que o de ontem. A escada escolhe primeiro; so' quando nao souber e' que a lista entra.
+     *
+     * **A do grupo continua de fora.** A rede e' a lista que o dono escreveu DENTRO deste turno:
+     * cair na lista do grupo era precisamente o defeito de 26/10/2026 — a hunt escolhida a pensar
+     * no carregador a matar o time fraco. A dele nao tem esse problema: ele escreveu-a ali.
+     */
     const lugarDoTurno = (montagem) => {
-      if (montagem?.turno?.tipo !== 'rotacao') return lugarDoGrupo();
+      const turno = montagem?.turno;
+      if (!naEscadaDoTurno(turno)) return lugarEntre(cacadasDoTurno(turno));
       const destino = cacadaDoTurno(montagem);
-      // Sem destino nao se cai na lista fixa: parar e explicar e' mais seguro do que mandar um
-      // Pokémon sem pedra para a hunt escolhida para o carregador com pedra.
-      return destino ? lugarDoGrupo(destino) : { aqui: null, ir: null };
+      if (destino) return lugarDoGrupo(destino);
+      const rede = cacadasProprias(turno);
+      return rede.length ? lugarEntre(rede) : { aqui: null, ir: null };
     };
 
     // ------------------------------------------ a piscina (os times da fila como um conjunto so')
@@ -1088,8 +1145,6 @@ PPX.modulo(
     const faltaNoGrupo = () => {
       if (!globalThis.PPX?.times?.montar)
         return 'A ferramenta Times está desligada — é ela que mexe na equipe.';
-      if (!cacadasDoGrupo().length)
-        return 'Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência.';
       const turnos = turnosDoGrupo();
       if (!turnos.length) return 'Crie um turno e escolha os times que vão entrar na rotação.';
       const sabidos = globalThis.PPX?.times?.nomes?.();
@@ -1097,6 +1152,10 @@ PPX.modulo(
         const qual = turnos.length > 1 ? `Turno ${i + 1}: e` : 'E';
         if (turno.tipo !== 'rotacao' && !turno.fixo)
           return `${qual}scolha o Pokémon que tem a pedra — ele nunca sai do grupo.`;
+        // A lista do grupo deixou de ser obrigatoria: um turno na escada nao a usa, e um turno
+        // fixo pode ter a sua. Exigi-la de quem nao precisa dela travava a escada por nada.
+        if (!naEscadaDoTurno(turno) && !cacadasDoTurno(turno).length)
+          return `${qual}scolha onde este turno caça — a lista dele, ou a do grupo.`;
         const meus = semVazios(turno.times);
         if (!meus.length) return `${qual}scolha os times de onde vêm os que rodam.`;
         // **Um time que nao existe nesta conta nao e' um time.** Acontece a quem leva a configuracao
@@ -1270,7 +1329,10 @@ PPX.modulo(
       const onde = lugar.aqui ? `em "${lugar.aqui}"` : `fora da lista`;
       // Com mais de uma pedra no rodizio, dizer qual esta' a correr nao e' enfeite: e' a diferenca
       // entre "ela parou" e "ela esta' na segunda".
-      const tipo = m.turno.tipo === 'rotacao' ? 'Sem pedra' : 'Com pedra';
+      const tipo =
+        m.turno.tipo === 'rotacao'
+          ? 'Sem pedra'
+          : `Com pedra${m.turno.onde === 'escada' ? ' · na escada' : ''}`;
       const detalhe = m.fixo ? ` (${m.fixo.nome})` : '';
       const pedra = m.quantos > 1 ? `Turno ${m.numero}/${m.quantos} · ${tipo}${detalhe}. ` : '';
       if (!m.faltam.length) {
@@ -2001,9 +2063,10 @@ PPX.modulo(
       }
 
       // ---------------------------------------------------------------- 3. a viagem
-      // No turno sem pedra, cada novo lider e' um aluno da escada. Carregamos os dados da especie
-      // antes de escolher a hunt; com pedra permanece a lista fixa de caçadas do grupo.
-      if (m.turno.tipo === 'rotacao') {
+      // Quem segue a escada escolhe a hunt pelo tipo do lider, e isso precisa da especie lida
+      // antes. Vale para o turno sem pedra e, desde 26/10/2026, para o turno com pedra posto na
+      // escada; o turno fixo nao precisa, que a lista dele ja' esta' escrita.
+      if (naEscadaDoTurno(m.turno)) {
         const especie = m.lider.especie || colecao.get(m.lider.id)?.especie || '';
         if (especie) await garantirMundo([especie]);
       }
@@ -2011,8 +2074,8 @@ PPX.modulo(
       if (!lugar.aqui) {
         if (!lugar.ir) {
           aviso(
-            m.turno.tipo === 'rotacao'
-              ? 'Não achei uma caçada automática segura nem um degrau para o nível deste Pokémon. Não vou usar a caçada fixa do turno com pedra.'
+            naEscadaDoTurno(m.turno)
+              ? 'Não achei uma caçada automática segura, nem um degrau para o nível deste Pokémon, nem caçada escrita neste turno. Não vou usar a caçada fixa de outro turno.'
               : 'Estou fora da lista e não consigo entrar sozinha em nenhuma delas. Ponha na lista uma caçada guardada, ou entre você.',
           );
           return 'sem porta';
@@ -3073,8 +3136,35 @@ PPX.modulo(
           gravar();
           desenhar();
         });
+        /**
+         * Onde este turno caça.
+         *
+         * So' aparece com pedra: sem pedra cada Pokemon da rotacao ja' tem a escada dele, e
+         * oferecer ali a escolha seria oferecer o que nao se cumpre.
+         */
+        const onde = document.createElement('select');
+        onde.title =
+          'Caçada fixa: a lista deste turno, ou a do grupo se ele não tiver a sua. ' +
+          'Escada: a caçada é escolhida pelo nível e pelo tipo do Pokémon com a pedra.';
+        for (const [valor, texto] of [
+          ['fixa', 'caçada fixa'],
+          ['escada', 'escada · pelo nível da pedra'],
+        ]) {
+          const o = document.createElement('option');
+          o.value = valor;
+          o.textContent = texto;
+          onde.append(o);
+        }
+        onde.value = turno.onde === 'escada' ? 'escada' : 'fixa';
+        onde.addEventListener('change', () => {
+          turno.onde = onde.value;
+          gravar();
+          desenhar();
+          void conferir();
+        });
+
         cima.append(tipo);
-        if (turno.tipo !== 'rotacao') cima.append(quem);
+        if (turno.tipo !== 'rotacao') cima.append(quem, onde);
         cima.append(forada);
 
         const times = document.createElement('ul');
@@ -3084,6 +3174,71 @@ PPX.modulo(
           conta.textContent = 'sem times: este turno não tem grupo para upar';
           item.append(cima, conta);
         } else item.append(cima);
+
+        /**
+         * A lista de caçadas deste turno.
+         *
+         * Vazia nao e' erro: quer dizer "uso a do grupo", que e' o que todos os turnos faziam
+         * antes de isto existir. E' por isso que a migracao pode deixar `cacadas: []` em todos
+         * sem mudar o comportamento de ninguem.
+         */
+        {
+          // Na escada ela e' a rede; no fixo e' quem manda. O que nao pode e' ficar guardada e
+          // escondida: uma caçada escrita que nao se ve nem age e' uma decisao do dono apagada
+          // sem aviso. Por isso desenha-se sempre, e a frase diz qual dos dois papeis ela tem.
+          const naEscada = turno.tipo === 'rotacao' || turno.onde === 'escada';
+          const nota = document.createElement('p');
+          nota.className = 'conta';
+          if (naEscada)
+            nota.textContent = semVazios(turno.cacadas).length
+              ? 'rede: usada só quando a escada não achar caçada para este nível'
+              : 'sem rede: se a escada não achar caçada, este turno para';
+          else
+            nota.textContent = semVazios(turno.cacadas).length
+              ? 'a caçada deste turno'
+              : cacadasDoGrupo().length
+                ? 'sem caçada própria: este turno usa a lista do grupo'
+                : 'sem caçada própria, e o grupo também não tem lista: escolha uma';
+          item.append(nota);
+          const minhas = document.createElement('ul');
+          for (const [j, nome] of (turno.cacadas || []).entries()) {
+            const linha = document.createElement('li');
+            const qual = campoDeCacada();
+            encherCacadas(qual, nome, 'escolha a caçada');
+            qual.addEventListener('change', () => {
+              turno.cacadas[j] = qual.value.trim();
+              gravar();
+              desenhar();
+              void conferir();
+            });
+            const apagar = document.createElement('button');
+            apagar.type = 'button';
+            apagar.dataset.apagar = '1';
+            apagar.textContent = '\u00d7';
+            apagar.title = 'Tirar esta caçada do turno';
+            apagar.addEventListener('click', () => {
+              turno.cacadas.splice(j, 1);
+              gravar();
+              desenhar();
+            });
+            linha.append(qual, apagar);
+            minhas.append(linha);
+          }
+          const maisCacada = document.createElement('button');
+          maisCacada.type = 'button';
+          maisCacada.className = 'mais';
+          maisCacada.textContent =
+            turno.tipo === 'rotacao' || turno.onde === 'escada'
+              ? '+ caçada de rede'
+              : '+ caçada deste turno';
+          maisCacada.addEventListener('click', () => {
+            turno.cacadas = turno.cacadas || [];
+            turno.cacadas.push('');
+            gravar();
+            desenhar();
+          });
+          item.append(minhas, maisCacada);
+        }
         for (const [j, nome] of (turno.times || []).entries()) {
           const linha = document.createElement('li');
           const qual = document.createElement('select');
@@ -3669,7 +3824,14 @@ PPX.modulo(
         sempre: cfg.sempre,
         grupo: {
           cacadas: cfg.grupo.cacadas,
-          turnos: cfg.grupo.turnos.map((t) => ({ tipo: t.tipo === 'rotacao' ? 'rotacao' : 'pedra', times: t.times })),
+          // `fixo` fica de fora de proposito: e' um Pokemon desta conta. O `onde` e a lista de
+          // caçadas sao escolhas do dono e viajam, como a lista do grupo sempre viajou.
+          turnos: cfg.grupo.turnos.map((t) => ({
+            tipo: t.tipo === 'rotacao' ? 'rotacao' : 'pedra',
+            onde: t.onde === 'escada' ? 'escada' : 'fixa',
+            cacadas: t.cacadas || [],
+            times: t.times,
+          })),
           alvo: cfg.grupo.alvo,
           minimo: cfg.grupo.minimo,
           passo: cfg.grupo.passo,
@@ -3707,6 +3869,10 @@ PPX.modulo(
           .slice(0, 20)
           .map((t) => ({
             tipo: t?.tipo === 'rotacao' ? 'rotacao' : 'pedra',
+            onde: t?.onde === 'escada' ? 'escada' : 'fixa',
+            cacadas: lista(t?.cacadas)
+              .slice(0, 50)
+              .map((c) => limparTexto(c, 80)),
             fixo: '',
             times: lista(t?.times)
               .slice(0, 50)

@@ -11,7 +11,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const ler = (arquivo) => readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8');
+// Lido sem os \r: a arvore de trabalho do Windows vem em CRLF e a da CI em LF, e um guarda que
+// casa duas linhas seguidas da' fonte so' falhava de um dos lados. Oito deles, em 26/10/2026.
+const ler = (arquivo) =>
+  readFileSync(new URL(`../${arquivo}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 // Os comentários citam de propósito as coisas que o código não pode conter.
 const semComentarios = (texto) =>
@@ -612,8 +615,9 @@ test('nao agir e uma decisao, e e dita', () => {
     // neutra: por ela passam o castigo de uma viagem falhada **e** os 3 s que o jogo pede entre
     // trocas, e chamar "tentativa que não deu" a um pedido de espera do jogo seria mentir.
     /Esperando \$\{faltam\}s para tentar de novo/,
-    // Os impasses do modo de grupo, que nasceram em 12/10/2026 com a pedra da XP.
-    /Escolha onde o grupo fica — pode ser mais de uma, em ordem de preferência/,
+    // Os impasses do modo de grupo, que nasceram em 12/10/2026 com a pedra da XP. A lista deixou
+    // de ser do grupo e passou a ser de cada turno em 26/10/2026: o impasse mudou de dono junto.
+    /scolha onde este turno caça — a lista dele, ou a do grupo/,
     // E o impasse novo: fora da lista, e sem nenhuma lá onde ela consiga entrar sozinha.
     /não consigo entrar sozinha em nenhuma delas/,
     /scolha o Pokémon que tem a pedra/,
@@ -915,8 +919,11 @@ test('o lugar do grupo e uma lista em ordem, e estar numa delas basta', () => {
   // Pedido em 12/10/2026: a expedição diária é oportunista — abre em janelas fixas e só se entra
   // nela com um CAPTCHA, à mão. O que não pode é parar de upar quando ele não está no PC. Então o
   // grupo tem uma LISTA: fica na primeira onde consiga estar, e a expedição é só mais uma entrada.
-  const bloco = codigo.slice(codigo.indexOf('const lugarDoGrupo ='));
+  // Desde 26/10/2026 a regra mora no `lugarEntre`, para a lista do turno e a do grupo usarem a
+  // mesma: duas copias dela divergiriam no primeiro conserto.
+  const bloco = codigo.slice(codigo.indexOf('const lugarEntre ='));
   const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  assert.match(codigo, /return lugarEntre\(cacadasDoGrupo\(\)\);/);
   // Estar na terceira basta: subir dali para a primeira a cada batida seria trocar de caçada por
   // nada, e cada troca custa a viagem e o risco de um modal pelo meio.
   assert.match(corpo, /const aqui = lista\.find\(\(nome\) => porta\?\.estouEm\?\.\(nome\)\);/);
@@ -968,7 +975,7 @@ test('turnos com e sem pedra revezam-se, e qual esta a correr nao se guarda', ()
   // O fixo e os times soltos de antes viram o primeiro turno.
   assert.match(
     codigo,
-    /\{ tipo: 'pedra', fixo: cfg\.grupo\.fixo \|\| '', times: cfg\.grupo\.times \|\| \[\] \}/,
+    /tipo: 'pedra',\s+onde: 'fixa',\s+cacadas: \[\],\s+fixo: cfg\.grupo\.fixo \|\| '',\s+times: cfg\.grupo\.times \|\| \[\],/,
   );
 });
 
@@ -989,9 +996,10 @@ test('o turno sem pedra leva o lider para a melhor cacada da escada', () => {
       conferir.indexOf('const lugar = lugarDoTurno(m);'),
   );
   assert.match(codigo, /const lugarDoGrupo = \(destinoAutomatico = ''\) =>/);
-  assert.match(codigo, /if \(montagem\?\.turno\?\.tipo !== 'rotacao'\) return lugarDoGrupo\(\);/);
-  assert.match(codigo, /return destino \? lugarDoGrupo\(destino\) : \{ aqui: null, ir: null \};/);
-  assert.match(codigo, /Não vou usar a caçada fixa do turno com pedra/);
+  assert.match(codigo, /if \(!naEscadaDoTurno\(turno\)\) return lugarEntre\(cacadasDoTurno\(turno\)\);/);
+  assert.match(codigo, /if \(destino\) return lugarDoGrupo\(destino\);/);
+  // A caçada escrita para outro turno continua a ser território proibido para quem segue a escada.
+  assert.match(codigo, /Não vou usar a caçada fixa de outro turno/);
 });
 
 test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
@@ -1001,7 +1009,7 @@ test('o painel mistura turnos com pedra e sem pedra na mesma fila', () => {
   );
   assert.match(codigo, /cfg\.grupo\.turnos\.push\(\{ tipo: 'pedra', fixo: '', times: \[''\] \}\)/);
   assert.match(codigo, /turno\.tipo = tipo\.value/);
-  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem\)/);
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem, onde\)/);
   assert.match(codigo, /if \(turno\.tipo !== 'rotacao' && !turno\.fixo\)/);
   // Configurações salvas antes desta opção conservam exatamente o comportamento original.
   assert.match(codigo, /tipo: t\?\.tipo === 'rotacao' \? 'rotacao' : 'pedra'/);
@@ -1240,7 +1248,7 @@ test('o grupo nao arrasta ninguem para uma cacada onde nao consegue trabalhar', 
   // feita a cada batida, logo a seguir: aqui ela só mudou de lugar.
   assert.ok(
     corpo.indexOf('const m = montagemDoGrupo(colecao, alvo);') <
-      corpo.indexOf('const lugar = lugarDoGrupo();'),
+      corpo.indexOf('const lugar = lugarDoTurno(m);'),
     'a montagem é conferida antes de a viagem ser decidida',
   );
   // `indexOf` devolve -1 para quem nao existe, e -1 e' menor do que tudo: sem esta primeira
@@ -1449,10 +1457,10 @@ test('a pedra nao viaja: ela e um bicho desta conta', () => {
   // bicho. Levá-lo seria apontar para o Pokémon errado sem dizer nada.
   const bloco = codigo.slice(codigo.indexOf("id: 'escada',"));
   const coletar = bloco.slice(bloco.indexOf('coletar:'), bloco.indexOf('aplicar:'));
-  assert.match(
-    coletar,
-    /turnos: cfg\.grupo\.turnos\.map\(\(t\) => \(\{ tipo: t\.tipo === 'rotacao' \? 'rotacao' : 'pedra', times: t\.times \}\)\)/,
-  );
+  assert.match(coletar, /tipo: t\.tipo === 'rotacao' \? 'rotacao' : 'pedra',/);
+  // O `onde` e a lista de caçadas sao escolhas do dono, como a lista do grupo sempre foi: viajam.
+  assert.match(coletar, /onde: t\.onde === 'escada' \? 'escada' : 'fixa',/);
+  assert.match(coletar, /cacadas: t\.cacadas \|\| \[\],/);
   assert.ok(!/fixo/.test(coletar), 'o Pokémon principal não entra no pacote');
   const aplicar = bloco.slice(bloco.indexOf('aplicar:'), bloco.indexOf('avisar: diz'));
   assert.match(aplicar, /fixo: '',/, 'a pedra chega vazia, e não com o id de outra conta');
@@ -1779,4 +1787,103 @@ test('a janela e a do dono, e o padrao nao e uma decisao escondida', () => {
     semComentarios(ler('tipos.js')),
     /const janela = Number\(opcoes\.janela\) \|\| 0;[\s\S]{0,120}if \(!janela/,
   );
+});
+
+test('cada turno com pedra escolhe onde caca: lista propria ou a escada', () => {
+  // Pedido em 26/10/2026, e o defeito que o motivou está nas palavras dele: *"se o outro time for
+  // mto fraco, vai morrer todo mundo"*. A caçada vinha da lista do grupo — escolhida a pensar no
+  // carregador com pedra — e o time fraco herdava-a. Agora o bloco escolhe.
+  assert.match(
+    codigo,
+    /const naEscadaDoTurno = \(turno\) => turno\?\.tipo === 'rotacao' \|\| turno\?\.onde === 'escada';/,
+  );
+  // Sem pedra continua a ser SEMPRE a escada, e isso não é uma opção que se desmarque: cada
+  // Pokémon da rotação tem a escada dele. Só o turno com pedra é que escolhe.
+  assert.match(codigo, /if \(turno\.tipo !== 'rotacao'\) cima\.append\(quem, onde\)/);
+  assert.doesNotMatch(codigo, /if \(turno\.tipo === 'rotacao'\) cima\.append\(onde\)/);
+});
+
+test('a lista vazia do turno quer dizer a do grupo, e nao caca nenhuma', () => {
+  // É o que faz a migração ser invisível: todo turno que já existia fica com `cacadas: []` e
+  // continua a usar a lista do grupo, exatamente como antes. Tratar a lista vazia como "nenhuma
+  // caçada" pararia a escada de toda a gente no dia em que isto entrasse.
+  assert.match(
+    codigo,
+    /const cacadasDoTurno = \(turno\) => \{\s+const minhas = cacadasProprias\(turno\);\s+return minhas\.length \? minhas : cacadasDoGrupo\(\);/,
+  );
+  // **A afirmação é feita DENTRO do bloco da migração.** A linha que põe o `onde` existe igual no
+  // `aplicar` da importação, a dois mil e tantos caracteres daqui, e uma busca no ficheiro inteiro
+  // casava com essa. Medido em 26/10/2026: apagada a linha da migração, a suíte não mexia um dedo.
+  const migracao = codigo.slice(codigo.indexOf('cfg.grupo.turnos = cfg.grupo.turnos.map('));
+  const corpoDaMigracao = migracao.slice(0, migracao.indexOf('}));'));
+  assert.match(corpoDaMigracao, /onde: t\?\.onde === 'escada' \? 'escada' : 'fixa',/);
+  assert.match(corpoDaMigracao, /cacadas: Array\.isArray\(t\?\.cacadas\) \? t\.cacadas : \[\],/);
+});
+
+test('a lista do grupo deixou de ser obrigatoria para quem nao a usa', () => {
+  // Exigi-la de um turno na escada travava a escada por nada — e travava CALADA, porque o
+  // diagnóstico falava de uma lista que aquele turno nunca ia ler.
+  assert.doesNotMatch(codigo, /Escolha onde o grupo fica/);
+  assert.match(
+    codigo,
+    /if \(!naEscadaDoTurno\(turno\) && !cacadasDoTurno\(turno\)\.length\)/,
+  );
+});
+
+test('o turno com pedra na escada segue o nivel do portador', () => {
+  // A resposta do dono, à letra: "quando tiver pokemon com pedra, tem que ser pelo level desse
+  // pokemon ou eu escolher uma caçada fixa". No turno com pedra o líder É o portador (ver
+  // `montagemDoGrupo`), por isso a mesma linha serve os dois casos — e é por isso que ela tem de
+  // continuar a ler `montagem.lider`, e não um `turno.fixo` que seria o portador só às vezes.
+  const escolha = codigo.slice(codigo.indexOf('const cacadaDoTurno ='));
+  const corpo = escolha.slice(0, escolha.indexOf('\n    };'));
+  assert.match(corpo, /if \(!naEscadaDoTurno\(montagem\?\.turno\)\) return '';/);
+  assert.match(corpo, /degrauAutomatico\(montagem\.lider, true\)/);
+  assert.doesNotMatch(corpo, /turno\.fixo/);
+  // E a espécie do líder é lida antes da escolha, senão o filtro por tipo decide sem dados.
+  const conferir = codigo.slice(codigo.indexOf('async function conferirGrupo'));
+  assert.match(conferir, /if \(naEscadaDoTurno\(m\.turno\)\) \{/);
+  assert.ok(
+    conferir.indexOf('await garantirMundo([especie])') <
+      conferir.indexOf('const lugar = lugarDoTurno(m);'),
+  );
+});
+
+test('o HUD diz quando o turno com pedra esta na escada', () => {
+  // Com dois turnos a alternar, "Com pedra" sozinho não distingue o que está na lista fixa do que
+  // está a escolher caçada sozinho — e é justamente a diferença que o dono vai querer conferir.
+  assert.match(codigo, /Com pedra\$\{m\.turno\.onde === 'escada' \? ' · na escada' : ''\}/);
+});
+
+test('a lista do turno e a rede da escada, e nao fica escondida', () => {
+  // Achado da revisão de 26/10/2026: posto o turno em "escada", a lista que o dono tinha escrito
+  // deixava de ser desenhada E deixava de ser lida. No dia em que a escada não achasse caçada, o
+  // turno parava com uma caçada válida guardada a um campo de distância — e sem dizer que a tinha.
+  //
+  // A saída é a mesma que os degraus já tinham no modo automático: **a escada escolhe primeiro, a
+  // lista é a rede**. É o que garante que o automático nunca deixa o dono pior do que ele estava.
+  const lugar = codigo.slice(codigo.indexOf('const lugarDoTurno ='));
+  const corpo = lugar.slice(0, lugar.indexOf('\n    };'));
+  assert.match(corpo, /const rede = cacadasProprias\(turno\);/);
+  assert.match(corpo, /return rede\.length \? lugarEntre\(rede\) : \{ aqui: null, ir: null \};/);
+  // **A rede é a lista DESTE turno, nunca a do grupo.** Cair na do grupo era o defeito original:
+  // a hunt escolhida a pensar no carregador a matar o time fraco. Por isso é `cacadasProprias`,
+  // que não tem recuo nenhum, e não `cacadasDoTurno`, que cai na do grupo.
+  assert.match(codigo, /const cacadasProprias = \(turno\) => semVazios\(turno\?\.cacadas\);/);
+  assert.doesNotMatch(corpo, /const rede = cacadasDoTurno/);
+});
+
+test('a caçada escrita num turno nunca fica guardada sem aparecer', () => {
+  // Uma caçada escrita que não se vê nem age é uma decisão do dono apagada sem aviso. O painel
+  // desenha a lista nos dois modos; o que muda é a frase, que diz qual dos dois papéis ela tem.
+  const desenho = codigo.slice(codigo.indexOf('const desenharTurnos ='));
+  assert.doesNotMatch(
+    desenho,
+    /if \(turno\.tipo !== 'rotacao' && turno\.onde !== 'escada'\) \{\s+const nota/,
+    'a lista não pode voltar a ser desenhada só no modo fixo',
+  );
+  assert.match(desenho, /rede: usada só quando a escada não achar caçada para este nível/);
+  assert.match(desenho, /sem rede: se a escada não achar caçada, este turno para/);
+  // E o impasse só se anuncia quando nem rede há.
+  assert.match(codigo, /nem caçada escrita neste turno/);
 });
