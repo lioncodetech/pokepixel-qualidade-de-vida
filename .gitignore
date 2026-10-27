@@ -1,0 +1,14 @@
+# Sobras de release.
+#
+# O pacote publicado NAO sai daqui: ele e' montado pela automacao do `.github/workflows/release.yml`,
+# num checkout limpo, a partir de uma tag. O que fica nestas pastas e' copia de trabalho — e uma
+# copia de trabalho de um .zip e' a pior coisa que se pode versionar: pesa, nao se le' num diff e
+# nunca e' a que esta' publicada.
+#
+# Isto esta' aqui por um susto concreto: um `git add -A` numa publicacao varreu tres destas pastas,
+# com os binarios dentro, para dentro de um commit. Deu para desfazer antes do push porque alguem
+# olhou para a lista de ficheiros — e e' justamente esse "alguem olhou" que nao se pode exigir
+# sempre.
+release-*/
+pokepixel-qualidade-de-vida-*.zip
+pokepixel-qualidade-de-vida-*.zip.sha256
