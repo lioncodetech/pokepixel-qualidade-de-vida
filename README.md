@@ -994,6 +994,24 @@ um clique em `↻` —, e sem o eco a resposta do primeiro passaria pela do segu
 velhos sem nada na tela indicando isso. E a espera tem fim: se a outra metade não tiver entrado,
 ninguém responde nunca, e um painel preso em "lendo…" não diz o que está errado.
 
+### O erro que ficava na tela depois de deixar de ser verdade
+
+A ferramenta pergunta sozinha assim que entra — um painel que abre vazio à espera de um clique está
+a pedir um passo que ele mesmo podia dar. Só que o jogo demora a publicar a API, e quem perguntou
+cedo demais recebia *"o jogo ainda não publicou a API"* — **e ficava assim**. Encontrado na conta do
+dono em 27/10/2026: a página estava aberta havia horas, a API bem viva, e o painel continuava a dizer
+que ela não existia. Abrir o painel com Alt+A também não fazia perguntar de novo; só o `↻`, e quem lê
+um erro não tem por que adivinhar que há um botão que o cura.
+
+São duas correções, e nenhuma delas chega sozinha:
+
+- **A ponte espera a API aparecer** em vez de olhar uma vez e desistir — e espera menos do que a
+  paciência do painel, senão o painel desistia primeiro e culpava a falha errada, que é exactamente
+  o que custou uma hora de procura do lado errado nos Times.
+- **O arranque insiste**, mas só enquanto a resposta for "ainda não há API". Uma lista que não é uma
+  lista não melhora por ser pedida cinco vezes; repetir um erro definitivo seria trocar uma mensagem
+  errada por várias.
+
 ### As faixas vêm do jogo
 
 Fraca 0,90–0,99 · comum 1,00–1,09 · incomum 1,10–1,24 · rara 1,25–1,39 · épica 1,40–1,54 · lendária

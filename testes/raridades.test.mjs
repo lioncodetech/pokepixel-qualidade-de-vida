@@ -277,3 +277,42 @@ test('a ponte espera haver quem ouca antes de falar', () => {
   );
   assert.match(painel, /a ponte com o jogo não carregou — recarregue a página \(F5\)/);
 });
+test('a ponte espera o jogo publicar a API, em vez de desistir no primeiro olhar', () => {
+  // **VISTO NA CONTA DO DONO EM 27/10/2026.** A pagina estava aberta havia horas, a API bem viva,
+  // e o painel continuava parado em "o jogo ainda nao publicou a API": a busca do arranque chegou
+  // antes de `PokeIdle.Api` existir e nunca mais tentou.
+  assert.match(ponte, /const esperarApi = async /);
+  assert.match(ponte, /if \(typeof buscar === 'function'\) return \{ api, buscar \};/);
+
+  // **A espera da ponte tem de caber DENTRO da paciencia do painel.** Se passasse dela, o painel
+  // desistia primeiro e dizia "o jogo nao respondeu — recarregue a pagina", que e' a mensagem de
+  // outra falha; foi uma troca de mensagens assim que mandou procurar o defeito dos Times no lado
+  // errado durante uma hora.
+  const daPonte = Number(/const ESPERA_DA_API = (\d+);/.exec(ponte)?.[1]);
+  const doPainel = Number(/const PACIENCIA = (\d+);/.exec(painel)?.[1]);
+  assert.ok(Number.isFinite(daPonte) && Number.isFinite(doPainel), 'os dois limites estao escritos');
+  assert.ok(
+    daPonte < doPainel,
+    `a ponte espera ${daPonte} ms e o painel so' tem ${doPainel} ms de paciencia: ` +
+      'o painel desiste primeiro e culpa a falha errada',
+  );
+});
+
+test('so a falta de API merece outra tentativa', () => {
+  // Tres respostas, e nao um booleano: `semApi` melhora sozinho, `erro` nao. Um booleano mandaria
+  // insistir numa lista que nao e' lista, ou desistir de uma API que ainda ia aparecer.
+  assert.match(ponte, /semApi: true,/);
+  assert.match(painel, /return resposta\.semApi === true \? 'semApi' : 'erro';/);
+  assert.match(painel, /return 'ok';/);
+
+  // O arranque insiste **so'** nesse caso, e tem fim.
+  assert.match(painel, /if \(\(await buscar\(false\)\) !== 'semApi'\) return;/);
+  const quantas = Number(/const TENTATIVAS_DE_ARRANQUE = (\d+);/.exec(painel)?.[1]);
+  assert.ok(quantas > 1 && quantas <= 10, `${quantas} tentativas nao e um numero de tentativas util`);
+  assert.match(painel, /const ESPERA_ENTRE_TENTATIVAS = \d+;/);
+  assert.match(painel, /void buscaDeArranque\(\);/);
+  assert.ok(
+    !/void buscar\(false\);/.test(painel),
+    'o arranque nao pode voltar a ser uma pergunta unica que desiste calada',
+  );
+});

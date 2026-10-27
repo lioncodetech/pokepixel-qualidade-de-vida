@@ -586,8 +586,15 @@ PPX.modulo(
       }
     };
 
+    /**
+     * Pede a lista e diz como correu, em vez de so' pintar a tela.
+     *
+     * Devolve `'ok'`, `'semApi'` — o jogo ainda nao publicou a API, e isso melhora sozinho — ou
+     * `'erro'`, que nao melhora. **So' o do meio merece outra tentativa**, e e' por isso que estes
+     * tres nomes existem: um booleano mandaria insistir em falhas definitivas ou desistir desta.
+     */
     const buscar = async (fresco) => {
-      if (buscando) return;
+      if (buscando) return 'erro';
       buscando = true;
       campo('[data-atualizar]').disabled = true;
       dizer(fresco ? 'Perguntando ao jogo…' : 'Lendo a sua coleção…');
@@ -595,7 +602,7 @@ PPX.modulo(
         const resposta = await pedirLista(fresco);
         if (resposta.erro) {
           dizer(`Parei: ${resposta.erro}`, true);
-          return;
+          return resposta.semApi === true ? 'semApi' : 'erro';
         }
         colecao = Array.isArray(resposta.lista) ? resposta.lista : [];
         faixasDoJogo = resposta.faixas || {};
@@ -613,6 +620,7 @@ PPX.modulo(
         // Uma lista cortada apresentada como completa seria pior do que lista nenhuma.
         if (resposta.parcial)
           dizer('O jogo devolveu só uma parte da coleção — a lista está incompleta.', true);
+        return 'ok';
       } finally {
         buscando = false;
         campo('[data-atualizar]').disabled = false;
@@ -835,8 +843,29 @@ PPX.modulo(
       olho.observe(document.body, { childList: true, subtree: true });
     }
 
-    // A primeira busca é automática: um painel que abre vazio e espera um clique para ter conteúdo
-    // está a pedir um passo que ele mesmo podia dar.
-    void buscar(false);
+    /**
+     * A primeira busca e' automatica: um painel que abre vazio e espera um clique para ter
+     * conteudo esta' a pedir um passo que ele mesmo podia dar.
+     *
+     * **E ELA INSISTE, PORQUE DESISTIR CALADO FOI O DEFEITO.** Visto na conta do dono em
+     * 27/10/2026: a pagina estava aberta havia horas, a API bem viva, e o painel continuava a
+     * dizer "o jogo ainda nao publicou a API" — a busca do arranque tinha chegado cedo demais e
+     * nunca mais tentou. Abrir o painel com Alt+A tambem nao voltava a perguntar: so' o ↻, e quem
+     * le' um erro nao tem por que adivinhar que ha' um botao que o cura.
+     *
+     * Insiste **so'** enquanto a resposta for "ainda nao ha' API". Um erro de verdade — uma lista
+     * que nao e' lista, uma ponte que nao carregou — nao melhora por ser repetido, e repeti-lo
+     * seria trocar uma mensagem errada por varias.
+     */
+    const TENTATIVAS_DE_ARRANQUE = 5;
+    const ESPERA_ENTRE_TENTATIVAS = 3000;
+    const buscaDeArranque = async () => {
+      for (let tentativa = 1; tentativa <= TENTATIVAS_DE_ARRANQUE; tentativa += 1) {
+        if ((await buscar(false)) !== 'semApi') return;
+        if (tentativa < TENTATIVAS_DE_ARRANQUE)
+          await new Promise((ok) => setTimeout(ok, ESPERA_ENTRE_TENTATIVAS));
+      }
+    };
+    void buscaDeArranque();
   },
 );

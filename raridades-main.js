@@ -85,43 +85,71 @@
   };
 
   /**
+   * Espera o jogo publicar a API, em vez de desistir no primeiro olhar.
+   *
+   * **MEDIDO NA CONTA DO DONO EM 27/10/2026.** O painel estava parado em "o jogo ainda nao
+   * publicou a API" com a pagina aberta havia horas e a API bem viva: a busca automatica do
+   * arranque chegou antes de `PokeIdle.Api` existir, escreveu o aviso e nunca mais tentou. Quem
+   * lia a tela via um erro que ja' nao era verdade.
+   *
+   * O limite fica ABAIXO da paciencia do painel, de proposito. Se esta espera passasse dela, o
+   * painel desistia primeiro e dizia "o jogo nao respondeu — recarregue a pagina", que e' a
+   * mensagem de outra falha. Foi uma troca de mensagens assim que mandou procurar o defeito dos
+   * Times no lado errado durante uma hora.
+   */
+  const ESPERA_DA_API = 12000;
+  const esperarApi = async (fresco) => {
+    const fim = Date.now() + ESPERA_DA_API;
+    for (;;) {
+      const api = globalThis.PokeIdle?.Api;
+      // `getCreaturesFresh` existe para o botao de atualizar: a outra responde do cache do jogo,
+      // que e' o que se quer na abertura do painel e nao e' o que se quer depois de capturar algo.
+      const buscar = fresco ? api?.getCreaturesFresh : api?.getCreatures;
+      if (typeof buscar === 'function') return { api, buscar };
+      if (Date.now() >= fim) return null;
+      await new Promise((ok) => setTimeout(ok, 200));
+    }
+  };
+
+  /**
    * A MARCA FICA NO DOM, PORQUE O DOM E' A UNICA COISA QUE OS DOIS MUNDOS PARTILHAM.
    *
    * Posta DEPOIS do ouvinte, de proposito: antes dele, ela mentiria. E um "ja' estou aqui" como
    * evento teria o mesmo defeito ao contrario — perder-se-ia se o outro lado ainda nao escutasse.
    */
-  addEventListener(PEDIDO, (evento) => {
+  addEventListener(PEDIDO, async (evento) => {
     const eco = evento?.detail?.eco;
     const fresco = evento?.detail?.fresco === true;
     const responder = (detalhe) =>
       dispatchEvent(new CustomEvent(RESPOSTA, { detail: { eco, ...detalhe } }));
 
-    const api = globalThis.PokeIdle?.Api;
-    // `getCreaturesFresh` existe para o botao de atualizar: a outra responde do cache do jogo, que
-    // e' o que se quer na abertura do painel e nao e' o que se quer depois de capturar algo.
-    const buscar = fresco ? api?.getCreaturesFresh : api?.getCreatures;
-    if (typeof buscar !== 'function') {
-      responder({
-        erro: 'o jogo ainda não publicou a API — espere a tela carregar e tente de novo',
-      });
-      return;
-    }
+    try {
+      const porta = await esperarApi(fresco);
+      if (!porta) {
+        // **`semApi` nao e' enfeite: e' o que deixa o painel saber que vale a pena tentar de
+        // novo.** As outras falhas daqui sao definitivas — uma lista que nao e' lista nao melhora
+        // esperando. Esta e' a unica que quer dizer so' "ainda nao".
+        responder({
+          erro: 'o jogo ainda não publicou a API — espere a tela carregar e tente de novo',
+          semApi: true,
+        });
+        return;
+      }
 
-    Promise.resolve()
-      .then(() => buscar.call(api))
-      .then((resposta) => {
-        const lista = Array.isArray(resposta) ? resposta : resposta?.data;
-        if (!Array.isArray(lista)) {
-          responder({ erro: 'o jogo respondeu uma coisa que não é uma lista' });
-          return;
-        }
-        // `next_cursor` vem vazio numa coleção inteira — medido com 117. Se um dia vier preenchido,
-        // o que esta' na tela e' uma parte, e dizer isso e' melhor do que mostrar uma lista curta
-        // como se fosse tudo.
-        const resto = resposta?.next_cursor ? String(resposta.next_cursor) : '';
-        responder({ lista: lista.map(reduzir), parcial: Boolean(resto), faixas: faixas() });
-      })
-      .catch((erro) => responder({ erro: String(erro?.message || erro || 'falhou') }));
+      const resposta = await porta.buscar.call(porta.api);
+      const lista = Array.isArray(resposta) ? resposta : resposta?.data;
+      if (!Array.isArray(lista)) {
+        responder({ erro: 'o jogo respondeu uma coisa que não é uma lista' });
+        return;
+      }
+      // `next_cursor` vem vazio numa coleção inteira — medido com 117. Se um dia vier preenchido,
+      // o que esta' na tela e' uma parte, e dizer isso e' melhor do que mostrar uma lista curta
+      // como se fosse tudo.
+      const resto = resposta?.next_cursor ? String(resposta.next_cursor) : '';
+      responder({ lista: lista.map(reduzir), parcial: Boolean(resto), faixas: faixas() });
+    } catch (erro) {
+      responder({ erro: String(erro?.message || erro || 'falhou') });
+    }
   });
   document.documentElement.dataset.lioncodeRaridades = 'pronto';
 })();
