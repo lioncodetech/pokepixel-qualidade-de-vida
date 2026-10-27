@@ -177,9 +177,19 @@ test('as confirmacoes de uma accao esperam pelo servidor', () => {
   // Era aqui que estourava o prazo com a accao ja' feita: o jogo tinha tirado o Pokemon e o HUD e'
   // que nao mudava. A linha inteira, e nao so' o `esperarEquipe`: o que se afirma e' que **esta**
   // confirmacao mudou de fonte.
-  assert.match(fonte, /const demorou = await esperarEquipe\(\(\) => noTime\(id\) === entrar, 8000\);/);
+  // **15 s nos dois vereditos.** Os 8 s de antes vinham de uma medicao antiga e deixavam dois
+  // segundos de margem sobre o passo mais lento medido em 27/10/2026 (~6 s). O que acontece quando
+  // a margem acaba nao e' um aviso util, e' o aviso ERRADO — "o jogo nao tirou X" sobre um X que o
+  // jogo tirou. Esperar a mais custa segundos; desistir cedo custa uma equipe a meio e um
+  // diagnostico falso.
+  assert.match(fonte, /const demorou = await esperarEquipe\(\(\) => noTime\(id\) === entrar, 15000\);/);
+  assert.match(fonte, /const deu = \(await esperarEquipe\(\(\) => liderAgora\(\) === id, 15000\)\) !== null;/);
+  // E o aviso diz o numero certo: um texto que fale em 8 s com uma espera de 15 s manda quem le'
+  // procurar um prazo que nao existe.
+  assert.match(fonte, /\$\{nomeDe\(id\)\} depois de 15 s`/);
+  // **Os 6 s do atalho da lideranca ficam 6 s**, e isso e' uma decisao, nao um esquecimento:
+  // falhando ali nao se desiste, cai-se no painel de equipe. E' orcamento do atalho, nao veredito.
   assert.match(fonte, /\(await esperarEquipe\(\(\) => liderAgora\(\) === id, 6000\)\) !== null\) return true;/);
-  assert.match(fonte, /const deu = \(await esperarEquipe\(\(\) => liderAgora\(\) === id, 6000\)\) !== null;/);
 });
 
 test('o ajudante de espera aguarda a condicao', () => {
@@ -188,8 +198,8 @@ test('o ajudante de espera aguarda a condicao', () => {
   // e `esperarEquipe` passa precisamente uma condicao dessas. E' o mesmo defeito que o `rampage.js`
   // tinha no mesmo dia.
   assert.match(fonte, /if \(await condicao\(\)\) return Date\.now\(\) - inicio;/);
-  // E a espera pelo servidor tem cadencia propria: a 60 ms, os 8 s do `alternar` seriam mais de
-  // cem pedidos por troca.
+  // E a espera pelo servidor tem cadencia propria: a 60 ms, os 15 s do `alternar` seriam mais de
+  // duzentos pedidos por troca.
   assert.match(fonte, /const ate = async \(condicao, limite, passo = 60\) => \{/);
   assert.match(fonte, /await espera\(passo\);/);
   const espera = fonte.slice(
@@ -285,6 +295,6 @@ test('uma ponte partida nao se disfarca de "o jogo nao fez"', () => {
   assert.match(fonte, /ultimoErroDaPonte = '';\n      equipeDoServidor = \{/);
   assert.match(fonte, /const porqueNaoVi = \(\) =>/);
   // E os dois avisos de prazo esgotado usam-no.
-  assert.match(fonte, /depois de 8 s` \+[\s\S]{0,120}porqueNaoVi\(\),/);
+  assert.match(fonte, /depois de 15 s` \+[\s\S]{0,120}porqueNaoVi\(\),/);
   assert.match(fonte, /não consegui tornar \$\{nomeDe\(passo\.id\)\} ativo\$\{porqueNaoVi\(\)\}/);
 });

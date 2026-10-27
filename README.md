@@ -398,6 +398,22 @@ quatro arquivos com ponte, só este devolve o tempo. Por isso ficam três coisas
 Medido na conta do dono depois do conserto: "Gym Kanto" montado em 18 s (três colocações, ordem de
 batalha e troca de líder) e "Hunt" em 23 s — esta a troca completa, seis saindo e seis entrando.
 
+### Por que 15 s, e não os 8 s de antes
+
+Os 8 s vinham de uma medição antiga — tirar levou 1444 ms, pôr levou 953 ms — e pareciam folgados.
+Nas duas montagens acima, já com tudo consertado, **um passo levou cerca de 6 s**: dois segundos de
+margem.
+
+E os dois preços não são do mesmo tamanho. Esperar a mais custa segundos, numa falha que ia falhar
+de qualquer maneira. Desistir cedo custa uma equipe a meio **e o aviso errado** — "o jogo não tirou
+X" sobre um X que o jogo tirou, que é exatamente a mensagem que mandou procurar o defeito no lado
+errado durante uma hora. Por isso o prazo subiu para 15 s nos dois lugares onde ele é um veredito:
+a confirmação da troca e a confirmação final da liderança.
+
+**Os 6 s do atalho da liderança ficaram 6 s**, e isso é decisão, não esquecimento. Ali não se
+desiste: falhando o clique no HUD, cai-se no painel de equipe e tenta-se pela outra porta. É
+orçamento do atalho, não veredito — esticá-lo só atrasaria a reserva.
+
 ### As três regras do jogo que mandam na ordem das operações
 
 Medidas no jogo, não supostas:

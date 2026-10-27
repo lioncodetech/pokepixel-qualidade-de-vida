@@ -763,15 +763,26 @@ PPX.modulo(
       }
 
       acao.click();
-      // Tirar levou 1444 ms e por 953 ms na medicao; 8 s cobre uma conexao ruim sem travar a tela.
-      //
-      // **Pergunta-se ao servidor, nao ao HUD.** Era exactamente aqui que estourava o prazo com a
-      // accao ja' feita: o jogo tinha tirado o Pokemon e o HUD e' que nao mudava.
-      const demorou = await esperarEquipe(() => noTime(id) === entrar, 8000);
+      /**
+       * **15 s, e nao os 8 s de antes.**
+       *
+       * Os 8 s vinham de uma medicao antiga — tirar levou 1444 ms, por levou 953 ms — e pareciam
+       * folgados. Nas duas montagens de 27/10/2026, ja' com tudo consertado, um passo levou cerca
+       * de 6 s: dois segundos de margem. E o que acontece quando ela acaba nao e' um aviso util, e'
+       * **o aviso errado** — "o jogo nao tirou X" sobre um X que o jogo tirou, que foi exactamente
+       * a mensagem que mandou procurar o defeito no lado errado durante uma hora nesse dia.
+       *
+       * Esperar a mais custa segundos numa falha de verdade. Desistir cedo custa uma equipe a meio
+       * e um diagnostico falso. Os precos nao sao do mesmo tamanho.
+       *
+       * **Pergunta-se ao servidor, nao ao HUD.** Era exactamente aqui que estourava o prazo com a
+       * accao ja' feita: o jogo tinha tirado o Pokemon e o HUD e' que nao mudava.
+       */
+      const demorou = await esperarEquipe(() => noTime(id) === entrar, 15000);
       if (demorou === null) {
         await fecharCartoes();
         throw new Error(
-          `o jogo não ${entrar ? 'colocou' : 'tirou'} ${nomeDe(id)} depois de 8 s` +
+          `o jogo não ${entrar ? 'colocou' : 'tirou'} ${nomeDe(id)} depois de 15 s` +
             (entrar ? ' — pode ser espécie repetida ou limite de nível' : '') +
             porqueNaoVi(),
         );
@@ -796,6 +807,9 @@ PPX.modulo(
       const cartao = document.querySelector(`${HUD}[data-creature-id="${CSS.escape(id)}"]`);
       if (cartao && cartao.getBoundingClientRect().width > 0) {
         cartao.click();
+        // **Estes 6 s continuam 6 s, de proposito.** Aqui nao se desiste: falhando, cai-se no
+        // caminho de baixo, que abre o painel de equipe e tenta pela outra porta. E' um orcamento
+        // para o atalho, nao um veredito — esticá-lo so' atrasaria a reserva.
         if ((await esperarEquipe(() => liderAgora() === id, 6000)) !== null) return true;
       }
 
@@ -810,7 +824,9 @@ PPX.modulo(
       );
       if (!botao) return false;
       botao.click();
-      const deu = (await esperarEquipe(() => liderAgora() === id, 6000)) !== null;
+      // **Este, sim, e' o veredito** — falhando, `aplicar` para com "nao consegui tornar X
+      // ativo". Mesmo preco assimetrico da confirmacao da troca, mesmo prazo.
+      const deu = (await esperarEquipe(() => liderAgora() === id, 15000)) !== null;
       await fechar(painelEquipe);
       return deu;
     }
