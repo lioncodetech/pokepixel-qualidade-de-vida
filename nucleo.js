@@ -430,6 +430,14 @@
     .alca { color: #8b93a5; font-size: 15px; cursor: move; touch-action: none; }
     .titulo { flex: 1; color: #e6e9ef; line-height: 1.1; }
     .titulo small { display: block; color: #6f7789; font-size: 11px; }
+    .relogio {
+      display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+      padding: 5px 10px; border-bottom: 1px solid #2a3243;
+      color: #c8d2e0; font-variant-numeric: tabular-nums;
+    }
+    .relogio b { font-weight: 600; letter-spacing: .02em; }
+    .relogio small { color: #6f7789; font-size: 11px; }
+    .relogio.mau { color: #d29922; }
     .legenda {
       padding: 4px 10px 0; color: #6f7789; font-size: 11px; line-height: 1.35;
       border-top: 1px solid #2a3243; margin-top: 2px;
@@ -491,6 +499,10 @@
       <span class="titulo">PokePixel<small>qualidade de vida</small></span>
       <button class="fechar" title="Fechar o menu (Alt+Q)">—</button>
     </div>
+    <div class="relogio" data-relogio>
+      <b data-hora>perguntando a hora…</b>
+      <small data-hora-nota></small>
+    </div>
     <ul></ul>
     <div class="legenda">
       O botão do meio mostra, esconde ou liga o efeito — e fica assim no próximo F5.
@@ -507,6 +519,182 @@
   aba.textContent = 'PokePixel';
   aba.title = 'Abrir o menu das ferramentas (Alt+Q)';
 
+  // ------------------------------------------------------------ a hora do servidor
+
+  /**
+   * O relogio do topo do menu.
+   *
+   * **NAO HA' CAIXINHA DE HORARIO DE VERAO, E ISSO E' UMA DECISAO MEDIDA.** O jogo diz o fuso em
+   * que vive — `getDailyLogin()` devolveu `America/Sao_Paulo` em 27/10/2026 —, e o `Intl` do
+   * navegador sabe sozinho se naquele dia, naquele fuso, o relogio estava adiantado ou nao. Sao
+   * Paulo nem tem horario de verao desde 2019; Portugal tem, e muda num domingo diferente do de
+   * quase toda a gente. Uma caixinha "é verao?" seria uma pergunta que a maquina ja' sabe
+   * responder, e uma caixinha esquecida numa posicao errada e' um relogio errado o ano inteiro.
+   *
+   * A diferenca mostrada e' entre os dois **relogios de parede**, e nao entre instantes: o
+   * instante e' o mesmo para os dois. E' por isso que ela se calcula formatando o mesmo momento
+   * nos dois fusos, em vez de somar horas a' mao.
+   */
+  const PEDIDO_HORA = 'lioncode:nucleo:pedido';
+  const RESPOSTA_HORA = 'lioncode:nucleo:resposta';
+  const PACIENCIA_HORA = 15000;
+  const RESSINCRONIZAR = 5 * 60000;
+  /** Quanto o relogio desta maquina esta' atrasado em relacao ao do servidor, em ms. */
+  let desvioDaMaquina = null;
+  let fusoDoServidor = '';
+  let erroDaHora = '';
+  let proximoEcoDaHora = 0;
+  let tiqueDaHora = 0;
+  let ultimaSincronia = 0;
+
+  const ponteDoNucleo = async () => {
+    const fim = Date.now() + PACIENCIA_HORA;
+    while (Date.now() < fim) {
+      if (document.documentElement.dataset.lioncodeNucleo === 'pronto') return true;
+      await new Promise((ok) => setTimeout(ok, 200));
+    }
+    return document.documentElement.dataset.lioncodeNucleo === 'pronto';
+  };
+
+  const perguntarAHora = () =>
+    new Promise((resolver) => {
+      const eco = `h${Date.now()}-${(proximoEcoDaHora += 1)}`;
+      let prazo = 0;
+      const ouvir = (evento) => {
+        if (evento?.detail?.eco !== eco) return;
+        clearTimeout(prazo);
+        removeEventListener(RESPOSTA_HORA, ouvir);
+        resolver(evento.detail);
+      };
+      addEventListener(RESPOSTA_HORA, ouvir);
+      prazo = setTimeout(() => {
+        removeEventListener(RESPOSTA_HORA, ouvir);
+        resolver({ erro: 'o jogo não respondeu' });
+      }, PACIENCIA_HORA);
+      dispatchEvent(new CustomEvent(PEDIDO_HORA, { detail: { eco, acao: 'hora' } }));
+    });
+
+  const sincronizarHora = async () => {
+    ultimaSincronia = Date.now();
+    if (!(await ponteDoNucleo())) {
+      erroDaHora = 'a ponte com o jogo não carregou — recarregue a página (F5)';
+      pintarHora();
+      return 'erro';
+    }
+    const r = await perguntarAHora();
+    if (r?.erro) {
+      erroDaHora = r.erro;
+      pintarHora();
+      return r.semApi === true ? 'semApi' : 'erro';
+    }
+    erroDaHora = '';
+    // O carimbo do servidor vale para o **meio** da viagem do pedido, nao para a chegada.
+    desvioDaMaquina = r.servidor - r.medidoEm;
+    fusoDoServidor = r.fuso || '';
+    pintarHora();
+    return 'ok';
+  };
+
+  /**
+   * A primeira pergunta insiste enquanto for "ainda nao ha' API".
+   *
+   * O menu monta-se antes de o jogo acabar de carregar; perguntar uma vez so' deixava a linha a
+   * dizer "sem a hora do servidor" depois de ja' haver hora. Insiste-se **so'** nesse caso: um
+   * erro de verdade nao melhora por ser repetido.
+   */
+  const TENTATIVAS_DE_ARRANQUE = 5;
+  const ESPERA_ENTRE_TENTATIVAS = 3000;
+  const primeiraHora = async () => {
+    for (let tentativa = 1; tentativa <= TENTATIVAS_DE_ARRANQUE; tentativa += 1) {
+      if ((await sincronizarHora()) !== 'semApi') return;
+      if (tentativa < TENTATIVAS_DE_ARRANQUE)
+        await new Promise((ok) => setTimeout(ok, ESPERA_ENTRE_TENTATIVAS));
+    }
+  };
+
+  /** O relogio de parede daquele fuso, naquele instante, como um numero comparavel. */
+  const relogioDeParede = (quando, zona) => {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zona,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(quando)
+      .reduce((m, x) => ((m[x.type] = x.value), m), {});
+    return Date.UTC(+partes.year, +partes.month - 1, +partes.day, +partes.hour, +partes.minute, +partes.second);
+  };
+
+  const diferencaDeFuso = (quando) => {
+    if (!fusoDoServidor) return null;
+    try {
+      const aqui = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return Math.round((relogioDeParede(quando, fusoDoServidor) - relogioDeParede(quando, aqui)) / 60000);
+    } catch {
+      return null;
+    }
+  };
+
+  const emHoras = (minutos) => {
+    const m = Math.abs(minutos);
+    return m % 60 === 0 ? `${m / 60} h` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+  };
+
+  function pintarHora() {
+    const campo = menu.querySelector('[data-hora]');
+    const nota = menu.querySelector('[data-hora-nota]');
+    const linha = menu.querySelector('[data-relogio]');
+    if (!campo || !nota || !linha) return;
+
+    if (desvioDaMaquina === null) {
+      // **Sem hora, nao se inventa uma.** Mostrar o relogio da maquina com o rotulo "servidor"
+      // seria a pior das saidas: parece certo e nao e'.
+      linha.classList.add('mau');
+      campo.textContent = erroDaHora ? 'sem a hora do servidor' : 'perguntando a hora…';
+      nota.textContent = erroDaHora;
+      linha.title = erroDaHora;
+      return;
+    }
+
+    const agora = Date.now() + desvioDaMaquina;
+    const zona = fusoDoServidor || 'UTC';
+    const hora = new Date(agora).toLocaleTimeString('pt-BR', {
+      timeZone: zona, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    linha.classList.remove('mau');
+    campo.textContent = `servidor ${hora}${fusoDoServidor ? '' : ' UTC'}`;
+
+    const minutos = diferencaDeFuso(agora);
+    const recados = [];
+    if (minutos === null) recados.push(fusoDoServidor ? '' : 'o jogo não disse o fuso');
+    else if (minutos === 0) recados.push('a mesma hora que a sua');
+    else recados.push(`${emHoras(minutos)} ${minutos > 0 ? 'à frente' : 'atrás'} do seu relógio`);
+    // **Um relogio de maquina errado estraga todos os horarios do pacote**, que sao marcados por
+    // ele. Meio minuto ja' e' muito para um reset que vira a' meia-noite em ponto, e quem nao for
+    // avisado vai culpar a ferramenta.
+    if (Math.abs(desvioDaMaquina) >= 30000)
+      recados.push(`o relógio desta máquina está ${Math.round(Math.abs(desvioDaMaquina) / 1000)} s ${desvioDaMaquina > 0 ? 'atrasado' : 'adiantado'}`);
+    nota.textContent = recados.filter(Boolean).join(' · ');
+    linha.title = `${zona}${fusoDoServidor ? '' : ' (o jogo não disse o fuso)'}`;
+  }
+
+  /** O relogio so' anda com o menu aberto: fechado, ninguem o le', e um tique por segundo a' toa
+   * e' trabalho que o jogo nao precisa de dividir. */
+  const moverORelogio = (ligar) => {
+    clearInterval(tiqueDaHora);
+    tiqueDaHora = 0;
+    if (!ligar) return;
+    pintarHora();
+    // **Abrir o menu sem hora pergunta de novo na hora**, e nao daqui a cinco minutos: quem abriu
+    // abriu para ver a hora, e e' o unico momento em que se sabe que alguem esta' a olhar.
+    if (desvioDaMaquina === null || Date.now() - ultimaSincronia >= RESSINCRONIZAR)
+      void sincronizarHora();
+    tiqueDaHora = setInterval(() => {
+      pintarHora();
+      if (Date.now() - ultimaSincronia >= RESSINCRONIZAR) void sincronizarHora();
+    }, 1000);
+  };
+
   let aberto = ler(CHAVE_ABERTO, false) === true;
   // A lista do que estava a' vista quando se escondeu tudo, ou `null` quando nao se escondeu.
   // Mora aqui em cima porque `pintar` a consulta, e ela tem de existir antes do primeiro desenho.
@@ -519,6 +707,8 @@
     aba.classList.toggle('aberta', !aberto);
     // Quem acabou de aparecer so' agora tem medidas: e' aqui que ele vai para o canto guardado.
     if (montado) colocar();
+    // O relogio anda so' com o menu a' vista.
+    moverORelogio(aberto);
   };
   const abrir = (sim) => {
     aberto = sim;
@@ -862,6 +1052,10 @@
 
   // Sem nenhuma ferramenta registrada — todas desligadas, ou todas com erro — o menu ainda precisa
   // aparecer: e' por ele que se liga qualquer uma de volta.
+  // A primeira pergunta sai sozinha, e nao fica' a' espera de alguem abrir o menu: quem abre quer
+  // ver a hora, nao ver "perguntando a hora…" e esperar a volta do pedido.
+  void primeiraHora();
+
   if (document.body) agendarMontagem();
   else addEventListener('DOMContentLoaded', agendarMontagem, { once: true });
 })();

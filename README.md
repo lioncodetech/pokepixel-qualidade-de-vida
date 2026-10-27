@@ -84,6 +84,42 @@ ferramentas, mas deixa de fora **Times** e **Escada**. As composições carregam
 conta e a Escada é configurada separadamente em cada janela. Os **nomes** escolhidos nas demais
 ferramentas viajam normalmente — por exemplo, time do Ginásio, do Rampage e do World Boss.
 
+## A hora do servidor, no topo do menu
+
+O menu (Alt+Q) abre com uma linha de relógio: **a hora do servidor**, a correr ao segundo, e ao lado
+a diferença para o seu próprio relógio — "3 h atrás do seu relógio", e no Verão europeu 4 h.
+
+Ela é **lida do jogo**, não calculada a partir da sua máquina. `getGameConfig()` devolve o
+`server_time` e `getDailyLogin()` devolve o fuso em que o servidor vive — medido em 27/10/2026,
+`America/Sao_Paulo`. A pergunta repete-se de cinco em cinco minutos, e só enquanto o menu está
+aberto: fechado, ninguém lê o relógio e um tique por segundo seria trabalho à toa.
+
+**A viagem do pedido entra na conta.** O `server_time` chega já velho: foi carimbado algures entre o
+pedido sair e a resposta voltar. Tomar o instante da chegada como o do carimbo erraria por uma
+viagem inteira, sempre para o mesmo lado — por isso o que conta é o meio do intervalo.
+
+E **sem hora não se inventa uma**: se o jogo não responder, a linha diz que está sem a hora do
+servidor. O relógio da sua máquina com o rótulo "servidor" seria a pior das saídas, porque parece
+certo e não é.
+
+### Por que não há caixinha de horário de verão
+
+Porque a máquina já sabe a resposta, e uma caixinha esquecida na posição errada é um relógio errado
+o ano inteiro.
+
+O jogo diz em que fuso vive, e o `Intl` do navegador sabe sozinho se naquele dia, naquele fuso, o
+relógio estava adiantado. São Paulo nem tem horário de verão desde 2019; Portugal tem, e muda num
+domingo diferente do de quase toda a gente. A diferença é calculada formatando **o mesmo instante**
+nos dois fusos e subtraindo — nunca somando horas à mão. Há um teste que corre a própria função do
+menu em Janeiro e em Julho e exige −3 h e −4 h: a diferença muda sozinha, nos dois lados do ano.
+
+### De brinde, um aviso que vale por si
+
+Se o relógio da sua máquina estiver meio minuto fora do servidor, a linha diz. **Todos os horários
+do pacote são marcados por esse relógio** — agendas, janelas de ginásio, o reset do dia. Meio minuto
+já é muito para um reset que vira à meia-noite em ponto, e quem não for avisado vai culpar a
+ferramenta.
+
 ## Os dois comandos de cada linha
 
 Cada ferramenta tem **dois** comandos no menu, e eles não são a mesma coisa:
