@@ -161,6 +161,11 @@ PPX.modulo(
      *
      * Devolver o tempo em vez de so' `true` permite que a falha diga "esperei 6 s e nada mudou",
      * que e' a diferenca entre um aviso util e um "nao funcionou".
+     *
+     * **MAS ENTAO O QUE ELE DEVOLVE NAO SE USA COMO BOOLEANO.** Zero e' um tempo legitimo — e o
+     * mais comum, quando a condicao ja' era verdadeira — e zero e' falso. Compare sempre com
+     * `null`. Os ajudantes iguais dos Eventos e do Rampage devolvem o valor encontrado, nao o
+     * tempo; quem trouxer codigo de la' tem de mudar esta linha.
      */
     const ate = async (condicao, limite, passo = 60) => {
       const inicio = Date.now();
@@ -225,8 +230,14 @@ PPX.modulo(
      * `CustomEvent` sem ninguem a escutar nao fica em fila: perde-se. Espera-se a marca, nunca se
      * re-dispara — e' a mesma regra dos Eventos, das Raridades e do Rampage.
      */
-    const pontePronta = () =>
-      ate(() => document.documentElement.dataset.lioncodeTimes === 'pronto', 20000);
+    const pontePronta = async () =>
+      // **`!== null`, e nao o valor solto.** O `ate` daqui devolve QUANTO DEMOROU, e a marca ja'
+      // esta' no DOM quando se pergunta: a primeira volta acerta, o tempo decorrido e' `0`, e `0` e'
+      // falso em JavaScript. Escrito como booleano, isto dava a ponte por ausente — de forma
+      // intermitente, conforme o relogio virasse um milissegundo entre as duas leituras. Custou uma
+      // montagem de equipe a meio, em 27/10/2026: a remocao acontecia e a confirmacao nunca a via.
+      // O padrao foi copiado dos Eventos e do Rampage, onde o `ate` devolve o valor encontrado.
+      (await ate(() => document.documentElement.dataset.lioncodeTimes === 'pronto', 20000)) !== null;
 
     let ecoDaPonte = 0;
     const pedirAoJogo = (acao) =>
@@ -283,13 +294,31 @@ PPX.modulo(
      */
     let equipeDoServidor = { ids: [], lider: '', lida: false };
 
+    /**
+     * O motivo da ultima leitura falhada, ou `''`.
+     *
+     * **Uma ponte partida nao e' "o jogo nao fez".** Sao duas falhas diferentes e levam a dois
+     * consertos diferentes, e durante uma hora em 27/10/2026 elas vestiram a mesma mensagem: o
+     * painel dizia "o jogo nao tirou X depois de 8 s" sobre um X que o jogo tinha tirado, porque
+     * quem nao estava a ver era a leitura, nao o jogo. Quem le' o aviso tem de poder distinguir.
+     */
+    let ultimoErroDaPonte = '';
+
     /** Pergunta ao jogo e guarda. Devolve `{ erro }` quando a ponte nao respondeu. */
     const relerEquipe = async () => {
       const r = await ponte('equipe');
-      if (r?.erro) return r;
+      if (r?.erro) {
+        ultimoErroDaPonte = r.erro;
+        return r;
+      }
+      ultimoErroDaPonte = '';
       equipeDoServidor = { ids: r.ids || [], lider: r.lider || '', lida: true };
       return r;
     };
+
+    /** O que acrescentar a um aviso de prazo esgotado, quando a culpa nao foi do jogo. */
+    const porqueNaoVi = () =>
+      ultimoErroDaPonte ? ` — na verdade não consegui ler a equipe: ${ultimoErroDaPonte}` : '';
 
     const idsNaEquipe = () => equipeDoServidor.ids;
     /** O id do Pokemon ativo, ou vazio enquanto a equipe nao foi lida. */
@@ -649,7 +678,7 @@ PPX.modulo(
         if (passo.acao === 'lider') {
           contar(`Passando a liderança para ${nomeDe(passo.id)}…`);
           if (!(await tornarLider(passo.id)))
-            throw new Error(`não consegui tornar ${nomeDe(passo.id)} ativo`);
+            throw new Error(`não consegui tornar ${nomeDe(passo.id)} ativo${porqueNaoVi()}`);
           continue;
         }
         contar(`${passo.acao === 'por' ? 'Colocando' : 'Tirando'} ${nomeDe(passo.id)}…`);
@@ -743,7 +772,8 @@ PPX.modulo(
         await fecharCartoes();
         throw new Error(
           `o jogo não ${entrar ? 'colocou' : 'tirou'} ${nomeDe(id)} depois de 8 s` +
-            (entrar ? ' — pode ser espécie repetida ou limite de nível' : ''),
+            (entrar ? ' — pode ser espécie repetida ou limite de nível' : '') +
+            porqueNaoVi(),
         );
       }
       // O cartao costuma fechar sozinho; se tiver ficado, nao se deixa um aberto para o proximo.

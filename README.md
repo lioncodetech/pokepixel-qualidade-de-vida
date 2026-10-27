@@ -366,6 +366,38 @@ E um defeito que veio de carona, igual ao que o Rampage tinha no mesmo dia: o aj
 sempre verdadeira** — sem o `await`, toda espera por algo que se pergunta ao jogo se dava por
 cumprida na primeira volta.
 
+### O zero que dizia que a ponte não existia
+
+A 1.30.2 saiu com a fonte trocada e **não funcionava**: a montagem parava no primeiro Pokémon,
+dizendo "o jogo não tirou Gyarados depois de 8 s" — e o jogo tinha tirado o Gyarados.
+
+O `ate` deste arquivo devolve **quanto tempo demorou**, para a falha poder dizer "esperei 6 s e nada
+mudou". Mas o `pontePronta` foi escrito como se ele devolvesse `true`:
+
+```js
+if (!(await pontePronta())) return { erro: 'a ponte com o jogo não carregou…' };
+```
+
+A marca da ponte já está no DOM quando se pergunta. A primeira volta acerta, o tempo decorrido é
+**`0`**, e `0` é falso em JavaScript: a ponte dava-se por ausente, a releitura da equipe devolvia
+erro, e a confirmação nunca via a remoção que tinha acontecido. Intermitente, porque dependia de o
+relógio virar um milissegundo entre duas leituras — numa corrida falhou logo no primeiro passo,
+noutra só no terceiro.
+
+O padrão veio dos Eventos e do Rampage, onde o ajudante igual devolve **o valor encontrado**. Dos
+quatro arquivos com ponte, só este devolve o tempo. Por isso ficam três coisas:
+
+- o contrato está escrito no comentário do próprio `ate`, com o aviso para quem trouxer código de lá;
+- um guarda varre **todas** as chamadas de `ate` e `esperarEquipe` e reprova qualquer uma cujo
+  resultado não seja comparado com `null` — não só a que falhou;
+- **uma ponte partida deixou de se disfarçar de "o jogo não fez".** São duas falhas diferentes, com
+  consertos diferentes, e durante uma hora vestiram a mesma mensagem, o que mandou procurar o
+  defeito no lado errado. Agora o aviso de prazo esgotado acrescenta `— na verdade não consegui ler
+  a equipe: <motivo>` quando a culpa foi da leitura.
+
+Medido na conta do dono depois do conserto: "Gym Kanto" montado em 18 s (três colocações, ordem de
+batalha e troca de líder) e "Hunt" em 23 s — esta a troca completa, seis saindo e seis entrando.
+
 ### As três regras do jogo que mandam na ordem das operações
 
 Medidas no jogo, não supostas:

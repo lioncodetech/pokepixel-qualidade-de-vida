@@ -234,3 +234,57 @@ test('a ponte espera a marca no DOM em vez de redisparar', () => {
     /ate\(\(\) => document\.documentElement\.dataset\.lioncodeTimes === 'pronto', 20000\)/,
   );
 });
+
+test('o que o ate devolve nunca e usado como booleano', () => {
+  // **ESTE GUARDA EXISTE POR UMA MONTAGEM DE EQUIPE QUE PAROU A MEIO, EM 27/10/2026.** O `ate`
+  // daqui devolve QUANTO DEMOROU, para a falha poder dizer "esperei 6 s e nada mudou". Mas zero é
+  // um tempo legítimo — e o mais comum, quando a condição já era verdadeira —, e zero é falso em
+  // JavaScript. O `pontePronta` tinha sido escrito como booleano, copiado dos Eventos e do Rampage,
+  // onde o ajudante devolve o valor encontrado e não o tempo. A marca da ponte já está no DOM
+  // quando se pergunta, então a primeira volta acertava, devolvia 0, e a ponte dava-se por ausente.
+  //
+  // O resultado era intermitente — dependia de o relógio virar um milissegundo entre duas leituras
+  // — e aparecia longe da causa: a remoção acontecia no jogo e a confirmação nunca a via, com o
+  // painel a dizer "o jogo não tirou X depois de 8 s" sobre um X que o jogo já tinha tirado.
+  //
+  // Por isso o guarda é sobre TODAS as chamadas, e não sobre a que falhou.
+  const maus = [];
+  for (const chamada of ['await ate(', 'await esperarEquipe(']) {
+    let i = fonte.indexOf(chamada);
+    while (i !== -1) {
+      const linha = fonte.slice(0, i).split('\n').length;
+      const volta = fonte.slice(Math.max(0, i - 80), i + 400);
+      const comparado = volta.includes('=== null') || volta.includes('!== null');
+      const guardado = /const [a-zA-Z]+ = await (ate|esperarEquipe)\(/.test(volta);
+      if (!comparado && !guardado) maus.push(`linha ${linha}: ${fonte.slice(i, i + 60)}`);
+      i = fonte.indexOf(chamada, i + 1);
+    }
+  }
+  assert.deepEqual(
+    maus,
+    [],
+    'o resultado de ate/esperarEquipe tem de ser comparado com null, nunca usado como booleano:'
+      + `\n  ${maus.join('\n  ')}`,
+  );
+
+  // E o contrato fica escrito onde quem mexer tropeça nele.
+  assert.match(fonte, /\*\*MAS ENTAO O QUE ELE DEVOLVE NAO SE USA COMO BOOLEANO\.\*\*/);
+  assert.match(
+    fonte,
+    /\(await ate\(\(\) => document\.documentElement\.dataset\.lioncodeTimes === 'pronto', 20000\)\) !== null;/,
+  );
+});
+
+test('uma ponte partida nao se disfarca de "o jogo nao fez"', () => {
+  // São duas falhas diferentes e levam a dois consertos diferentes, e durante uma hora em
+  // 27/10/2026 vestiram a mesma mensagem: o painel dizia "o jogo não tirou X depois de 8 s" sobre
+  // um X que o jogo tinha tirado — quem não estava a ver era a leitura, não o jogo. Quem lê o
+  // aviso tem de poder distinguir, senão procura o defeito no lado errado.
+  assert.match(fonte, /let ultimoErroDaPonte = '';/);
+  // Some assim que uma leitura funciona: um erro velho pendurado num aviso novo mente igual.
+  assert.match(fonte, /ultimoErroDaPonte = '';\n      equipeDoServidor = \{/);
+  assert.match(fonte, /const porqueNaoVi = \(\) =>/);
+  // E os dois avisos de prazo esgotado usam-no.
+  assert.match(fonte, /depois de 8 s` \+[\s\S]{0,120}porqueNaoVi\(\),/);
+  assert.match(fonte, /não consegui tornar \$\{nomeDe\(passo\.id\)\} ativo\$\{porqueNaoVi\(\)\}/);
+});
