@@ -546,6 +546,21 @@
   let proximoEcoDaHora = 0;
   let tiqueDaHora = 0;
   let ultimaSincronia = 0;
+  /**
+   * O ultimo carimbo aceite, e a viagem minima para uma resposta contar como medicao.
+   *
+   * **UMA RESPOSTA DO CACHE NAO E' UMA MEDICAO.** Medido na conta do dono em 27/10/2026:
+   * `getGameConfig()` chamado 20 s depois devolveu o MESMO `server_time`, em **1 ms** de viagem —
+   * sem rede pelo meio —, enquanto os pedidos de verdade levaram entre 330 e 575 ms. Tomar esse
+   * carimbo por "agora" punha o relogio 20 s atras, e com cinco minutos entre sincronias foi assim
+   * que ele apareceu **1m41s atrasado** no jogo logado, na primeira versao desta linha.
+   *
+   * Sao duas condicoes, e as duas sao precisas: um carimbo igual ao anterior nunca e' novo, e uma
+   * resposta instantanea nunca veio do servidor. Uma medicao recusada **nao apaga** a que ja'
+   * havia — um relogio de maquina nao derrapa minutos em cinco minutos.
+   */
+  let ultimoCarimbo = null;
+  const VIAGEM_MINIMA = 20;
 
   const ponteDoNucleo = async () => {
     const fim = Date.now() + PACIENCIA_HORA;
@@ -587,7 +602,15 @@
       pintarHora();
       return r.semApi === true ? 'semApi' : 'erro';
     }
+    if (r.servidor === ultimoCarimbo || r.viagem < VIAGEM_MINIMA) {
+      // Nao e' um erro do jogo: e' uma resposta que nao serve para medir o tempo.
+      if (desvioDaMaquina === null)
+        erroDaHora = 'o jogo respondeu do cache — ainda não consegui medir a hora';
+      pintarHora();
+      return desvioDaMaquina === null ? 'cache' : 'ok';
+    }
     erroDaHora = '';
+    ultimoCarimbo = r.servidor;
     // O carimbo do servidor vale para o **meio** da viagem do pedido, nao para a chegada.
     desvioDaMaquina = r.servidor - r.medidoEm;
     fusoDoServidor = r.fuso || '';
@@ -606,7 +629,9 @@
   const ESPERA_ENTRE_TENTATIVAS = 3000;
   const primeiraHora = async () => {
     for (let tentativa = 1; tentativa <= TENTATIVAS_DE_ARRANQUE; tentativa += 1) {
-      if ((await sincronizarHora()) !== 'semApi') return;
+      // Insiste tambem quando a resposta veio do cache: tambem e' um "ainda nao", e tambem passa.
+      const como = await sincronizarHora();
+      if (como !== 'semApi' && como !== 'cache') return;
       if (tentativa < TENTATIVAS_DE_ARRANQUE)
         await new Promise((ok) => setTimeout(ok, ESPERA_ENTRE_TENTATIVAS));
     }

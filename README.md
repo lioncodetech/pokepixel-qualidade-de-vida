@@ -113,6 +113,22 @@ domingo diferente do de quase toda a gente. A diferença é calculada formatando
 nos dois fusos e subtraindo — nunca somando horas à mão. Há um teste que corre a própria função do
 menu em Janeiro e em Julho e exige −3 h e −4 h: a diferença muda sozinha, nos dois lados do ano.
 
+### Uma resposta do cache não é uma medição
+
+O jogo guarda a resposta de `getGameConfig()`. Medido em 27/10/2026: chamada outra vez 20 segundos
+depois, devolveu **o mesmo `server_time`**, em 1 ms de viagem — sem rede pelo meio —, enquanto os
+pedidos de verdade levaram entre 330 e 575 ms.
+
+Tomar esse carimbo por "agora" punha o relógio 20 segundos atrás. Com cinco minutos entre
+sincronias, foi assim que a primeira versão desta linha apareceu **1m41s atrasada** no jogo. O
+relógio não estava parado: estava a ser corrigido para trás, de cinco em cinco minutos, por uma
+resposta que não tinha saído de casa.
+
+Agora uma resposta só conta como medição se trouxer **um carimbo diferente do anterior** e tiver
+**viajado** — as duas coisas, porque um carimbo repetido nunca é novo e uma resposta instantânea
+nunca veio do servidor. E uma medição recusada **não apaga a que já havia**: um relógio de máquina
+não derrapa minutos em cinco minutos, e trocar uma medida boa por nada seria piorar.
+
 ### De brinde, um aviso que vale por si
 
 Se o relógio da sua máquina estiver meio minuto fora do servidor, a linha diz. **Todos os horários

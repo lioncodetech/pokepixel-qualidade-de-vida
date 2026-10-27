@@ -122,7 +122,8 @@ test('a ponte do nucleo espera a API, como a das Raridades', () => {
   );
 
   // E o arranque insiste **so'** enquanto for "ainda nao ha' API".
-  assert.match(menu, /if \(\(await sincronizarHora\(\)\) !== 'semApi'\) return;/);
+  assert.match(menu, /const como = await sincronizarHora\(\);/);
+  assert.match(menu, /if \(como !== 'semApi' && como !== 'cache'\) return;/);
   assert.match(menu, /void primeiraHora\(\);/);
   assert.ok(
     !/void sincronizarHora\(\);\n\n  if \(document\.body\)/.test(ler('nucleo.js')),
@@ -130,4 +131,27 @@ test('a ponte do nucleo espera a API, como a das Raridades', () => {
   );
   // Abrir o menu sem hora tambem volta a perguntar, sem esperar a ressincronia.
   assert.match(menu, /desvioDaMaquina === null \|\| Date\.now\(\) - ultimaSincronia >= RESSINCRONIZAR/);
+});
+test('uma resposta do cache nao e uma medicao do tempo', () => {
+  // **MEDIDO NA CONTA DO DONO EM 27/10/2026.** `getGameConfig()` chamado 20 s depois devolveu o
+  // MESMO `server_time`, em 1 ms de viagem — sem rede pelo meio —, enquanto os pedidos de verdade
+  // levaram entre 330 e 575 ms. Tomar esse carimbo por "agora" punha o relogio 20 s atras, e com
+  // cinco minutos entre sincronias foi assim que ele apareceu 1m41s atrasado no jogo logado.
+  assert.match(menu, /r\.servidor === ultimoCarimbo \|\| r\.viagem < VIAGEM_MINIMA/);
+  assert.match(menu, /ultimoCarimbo = r\.servidor;/);
+  assert.match(ponte, /viagem: depois - antes/);
+
+  // A viagem minima fica bem acima do 1 ms do cache e bem abaixo dos 330 ms de um pedido real:
+  // um limite encostado a qualquer um dos dois lados recusava medicoes boas ou aceitava cache.
+  const minima = Number(/const VIAGEM_MINIMA = (\d+);/.exec(menu)?.[1]);
+  assert.ok(minima > 1 && minima < 330, `${minima} ms nao separa o cache de um pedido medido`);
+
+  // **Uma medicao recusada nao apaga a que ja havia.** Um relogio de maquina nao derrapa minutos
+  // em cinco minutos, e zerar o desvio por causa de um cache seria trocar uma medida boa por nada.
+  const bloco = menu.slice(menu.indexOf('r.servidor === ultimoCarimbo'));
+  const ate = bloco.slice(0, bloco.indexOf('erroDaHora = \'\';'));
+  assert.ok(
+    !/desvioDaMaquina = /.test(ate),
+    'o caminho do cache nao pode mexer no desvio ja medido',
+  );
 });
