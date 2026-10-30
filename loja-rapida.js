@@ -697,13 +697,14 @@ PPX.modulo({ id: 'loja-rapida', nome: 'Loja rápida', atalhos: 'Alt+C esconde ·
        mais largo que a coluna do cabecalho — os rotulos nao batiam com as colunas. */
     #lioncode-loja-rapida, #lioncode-loja-rapida * { box-sizing: border-box; }
     #lioncode-loja-rapida {
-      position: fixed; z-index: 2147483000; width: 524px; max-height: 88vh; overflow: auto;
+      position: fixed; z-index: 2147483000; width: 524px; max-height: var(--ppx-teto); overflow: auto;
       /* Canto de arrastar do proprio navegador: a rolagem ja' existe, entao encolher nao esconde
          nada, so' passa a rolar. */
       resize: both; min-width: 330px; min-height: 150px;
-      background: #10151e; color: #e6e9ef; border: 1px solid #2a3240; border-radius: 12px;
-      font: 12px/1.45 system-ui, sans-serif; box-shadow: 0 14px 34px rgba(0,0,0,.55);
-      scrollbar-width: thin; scrollbar-color: #2a3240 transparent;
+      background: var(--ppx-fundo); color: var(--ppx-texto);
+      border: 1px solid var(--ppx-borda); border-radius: var(--ppx-raio);
+      font: var(--ppx-fonte-densa); box-shadow: var(--ppx-sombra);
+      scrollbar-width: thin; scrollbar-color: var(--ppx-borda) transparent;
       /* Transparente em repouso para nao tapar o jogo atras dela, e opaca assim que o mouse ou o
          teclado chega: o painel e' para ser lido de perto, nao enquanto se joga. */
       opacity: .82; transition: opacity .15s;

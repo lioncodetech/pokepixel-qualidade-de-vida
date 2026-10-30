@@ -314,10 +314,11 @@ PPX.modulo(
     estilo.textContent = `
       #lioncode-layout-padrao, #lioncode-layout-padrao * { box-sizing: border-box; }
       #lioncode-layout-padrao {
-        position: fixed; z-index: 2147483000; width: 290px; max-height: 88vh; overflow: auto;
-        background: #10151e; color: #e6e9ef; border: 1px solid #2a3240; border-radius: 12px;
-        font: 12px/1.45 system-ui, sans-serif; box-shadow: 0 14px 34px rgba(0,0,0,.55);
-        scrollbar-width: thin; scrollbar-color: #2a3240 transparent;
+        position: fixed; z-index: 2147483000; width: 290px; max-height: var(--ppx-teto); overflow: auto;
+        background: var(--ppx-fundo); color: var(--ppx-texto);
+      border: 1px solid var(--ppx-borda); border-radius: var(--ppx-raio);
+        font: var(--ppx-fonte-densa); box-shadow: var(--ppx-sombra);
+        scrollbar-width: thin; scrollbar-color: var(--ppx-borda) transparent;
         opacity: .82; transition: opacity .15s;
       }
       #lioncode-layout-padrao:hover, #lioncode-layout-padrao:focus-within { opacity: 1; }

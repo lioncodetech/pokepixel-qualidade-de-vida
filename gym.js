@@ -53,8 +53,33 @@ PPX.modulo(
     const CHAVE_AGENDA = 'lioncode:gym:agenda';
     const CHAVE_PLACAR = 'lioncode:gym:placar';
     const CHAVE_ELITE4 = 'lioncode:gym:elite4';
+    /**
+     * Os ginasios que a ferramenta aprendeu do jogo, por regiao.
+     *
+     * Chave propria, e **de proposito fora do export**: isto e' o que ela descobriu sozinha, nao
+     * uma escolha de ninguem. Levar o catalogo para outra janela seria levar o palpite de uma
+     * conta para outra, e quando o jogo mudar os ginasios o catalogo velho venceria o jogo.
+     */
+    const CHAVE_GINASIOS = 'lioncode:gym:ginasios';
 
-    const REGIOES = ['KANTO', 'JOHTO'];
+    /**
+     * As regioes com Desafio dos Gyms, na ordem em que o jogo as poe nas abas.
+     *
+     * Hoenn entrou em 30/10/2026, quando o jogo a acrescentou. Medido na janela antes de entrar
+     * aqui: as abas sao botoes de texto `KANTO`, `JOHTO` e `HOENN`, e o mapa do Hoenn traz os
+     * mesmos sete `gym-hotspot` mais o `--league`, com o mesmo `is-active` e o mesmo rotulo
+     * `HOJE`. Nada do que a ferramenta le' no jogo mudou: o que faltava era ela so' conhecer duas.
+     *
+     * Por isso tudo o que se repete por regiao — as abas do painel, os botoes da Elite 4, as
+     * linhas da agenda — passou a ser desenhado a partir desta lista. Quando Sinnoh chegar, e'
+     * uma linha.
+     */
+    const REGIOES = ['KANTO', 'JOHTO', 'HOENN'];
+    const NOMES = { KANTO: 'Kanto', JOHTO: 'Johto', HOENN: 'Hoenn' };
+    /** O nome bonito da regiao. Sem nome escrito mostra o proprio codigo, e nao 'Johto'. */
+    const nomeDe = (regiao) => NOMES[regiao] || regiao;
+    /** So' o texto cinzento da caixa de horas: horarios diferentes dizem que cada uma tem a sua. */
+    const EXEMPLOS = ['08:00-09:00', '19:00-20:00', '13:00-14:00'];
 
     // ------------------------------------------------------------- os dois ciclos
     //
@@ -426,6 +451,39 @@ PPX.modulo(
       return true;
     };
 
+    /**
+     * Abre a janela do ginasio ja' na aba da regiao pedida, com a segunda tentativa que a
+     * experiencia obrigou a ter.
+     *
+     * Duas etapas precisam exactamente disto — a que vai ver qual e' o ginasio de hoje e a que
+     * desafia. Escrever o mesmo duas vezes seria ter dois caminhos a envelhecer em separado, e
+     * foi esse o erro que a propria ferramenta evita em `comecar`.
+     */
+    const abrirNaRegiao = async (regiao) => {
+      // A tela limpa e os menus fechados sao garantia **de quem abre**. Deixa-los a cargo de cada
+      // chamador faz com que um chamador esquecido seja um defeito que so' aparece com anuncio na
+      // tela — e o jogo recusa abrir janelas com um menu da barra aberto.
+      await esperarTelaLimpa(8000, (t) => dizer(t));
+      await fecharMenus();
+      let janela = await abrirOGinasio();
+      if (!janela) {
+        // Segunda tentativa: se um aneuncio apareceu entre a limpeza e o clique, a janela nao
+        // abriu por causa dele, e nao porque o NPC sumiu.
+        await esperarTelaLimpa(8000, (t) => dizer(t));
+        await fecharMenus();
+        janela = await abrirOGinasio();
+      }
+      if (!janela)
+        return {
+          erro: haSobreposto()
+            ? 'há um anúncio do jogo por cima que não consegui fechar'
+            : 'não consegui abrir a janela do ginásio',
+        };
+      if (!(await escolherRegiao(janela, regiao)))
+        return { erro: `a janela do ginásio não tem a aba ${regiao}` };
+      return { janela };
+    };
+
     const hotspots = (janela) =>
       [...janela.querySelectorAll('.gym-hotspot')].filter(
         (h) => !h.className.includes('gym-hotspot--league'),
@@ -667,6 +725,10 @@ PPX.modulo(
 
     const ETAPAS = [
       'sair',
+      // Ver **antes** de montar: o time de cada ginasio so' se pode escolher sabendo qual e' o
+      // ginasio de hoje, e a janela do ginasio e' a unica que o diz. Esta etapa abre-a, aprende
+      // os ginasios da regiao, guarda o de hoje e fecha-a outra vez.
+      'ver-ginasio',
       'time-gym',
       'recarregar',
       'desafiar',
@@ -675,7 +737,7 @@ PPX.modulo(
       'voltar',
     ];
     /** As etapas de cada orcamento. O combate fica fora: dura o que durar. */
-    const DA_ENTRADA = ['sair', 'time-gym', 'recarregar', 'desafiar'];
+    const DA_ENTRADA = ['sair', 'ver-ginasio', 'time-gym', 'recarregar', 'desafiar'];
     const DA_SAIDA = ['recarregar-volta', 'time-volta', 'voltar'];
     /**
      * As duas recargas da sequencia, com a razao de cada uma na propria mensagem.
@@ -701,6 +763,8 @@ PPX.modulo(
      */
     const CLIQUES = {
       sair: 1,
+      // Abrir a janela, trocar para a aba da regiao e fechar.
+      'ver-ginasio': 3,
       // As trocas de time nao clicam nada aqui — quem clica e' o Times, com o ritmo de 20–30 s
       // dele. O 1 e' o tempo **antes** de abrir a mochila: ninguem sai de um combate e abre a
       // mochila no mesmo instante, que foi exactamente a queixa da tela da vitoria.
@@ -731,7 +795,8 @@ PPX.modulo(
 
     const escolhas = () => {
       const bruto = ler(CHAVE_ESCOLHAS, null) || {};
-      const regiao = bruto.regiao === 'JOHTO' ? 'JOHTO' : 'KANTO';
+      // Uma regiao guardada que nao exista mais — ou que ainda nao exista — cai no Kanto.
+      const regiao = REGIOES.includes(bruto.regiao) ? bruto.regiao : 'KANTO';
       const por = { ...(bruto.porRegiao || {}) };
       if (!bruto.porRegiao && (bruto.timeGym || bruto.timeVolta))
         por[regiao] = { timeGym: bruto.timeGym || '', timeVolta: bruto.timeVolta || 'Hunt' };
@@ -740,10 +805,86 @@ PPX.modulo(
         porRegiao: Object.fromEntries(
           REGIOES.map((r) => [r, { ...PADRAO_REGIAO, ...(por[r] || {}) }]),
         ),
+        // O time de cada ginasio, pela id do jogo (`kanto_brock`). Quem nao tiver um aqui usa o
+        // da regiao: a escolha fina e' um acrescento, nao uma troca de regime.
+        porGinasio: { ...(bruto.porGinasio || {}) },
       };
     };
 
     const timesDe = (regiao) => escolhas().porRegiao[regiao] || { ...PADRAO_REGIAO };
+
+    // ------------------------------------------------- os ginasios, e o time de cada um
+    //
+    // O jogo da' a cada ginasio uma id estavel — `kanto_brock`, `johto_chuck`, `hoenn_norman` —
+    // no `data-gym-id` do hotspot, com a regiao no prefixo. Medido na janela em 30/10/2026: 21
+    // ginasios, sete por regiao, e o `aria-label` traz "Lider · Cidade" (com "HOJE · " a' frente
+    // no do dia). E' por essa id que o time de cada ginasio se guarda: pelo nome partia-se no
+    // primeiro acento, na primeira traducao e no primeiro "Tate & Liza".
+    //
+    // O catalogo nao esta' escrito aqui de proposito. Ele e' aprendido do jogo quando a janela
+    // esta' aberta — o mesmo caminho das cacadas, que aprendem em que aba moram. Uma lista
+    // escrita a mao fica errada no dia em que o jogo acrescentar um ginasio, e fica errada **em
+    // silencio**.
+
+    /** O catalogo aprendido: `{ KANTO: [{ id, rotulo }], ... }`. */
+    const ginasiosSabidos = () => {
+      const bruto = ler(CHAVE_GINASIOS, null) || {};
+      return Object.fromEntries(
+        REGIOES.map((r) => [r, Array.isArray(bruto[r]) ? bruto[r] : []]),
+      );
+    };
+
+    /**
+     * Guarda os ginasios de uma regiao, lidos da janela aberta.
+     *
+     * **Le' sempre do documento, e nunca de um no' guardado de antes.** Medido em 30/10/2026: ao
+     * trocar de aba o jogo redesenha o mapa inteiro, e um elemento apanhado antes da troca
+     * continua a responder — com os ginasios da aba anterior. Foi assim que a primeira medicao
+     * deu Hoenn nas tres regioes.
+     */
+    const aprenderGinasios = (janela, regiao) => {
+      if (!REGIOES.includes(regiao)) return [];
+      const lista = hotspots(janela)
+        .map((h) => ({
+          id: h.dataset?.gymId || '',
+          rotulo: (h.getAttribute('aria-label') || h.textContent || '')
+            .replace(/^\s*HOJE\s*·?\s*/i, '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        }))
+        .filter((g) => g.id);
+      // Uma leitura vazia nao apaga o que se sabia: a janela desenha o mapa depois de existir, e
+      // apagar aqui seria trocar um catalogo bom por nada.
+      if (!lista.length) return ginasiosSabidos()[regiao];
+      // So' se grava o que mudou. Isto e' lido de 3 em 3 segundos enquanto a janela estiver a'
+      // vista, e gravar sempre seria escrever no armazenamento a cada batida, para sempre, para
+      // guardar exactamente o mesmo.
+      const sabidos = ginasiosSabidos();
+      if (JSON.stringify(sabidos[regiao]) === JSON.stringify(lista)) return lista;
+      gravar(CHAVE_GINASIOS, { ...sabidos, [regiao]: lista });
+      return lista;
+    };
+
+    /**
+     * O time para um ginasio: o dele, se tiver; senao o da regiao.
+     *
+     * A regiao continua a ser a rede. Quem nunca mexer nisto nao ve' diferenca nenhuma.
+     */
+    const timeDoGinasio = (regiao, id) => {
+      const guardado = escolhas();
+      const proprio = id ? guardado.porGinasio[id] : '';
+      return proprio || (guardado.porRegiao[regiao] || PADRAO_REGIAO).timeGym || '';
+    };
+
+    /** Ha' com que trabalhar nesta regiao? O da regiao, ou o de algum ginasio dela. */
+    const temAlgumTime = (regiao) => {
+      const guardado = escolhas();
+      if ((guardado.porRegiao[regiao] || PADRAO_REGIAO).timeGym) return true;
+      const prefixo = `${regiao.toLowerCase()}_`;
+      return Object.entries(guardado.porGinasio).some(
+        ([id, time]) => time && id.startsWith(prefixo),
+      );
+    };
 
     // ------------------------------------------------------------- a agenda
     //
@@ -890,7 +1031,7 @@ PPX.modulo(
       gravar(CHAVE_ELITE4, todos);
       pintarElite4();
       pintarResumo();
-      dizer(`Elite 4 de ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}: ${feita ? 'marcada como feita' : 'marcada como não feita'}.`);
+      dizer(`Elite 4 de ${nomeDe(regiao)}: ${feita ? 'marcada como feita' : 'marcada como não feita'}.`);
     };
 
     // ------------------------------------------------------------------ painel
@@ -908,13 +1049,16 @@ PPX.modulo(
       <div class="corpo">
         <label>Região
           <select data-regiao>
-            <option value="KANTO">Kanto</option>
-            <option value="JOHTO">Johto</option>
+            ${REGIOES.map((r) => `<option value="${r}">${nomeDe(r)}</option>`).join('')}
           </select>
         </label>
         <label>Time do ginásio
           <select data-time-gym></select>
         </label>
+        <details class="porginasio">
+          <summary>Time por ginásio <span data-conta-ginasios></span></summary>
+          <div data-ginasios></div>
+        </details>
         <label>Voltar com
           <select data-time-volta></select>
         </label>
@@ -923,29 +1067,24 @@ PPX.modulo(
         <div class="elite4">
           <span>Elite 4 feita hoje</span>
           <div>
-            <button type="button" data-elite4="KANTO">○ Kanto</button>
-            <button type="button" data-elite4="JOHTO">○ Johto</button>
+            ${REGIOES.map(
+              (r) => `<button type="button" data-elite4="${r}">○ ${nomeDe(r)}</button>`,
+            ).join('')}
           </div>
         </div>
         <div class="agenda">
+          ${REGIOES.map(
+            (r, i) => `
           <div class="linha">
-            <span class="sinal" data-sinal="KANTO" data-marcar="KANTO"></span>
-            <label class="liga"><input type="checkbox" data-auto="KANTO"> Kanto</label>
-            <input type="text" data-horas="KANTO" placeholder="08:00-09:00"
+            <span class="sinal" data-sinal="${r}" data-marcar="${r}"></span>
+            <label class="liga"><input type="checkbox" data-auto="${r}"> ${nomeDe(r)}</label>
+            <input type="text" data-horas="${r}" placeholder="${EXEMPLOS[i] || '12:00-13:00'}"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
-            <span data-agenda="KANTO"></span>
-            <button type="button" class="ja" data-ir-regiao="KANTO"
-              title="Fazer o ginásio de Kanto agora">▶</button>
-          </div>
-          <div class="linha">
-            <span class="sinal" data-sinal="JOHTO" data-marcar="JOHTO"></span>
-            <label class="liga"><input type="checkbox" data-auto="JOHTO"> Johto</label>
-            <input type="text" data-horas="JOHTO" placeholder="19:00-20:00"
-              title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
-            <span data-agenda="JOHTO"></span>
-            <button type="button" class="ja" data-ir-regiao="JOHTO"
-              title="Fazer o ginásio de Johto agora">▶</button>
-          </div>
+            <span data-agenda="${r}"></span>
+            <button type="button" class="ja" data-ir-regiao="${r}"
+              title="Fazer o ginásio de ${nomeDe(r)} agora">▶</button>
+          </div>`,
+          ).join('')}
           <div class="linha reset">
             <span>servidor reseta às</span>
             <input type="text" data-reset placeholder="00:00"
@@ -962,9 +1101,25 @@ PPX.modulo(
       #lioncode-gym, #lioncode-gym * { box-sizing: border-box; }
       #lioncode-gym {
         position: fixed; z-index: 2147483000; width: 240px;
-        background: #11161f; color: #e7edf6; border: 1px solid #2a3244; border-radius: 10px;
-        font: 13px/1.45 system-ui, sans-serif; box-shadow: 0 8px 24px #0008;
+        background: var(--ppx-fundo); color: var(--ppx-texto);
+        border: 1px solid var(--ppx-borda); border-radius: var(--ppx-raio);
+        font: var(--ppx-fonte); box-shadow: var(--ppx-sombra);
+        /* O painel nao pode passar da tela. Com tres regioes, a agenda aberta e os ginasios a'
+           vista ele mediu 1185 px numa tela de 785: o fim ficava inalcancavel, e com ele o campo
+           do reset e o botao de parar. Coluna para o cabecalho ficar preso e so' o corpo rolar —
+           quem rolasse o painel inteiro perdia de vista o botao de fechar. */
+        display: flex; flex-direction: column; max-height: var(--ppx-teto);
       }
+      /* O cabecalho nao encolhe: numa caixa flex ele cederia altura antes de o corpo rolar. */
+      #lioncode-gym > header { flex: 0 0 auto; }
+      #lioncode-gym .corpo { overflow-y: auto; overscroll-behavior: contain;
+        scrollbar-width: thin; scrollbar-color: var(--ppx-borda) transparent; }
+      /* ESTA REGRA TEM DE EXISTIR, e com o id. O painel poe uma regra de label com id, e isso
+         GANHA a' regra label[hidden] da agenda partilhada, que so' tem classes — o painel
+         desfazia o esconder do componente. Medido em 30/10/2026: com "repetir: todo dia", as duas
+         listas de dias estavam marcadas hidden e mediam 147 e 164 px, a' vista. Nenhum outro
+         painel do pacote tem uma regra de label tao larga, por isso o defeito era so' deste. */
+      #lioncode-gym [hidden] { display: none; }
       #lioncode-gym header {
         display: flex; align-items: center; gap: 8px; padding: 8px 10px;
         border-bottom: 1px solid #2a3244; cursor: move;
@@ -985,6 +1140,20 @@ PPX.modulo(
       }
       #lioncode-gym button.ir:hover, #lioncode-gym button.volta:hover { background: #26344c; }
       #lioncode-gym button.volta { border-color: #2a3244; color: #9aa6b8; }
+      #lioncode-gym .porginasio { font-size: 12px; color: #9aa6b8; }
+      #lioncode-gym .porginasio > summary { cursor: pointer; padding: 4px 0; }
+      /* A direccao TEM DE ESTAR ESCRITA: estas linhas sao label, e o painel ja' poe
+         label { flex-direction: column }. Sem a declaracao, a linha empilha o nome por cima da
+         lista e o flex-basis passa a valer como ALTURA — cada ginasio virava um quadro de 96 px
+         de alto, sete deles a encher a tela. (Sem crases neste comentario: o CSS vive dentro de
+         um template literal, e uma crase aqui fecha a string a meio.) */
+      #lioncode-gym .porginasio .ginasio { display: flex; flex-direction: row;
+        align-items: center; gap: 6px; padding: 1px 0; }
+      #lioncode-gym .porginasio .ginasio > span { flex: 1 1 auto; min-width: 0; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+      #lioncode-gym .porginasio .ginasio select { flex: 0 0 108px; width: 108px; min-width: 0;
+        padding: 3px 4px; font-size: 11px; }
+      #lioncode-gym .porginasio .vazio { margin: 4px 0; opacity: .8; }
       #lioncode-gym .elite4 { display: grid; gap: 5px; padding: 7px 0;
         border-top: 1px solid #202835; border-bottom: 1px solid #202835; color: #9aa6b8;
         font-size: 12px; }
@@ -1121,7 +1290,82 @@ PPX.modulo(
         }
       }
       campo('[data-regiao]').value = guardado.regiao;
+      pintarGinasios(nomes);
       return nomes;
+    };
+
+    /**
+     * Uma linha por ginasio da regiao escolhida, cada uma com o seu time.
+     *
+     * A primeira opcao de cada lista e' **usar o da regiao**, e e' ela que fica escolhida por
+     * omissao: quem nunca mexer aqui continua a ter o comportamento de sempre, e a escolha fina
+     * e' um acrescento e nao um regime novo. Por isso o bloco tambem nasce fechado.
+     */
+    function pintarGinasios(nomesConhecidos) {
+      const caixa = campo('[data-ginasios]');
+      if (!caixa) return;
+      const nomes = nomesConhecidos || globalThis.PPX?.times?.nomes?.() || [];
+      const guardado = escolhas();
+      const lista = ginasiosSabidos()[guardado.regiao] || [];
+      const conta = campo('[data-conta-ginasios]');
+      if (conta)
+        conta.textContent = lista.length
+          ? `(${lista.filter((g) => guardado.porGinasio[g.id]).length}/${lista.length})`
+          : '';
+      caixa.textContent = '';
+      if (!lista.length) {
+        const aviso = document.createElement('p');
+        aviso.className = 'vazio';
+        // Diz-se o que fazer, e nao so' que falta: a lista aprende-se do jogo, e o jogador nao
+        // tem como adivinhar que basta abrir a janela.
+        aviso.textContent = `Abra o Desafio dos Gyms na aba ${nomeDe(guardado.regiao)} uma vez e os ginásios aparecem aqui.`;
+        caixa.append(aviso);
+        return;
+      }
+      for (const ginasio of lista) {
+        const linha = document.createElement('label');
+        linha.className = 'ginasio';
+        const nome = document.createElement('span');
+        // So' o lider na linha: o painel tem 240 px e "Lt. Surge · Vermilion" nao cabe ao lado de
+        // uma lista. A cidade continua inteira no `title`, que e' onde ha' espaco para ela.
+        const rotulo = ginasio.rotulo || ginasio.id;
+        nome.textContent = rotulo.split('·')[0].trim() || rotulo;
+        linha.title = rotulo;
+        const sel = document.createElement('select');
+        sel.dataset.ginasio = ginasio.id;
+        const padrao = document.createElement('option');
+        padrao.value = '';
+        padrao.textContent = '— usar o da região —';
+        sel.append(padrao);
+        for (const n of nomes) {
+          const opcao = document.createElement('option');
+          opcao.value = n;
+          opcao.textContent = n;
+          sel.append(opcao);
+        }
+        // Um time escolhido que ja' nao exista no Times nao pode desaparecer em silencio: fica
+        // na lista, marcado, para o dono ver que aquilo deixou de valer.
+        const escolhido = guardado.porGinasio[ginasio.id] || '';
+        if (escolhido && !nomes.includes(escolhido)) {
+          const sumido = document.createElement('option');
+          sumido.value = escolhido;
+          sumido.textContent = `${escolhido} (não existe mais)`;
+          sel.append(sumido);
+        }
+        sel.value = escolhido;
+        linha.append(nome, sel);
+        caixa.append(linha);
+      }
+    }
+
+    /** Grava o time de um ginasio. Vazio quer dizer "usar o da regiao", e por isso apaga-se. */
+    const guardarGinasio = (id, time) => {
+      const guardado = escolhas();
+      const porGinasio = { ...guardado.porGinasio };
+      if (time) porGinasio[id] = time;
+      else delete porGinasio[id];
+      gravar(CHAVE_ESCOLHAS, { ...guardado, porGinasio });
+      pintarGinasios();
     };
 
     /** Grava os times **na regiao que esta' escolhida**, sem tocar na outra. */
@@ -1129,6 +1373,9 @@ PPX.modulo(
       const guardado = escolhas();
       const regiao = campo('[data-regiao]').value;
       gravar(CHAVE_ESCOLHAS, {
+        // `porGinasio` tem de vir junto: este objecto e' gravado inteiro por cima do anterior, e
+        // sem esta linha mexer no time da regiao apagava os times de todos os ginasios.
+        ...guardado,
         regiao,
         porRegiao: {
           ...guardado.porRegiao,
@@ -1142,6 +1389,12 @@ PPX.modulo(
 
     for (const seletor of ['[data-time-gym]', '[data-time-volta]'])
       campo(seletor).addEventListener('change', guardarEscolhas);
+
+    // Delegado: as linhas sao refeitas a cada pintura, e um ouvinte por linha morria com ela.
+    campo('[data-ginasios]').addEventListener('change', (evento) => {
+      const sel = evento.target?.closest?.('[data-ginasio]');
+      if (sel) guardarGinasio(sel.dataset.ginasio, sel.value);
+    });
 
     // Trocar de regiao nao e' mudar uma escolha, e' mudar de pagina: grava-se so' a regiao e as
     // listas passam a mostrar os times dela. Gravar aqui como nas outras escreveria os times da
@@ -1189,7 +1442,7 @@ PPX.modulo(
         if (!botao) continue;
         const feita = elite4Feita(regiao);
         botao.classList.toggle('feita', feita);
-        botao.textContent = `${feita ? '✓' : '○'} ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}`;
+        botao.textContent = `${feita ? '✓' : '○'} ${nomeDe(regiao)}`;
         botao.title = feita ? 'Clique para marcar como não feita' : 'Clique para marcar como feita';
       }
     };
@@ -1225,7 +1478,7 @@ PPX.modulo(
         ponto.title = 'Clique para corrigir: ainda não feito → Vitória → Derrota';
         ponto.style.background = cor;
         const nome = document.createElement('b');
-        nome.textContent = regiao === 'KANTO' ? 'Kanto' : 'Johto';
+        nome.textContent = nomeDe(regiao);
         const diz = document.createElement('span');
         diz.className = 'quando';
         // A palavra tambem corrige: e' nela que o dono esta' olhando quando ve' que ela mente.
@@ -1259,8 +1512,10 @@ PPX.modulo(
         botao.type = 'button';
         botao.className = `elite4-mini${feita ? ' feita' : ''}`;
         botao.dataset.elite4 = regiao;
-        botao.textContent = `${regiao === 'KANTO' ? 'K' : 'J'} ${feita ? '✓' : '○'}`;
-        botao.title = `Elite 4 de ${regiao === 'KANTO' ? 'Kanto' : 'Johto'}: ${feita ? 'feita' : 'não feita'}. Clique para alterar.`;
+        // A inicial, para caber no painel minimizado. Vem do nome, para nao haver uma terceira
+        // lista de regioes a manter.
+        botao.textContent = `${nomeDe(regiao)[0].toUpperCase()} ${feita ? '✓' : '○'}`;
+        botao.title = `Elite 4 de ${nomeDe(regiao)}: ${feita ? 'feita' : 'não feita'}. Clique para alterar.`;
         elite.append(botao);
       }
       caixa.append(elite);
@@ -1315,7 +1570,7 @@ PPX.modulo(
             ? 'amanhã'
             : `${dois(quando.getDate())}/${dois(quando.getMonth() + 1)}`;
       campo('[data-proxima]').textContent =
-        `próximo: ${primeiro === 'KANTO' ? 'Kanto' : 'Johto'} ${dia} às ` +
+        `próximo: ${nomeDe(primeiro)} ${dia} às ` +
         `${dois(quando.getHours())}:${dois(quando.getMinutes())}`;
       pintarResumo();
     };
@@ -1508,6 +1763,37 @@ PPX.modulo(
         return { ok: true };
       }
 
+      if (etapa === 'ver-ginasio') {
+        await respirarAntesDoClique((t) => dizer(t));
+        if (parar) return { ok: true };
+        dizer(`Vendo qual é o ginásio de hoje em ${nomeDe(dados.regiao)}…`);
+        const aberta = await abrirNaRegiao(dados.regiao);
+        if (aberta.erro) return { ok: false, erro: aberta.erro };
+        aprenderGinasios(aberta.janela, dados.regiao);
+        const hoje = await ginasioDeHoje(aberta.janela);
+        // Sem saber qual e', fica o time da regiao: nao se desiste do dia por causa da escolha
+        // fina. Quem nao usa time por ginasio nao pode perder o ginasio por uma leitura falhada.
+        const id = hoje?.dataset?.gymId || '';
+        const nome = hoje
+          ? (hoje.getAttribute('aria-label') || '').replace(/^\s*HOJE\s*·?\s*/i, '').trim()
+          : '';
+        await fecharJanela(aberta.janela);
+        const time = timeDoGinasio(dados.regiao, id);
+        if (!time)
+          return {
+            ok: false,
+            erro: nome
+              ? `hoje é ${nome} e não há time escolhido para ele nem para ${nomeDe(dados.regiao)}`
+              : `não há time escolhido para ${nomeDe(dados.regiao)}`,
+          };
+        dados.ginasioId = id;
+        dados.ginasioNome = nome;
+        dados.timeGym = time;
+        guardarTarefa(dados);
+        if (nome) dizer(`Hoje é ${nome}. Time: "${time}".`);
+        return { ok: true };
+      }
+
       if (etapa === 'time-gym') {
         await respirarAntesDoClique((t) => dizer(t));
         if (parar) return { ok: true };
@@ -1536,23 +1822,9 @@ PPX.modulo(
         await esperarTelaLimpa(15000, (t) => dizer(t));
         await fecharMenus();
         dizer('Abrindo o ginásio…');
-        let janela = await abrirOGinasio();
-        if (!janela) {
-          // Segunda tentativa: se um aneuncio apareceu entre a limpeza e o clique, a janela nao
-          // abriu por causa dele, e nao porque o NPC sumiu.
-          await esperarTelaLimpa(8000, (t) => dizer(t));
-          await fecharMenus();
-          janela = await abrirOGinasio();
-        }
-        if (!janela)
-          return {
-            ok: false,
-            erro: haSobreposto()
-              ? 'há um anúncio do jogo por cima que não consegui fechar'
-              : 'não consegui abrir a janela do ginásio',
-          };
-        if (!(await escolherRegiao(janela, dados.regiao)))
-          return { ok: false, erro: `a janela do ginásio não tem a aba ${dados.regiao}` };
+        const aberta = await abrirNaRegiao(dados.regiao);
+        if (aberta.erro) return { ok: false, erro: aberta.erro };
+        const janela = aberta.janela;
 
         dizer(`Procurando o ginásio de hoje em ${dados.regiao}…`);
         const hoje = await ginasioDeHoje(janela);
@@ -1738,9 +2010,13 @@ PPX.modulo(
         return false;
       }
       const times = timesDe(regiao);
-      if (!times.timeGym) {
+      // Chega haver **algum** time util nesta regiao: o dela, ou o de um ginasio dela. Exigir o
+      // da regiao a quem so' usa times por ginasio seria pedir uma escolha que nao vai ser usada.
+      // Qual deles vale decide-se na etapa `ver-ginasio`, que e' quando se sabe o ginasio de hoje.
+      if (!temAlgumTime(regiao)) {
         dizer(
-          `Escolha o time do ginásio de ${regiao}. Guarde um no Times primeiro, se não houver.`,
+          `Escolha o time do ginásio de ${nomeDe(regiao)} — o da região ou o do ginásio de hoje. ` +
+            'Guarde um no Times primeiro, se não houver.',
           true,
         );
         return false;
@@ -2092,6 +2368,34 @@ PPX.modulo(
     // o botão de voltar precisa de a ter visto pelo menos uma vez.
     setInterval(lembrarCacada, 10000);
 
+    /**
+     * Aprender os ginasios **do que o jogador faz**, e nao de uma visita nossa.
+     *
+     * O painel precisa da lista para mostrar uma linha por ginasio, e a lista so' existe dentro
+     * da janela do Desafio dos Gyms. A alternativa era abrir a janela por nossa conta so' para
+     * ler — tres cliques no jogo, para encher um menu. Isto nao clica em nada: quando a janela
+     * esta' aberta, seja por quem for, le'-se a aba que estiver a' vista.
+     *
+     * A regiao vem da **aba activa**, e nao da que o painel mostra: quem abriu a janela pode
+     * estar a ver outra. Guardar a lista de Hoenn debaixo de 'KANTO' seria pior do que nao ter
+     * lista nenhuma — e foi exactamente o engano que a primeira medicao deste trabalho cometeu.
+     */
+    const espreitarGinasios = () => {
+      const seletor = document.querySelector('.gym-selector');
+      // **Existir nao e' estar aberta.** Medido no jogo em 30/10/2026: ao fechar a janela o jogo
+      // deixa o no' no documento, escondido — zero por zero, `offsetParent` nulo — e com os
+      // hotspots todos la' dentro. Sem esta linha, lia-se uma janela fantasma para sempre.
+      if (!visivel(seletor)) return;
+      const aba = [...seletor.querySelectorAll('button')].find(
+        (b) => b.className.includes('is-active') && REGIOES.includes((b.textContent || '').trim().toUpperCase()),
+      );
+      if (!aba) return;
+      const regiao = (aba.textContent || '').trim().toUpperCase();
+      const antes = JSON.stringify(ginasiosSabidos()[regiao]);
+      if (JSON.stringify(aprenderGinasios(seletor, regiao)) !== antes) pintarGinasios();
+    };
+    setInterval(espreitarGinasios, 3000);
+
     if (globalThis.PPX) {
       globalThis.PPX.controlar?.('gym', mostrarPainel);
       mostrarPainel(globalThis.PPX.visivel?.('gym') !== false);
@@ -2120,6 +2424,12 @@ PPX.modulo(
                   timeVolta: trocar(guardado.porRegiao[r].timeVolta),
                 },
               ]),
+            ),
+            // E os times por ginasio, pela mesma razao: eles tambem guardam o **nome** do time,
+            // e um renomear que nao passasse por aqui deixava-os a apontar para um time que ja'
+            // nao existe — descoberto so' no meio de uma corrida.
+            porGinasio: Object.fromEntries(
+              Object.entries(guardado.porGinasio).map(([id, time]) => [id, trocar(time)]),
             ),
           });
           encherTimes(true);

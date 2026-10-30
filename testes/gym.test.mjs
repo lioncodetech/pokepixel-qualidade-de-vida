@@ -67,6 +67,8 @@ test('o F5 e uma etapa, e a seguinte e gravada antes dele', () => {
   // de fechar e reabrir. Só a recarga acerta. Daí a etapa — e daí a máquina de estados guardada.
   assert.deepEqual(etapas, [
     'sair',
+    // Ver antes de montar: o time de cada ginasio so' se escolhe sabendo o ginasio de hoje.
+    'ver-ginasio',
     'time-gym',
     'recarregar',
     'desafiar',
@@ -157,10 +159,11 @@ test('a Elite Four fica de fora', () => {
   assert.match(codigo, /!h\.className\.includes\('gym-hotspot--league'\)/);
 });
 
-test('Elite 4 de Kanto e Johto pode ser marcada manualmente por dia', () => {
+test('a Elite 4 de cada regiao pode ser marcada manualmente por dia', () => {
   assert.match(codigo, /const CHAVE_ELITE4 = 'lioncode:gym:elite4';/);
-  assert.match(codigo, /data-elite4="KANTO"/);
-  assert.match(codigo, /data-elite4="JOHTO"/);
+  // O botao e' desenhado por regiao, a partir da lista: escrever as regioes a mao no HTML era
+  // o que deixava o Hoenn de fora quando ele chegou.
+  assert.match(codigo, /data-elite4="\$\{r\}"/);
   assert.match(codigo, /const elite4Feita = \(regiao\) => elite4\(\)\[regiao\]\?\.dia === diaDoServidor\(\);/);
   assert.match(codigo, /if \(feita\) todos\[regiao\] = \{ dia: diaDoServidor\(\), quando: Date\.now\(\) \};/);
   const marcar = codigo.slice(codigo.indexOf('const marcarElite4 = (regiao)'));
@@ -169,11 +172,12 @@ test('Elite 4 de Kanto e Johto pode ser marcada manualmente por dia', () => {
   assert.match(codigo, /botao\.classList\.toggle\('feita', feita\)/);
 });
 
-test('o modo minimizado mostra e permite corrigir as duas Elite 4', () => {
+test('o modo minimizado mostra e permite corrigir a Elite 4 de cada regiao', () => {
   assert.match(codigo, /elite\.className = 'linha elite4-resumo';/);
   assert.match(codigo, /tituloElite\.textContent = 'Elite 4';/);
   assert.match(codigo, /botao\.dataset\.elite4 = regiao;/);
-  assert.match(codigo, /`\$\{regiao === 'KANTO' \? 'K' : 'J'\} \$\{feita \? '✓' : '○'\}`/);
+  // A inicial sai do nome da regiao: um 'K' ou 'J' escrito a mao da' 'J' ao Hoenn.
+  assert.match(codigo, /nomeDe\(regiao\)\[0\]\.toUpperCase\(\)/);
   assert.match(codigo, /\.elite4-mini\.feita/);
 });
 
@@ -215,12 +219,22 @@ test('tres tentativas e para, em vez de insistir para sempre', () => {
 test('nao se abre janela com um menu da barra aberto, nem com banner na frente', () => {
   // As duas coisas fazem o jogo recusar abrir janelas, e o banner nasce logo depois de cada
   // recarga — na prova real ele apareceu por cima da tela de combate.
-  const bloco = codigo.slice(codigo.indexOf("if (etapa === 'desafiar')"));
-  const limpeza = bloco.indexOf('esperarTelaLimpa');
-  const menus = bloco.indexOf('fecharMenus()');
-  const abre = bloco.indexOf('abrirOGinasio()');
+  // A garantia vive em quem abre, e nao em cada chamador: `abrirNaRegiao` e' o unico caminho
+  // para a janela do ginasio, e e' la' que a tela e' limpa e os menus fechados. Deixa-lo a cargo
+  // de quem chama faz de um chamador esquecido um defeito que so' aparece com anuncio na tela.
+  const abrir = codigo.slice(codigo.indexOf('const abrirNaRegiao = async'));
+  const limpeza = abrir.indexOf('esperarTelaLimpa');
+  const menus = abrir.indexOf('fecharMenus()');
+  const abre = abrir.indexOf('abrirOGinasio()');
   assert.ok(limpeza >= 0 && limpeza < abre, 'abre o ginásio sem esperar a tela limpar');
   assert.ok(menus >= 0 && menus < abre, 'abre o ginásio com um menu da barra aberto');
+  // E nenhuma etapa pode voltar a abrir a janela por fora, passando ao lado dessa garantia.
+  const etapasDoCodigo = codigo.slice(codigo.indexOf("if (etapa === 'sair')"));
+  assert.doesNotMatch(
+    etapasDoCodigo,
+    /await abrirOGinasio\(\)/,
+    'uma etapa voltou a abrir o ginásio por fora de `abrirNaRegiao`',
+  );
 });
 
 test('as janelas sao fechadas com um clique so', () => {
@@ -291,11 +305,14 @@ test('a limpeza acontece depois da recarga e antes de cada abertura', () => {
   // A etapa `desafiar` vem logo depois do F5, que é exactamente quando o anúncio nasce.
   const desafiar = codigo.slice(codigo.indexOf("if (etapa === 'desafiar')"));
   const limpa = desafiar.indexOf('esperarTelaLimpa');
-  const abre = desafiar.indexOf('abrirOGinasio()');
+  const abre = desafiar.indexOf('abrirNaRegiao(');
+  // Esta etapa vem logo a seguir ao F5 e espera 15 s, mais do que a espera de quem abre: o
+  // anúncio nasce com a página, e é aqui que ele custa caro.
   assert.ok(limpa >= 0 && limpa < abre, 'abre o ginásio sem esperar a tela limpar');
   // E há segunda tentativa, para o anúncio que aparecer entre a limpeza e o clique.
+  const abrirNaRegiao = codigo.slice(codigo.indexOf('const abrirNaRegiao = async'));
   assert.match(
-    desafiar.slice(0, desafiar.indexOf('return {')),
+    abrirNaRegiao.slice(0, abrirNaRegiao.indexOf('return { janela }')),
     /janela = await abrirOGinasio\(\);/,
   );
   // A retomada depois do F5 também espera, em vez de uma pausa fixa de 1,5 s.
@@ -433,7 +450,7 @@ test('a agenda e a mesma da venda e da loja rapidas', () => {
     assert.doesNotMatch(fonte, /abre <= ultima/, `${nome} voltou a ter a conta da janela em casa`);
   }
   // Uma janela por regiao, porque as regioes pedem times diferentes.
-  assert.match(codigo, /const REGIOES = \['KANTO', 'JOHTO'\]/);
+  assert.match(codigo, /const REGIOES = \['KANTO', 'JOHTO', 'HOENN'\]/);
   assert.match(codigo, /const timesDe = \(regiao\) => escolhas\(\)\.porRegiao\[regiao\]/);
 });
 
@@ -495,8 +512,7 @@ test('os dois cinemas sao coisas diferentes', () => {
 test('cada regiao tem o seu botao de ir, e ele vive tambem no minimizado', () => {
   // Minimizado é o estado em que este painel vive. Mandar abrir o painel inteiro para clicar num
   // botão desfaz o motivo de o ter minimizado — era esse o pedido.
-  for (const regiao of ['KANTO', 'JOHTO'])
-    assert.match(codigo, new RegExp(`data-ir-regiao="${regiao}"`));
+  assert.match(codigo, /data-ir-regiao="\$\{r\}"/, 'um botao por regiao, saido da lista');
   assert.match(codigo, /ja\.dataset\.irRegiao = regiao;/, 'o resumo minimizado faz o seu');
 
   const clique = codigo.slice(codigo.indexOf("evento.target.closest?.('[data-ir-regiao]')"));
@@ -554,7 +570,7 @@ test('o placar corrige-se a mao, e a mao nunca marca erro', () => {
   // E corrigir o placar não manda no ginásio: quem manda na corrida é a agenda.
   assert.ok(!/comecar\(/.test(corpo), 'marcar à mão não faz o ginásio correr');
   // O mesmo clique serve nos dois painéis: o sinal da agenda e o do resumo minimizado.
-  assert.match(codigo, /data-marcar="KANTO"/);
+  assert.match(codigo, /data-marcar="\$\{r\}"/);
   assert.match(codigo, /ponto\.dataset\.marcar = regiao;/);
   assert.match(codigo, /diz\.dataset\.marcar = regiao;/);
   assert.match(codigo, /const marca = evento\.target\.closest\?\.\('\[data-marcar\]'\);/);
@@ -590,4 +606,204 @@ test('na expedicao o ginasio espera, e nao arrasta ninguem para fora dela', () =
     corpo.indexOf('clearTimeout(esperandoExpedicao)') < corpo.indexOf('esperandoExpedicao ='),
     'um relógio de cada vez',
   );
+});
+
+test('o Hoenn entrou, e nada no painel ficou escrito a mao para duas regioes', () => {
+  // O jogo acrescentou os ginasios da terceira geracao em 30/10/2026. Medido na janela do jogo
+  // antes de mexer no codigo: as abas sao `KANTO`, `JOHTO` e `HOENN`, e o mapa do Hoenn traz os
+  // mesmos sete `gym-hotspot` mais o `--league`, com o mesmo `is-active` e o mesmo rotulo `HOJE`.
+  // Nada do que a ferramenta le' no jogo mudou — o que faltava era ela so' conhecer duas regioes.
+  assert.match(codigo, /'HOENN'/, 'o Hoenn tem de estar na lista das regioes');
+  assert.match(codigo, /HOENN: 'Hoenn'/, 'e tem de ter nome, senao o painel mostra o codigo');
+
+  // A aba do jogo e' escolhida pelo texto do botao, e `HOENN` ja' casa com isso sem mudar nada.
+  const escolher = codigo.slice(codigo.indexOf('const escolherRegiao = async'));
+  assert.match(
+    escolher.slice(0, 400),
+    /toUpperCase\(\) === regiao\.toUpperCase\(\)/,
+    'a aba continua a ser achada pelo nome da regiao',
+  );
+
+  // E o que falhou quando o Hoenn chegou: regioes escritas a mao no HTML e ternarios de duas
+  // pontas. Uma quarta regiao nao pode voltar a custar sete sitios.
+  assert.doesNotMatch(codigo, /data-elite4="KANTO"/, 'o HTML voltou a ter regiao escrita a mao');
+  assert.doesNotMatch(codigo, /data-auto="JOHTO"/, 'o HTML voltou a ter regiao escrita a mao');
+  assert.doesNotMatch(
+    codigo,
+    /=== 'KANTO' \? '/,
+    "voltou um ternario de duas pontas: ele responde 'Johto' a qualquer regiao nova",
+  );
+});
+
+test('cada ginasio pode ter o seu time, e a regiao e a rede', () => {
+  // Pedido do dono em 30/10/2026. O ginásio do dia roda, e um time que ganha ao Koga não é o
+  // mesmo que ganha à Erika — ter um time só por região obrigava a trocá-lo à mão todo dia.
+  assert.match(codigo, /const timeDoGinasio = \(regiao, id\)/);
+  const escolher = codigo.slice(codigo.indexOf('const timeDoGinasio = (regiao, id)'));
+  const corpo = escolher.slice(0, escolher.indexOf('\n    };'));
+  // A região continua a valer quando o ginásio não tem time: quem nunca mexer nisto não vê
+  // diferença nenhuma, e é por isso que isto é um acréscimo e não um regime novo.
+  assert.match(corpo, /proprio \|\|/, 'o time do ginásio tem de cair no da região');
+});
+
+test('o time por ginasio e guardado pela id do jogo, e nao pelo nome', () => {
+  // Medido na janela do jogo em 30/10/2026: cada hotspot tem `data-gym-id` estável, com a região
+  // no prefixo — `kanto_brock`, `johto_chuck`, `hoenn_norman`. Guardar pelo nome partia-se no
+  // primeiro acento, na primeira tradução e no "Tate & Liza".
+  assert.match(codigo, /h\.dataset\?\.gymId/, 'a id vem do `data-gym-id` do jogo');
+  assert.match(codigo, /porGinasio/, 'os times por ginásio têm de ser guardados');
+  // E a lista de ginásios **não** está escrita no código: ela é aprendida do jogo.
+  assert.doesNotMatch(
+    codigo,
+    /kanto_brock|johto_falkner|hoenn_roxanne/,
+    'a lista de ginásios voltou a estar escrita à mão, e fica errada quando o jogo mudar',
+  );
+});
+
+test('ver qual e o ginasio de hoje acontece antes de montar o time', () => {
+  // Sem isto o time é escolhido com a janela do ginásio ainda fechada, quando ninguém sabe qual
+  // é o ginásio do dia — e a escolha por ginásio nunca chegaria a ser usada.
+  const ver = etapas.indexOf('ver-ginasio');
+  const monta = etapas.indexOf('time-gym');
+  assert.ok(ver >= 0, 'não há etapa que veja o ginásio de hoje');
+  assert.ok(ver < monta, 'o time é montado antes de se saber qual é o ginásio');
+  // E a etapa grava o que descobriu antes de seguir: a corrida passa por um F5, e o que só
+  // existisse em memória não sobreviveria a ele.
+  const bloco = codigo.slice(codigo.indexOf("if (etapa === 'ver-ginasio')"));
+  const corpo = bloco.slice(0, bloco.indexOf('\n      }'));
+  assert.match(corpo, /dados\.timeGym = time;/);
+  assert.match(corpo, /guardarTarefa\(dados\)/);
+  // A janela é fechada antes de a etapa acabar: uma janela esquecida aberta faz o jogo recusar
+  // abrir as seguintes — a lição que já custou uma sessão inteira neste pacote.
+  assert.match(corpo, /fecharJanela\(aberta\.janela\)/);
+});
+
+test('uma leitura falhada do ginasio de hoje nao faz perder o dia', () => {
+  // A escolha fina é um acréscimo. Se não se conseguir ler qual é o ginásio, usa-se o time da
+  // região e segue-se — desistir do dia por causa de um refinamento seria trocar o certo pelo
+  // bonito.
+  const bloco = codigo.slice(codigo.indexOf("if (etapa === 'ver-ginasio')"));
+  const corpo = bloco.slice(0, bloco.indexOf('\n      }'));
+  assert.match(corpo, /const id = hoje\?\.dataset\?\.gymId \|\| '';/);
+  assert.match(corpo, /timeDoGinasio\(dados\.regiao, id\)/);
+});
+
+test('mexer no time da regiao nao apaga os times dos ginasios', () => {
+  // `gravar` escreve o objecto inteiro por cima do anterior. Sem levar `porGinasio` junto, trocar
+  // o time da região apagava, em silêncio, a escolha de todos os ginásios dela.
+  const guardar = codigo.slice(codigo.indexOf('const guardarEscolhas = () => {'));
+  const corpo = guardar.slice(0, guardar.indexOf('\n    };'));
+  assert.match(corpo, /\.\.\.guardado,/, 'o resto das escolhas tem de viajar junto');
+});
+
+test('renomear um time no Times acerta tambem os times por ginasio', () => {
+  // Eles guardam o **nome** do time, como os da região. Um renomear que não passasse por aqui
+  // deixava-os a apontar para um time que já não existe — descoberto só no meio de uma corrida.
+  const porta = codigo.slice(codigo.indexOf('timeRenomeado: (velho, novo)'));
+  const corpo = porta.slice(0, porta.indexOf('encherTimes(true)'));
+  assert.match(corpo, /porGinasio: Object\.fromEntries\(/);
+  assert.match(corpo, /\[id, trocar\(time\)\]/);
+});
+
+test('o catalogo de ginasios e aprendido do jogo, e nao viaja no export', () => {
+  // Regra do repositório: o que a ferramenta descobriu sozinha não viaja. Levar o catálogo para
+  // outra janela seria levar o palpite de uma conta para outra, e no dia em que o jogo mudar os
+  // ginásios o catálogo velho venceria o jogo.
+  assert.match(codigo, /const CHAVE_GINASIOS = 'lioncode:gym:ginasios';/);
+  const config = readFileSync(new URL('../config.js', import.meta.url), 'utf8');
+  assert.match(config, /'lioncode:gym:escolhas'/, 'as escolhas viajam, e os times por ginásio com elas');
+  assert.doesNotMatch(config, /lioncode:gym:ginasios/, 'o catálogo aprendido não pode viajar');
+});
+
+test('aprender os ginasios le sempre do documento, por causa do redesenho', () => {
+  // **Medido em 30/10/2026**: ao trocar de aba o jogo redesenha o mapa inteiro, e um elemento
+  // apanhado antes da troca continua a responder — com os ginásios da aba anterior. Foi assim
+  // que a primeira medição deste trabalho deu Hoenn nas três regiões.
+  const espreitar = codigo.slice(codigo.indexOf('const espreitarGinasios = () => {'));
+  const corpo = espreitar.slice(0, espreitar.indexOf('\n    };'));
+  assert.match(corpo, /document\.querySelector\('\.gym-selector'\)/);
+  // E a região vem da aba activa, e não da que o painel mostra: quem abriu a janela pode estar a
+  // ver outra, e guardar a lista do Hoenn debaixo de 'KANTO' é pior do que não ter lista.
+  assert.match(corpo, /b\.className\.includes\('is-active'\)/);
+  assert.doesNotMatch(corpo, /escolhas\(\)\.regiao/);
+});
+
+test('uma leitura vazia nao apaga o catalogo que ja se sabia', () => {
+  // A janela entra no DOM antes do mapa. Gravar o que se lê nesse instante trocaria um catálogo
+  // bom por nada — e o painel ficaria sem linhas, sem ninguém ter feito nada.
+  const aprender = codigo.slice(codigo.indexOf('const aprenderGinasios = (janela, regiao)'));
+  const corpo = aprender.slice(0, aprender.indexOf('\n    };'));
+  assert.match(corpo, /if \(!lista\.length\) return ginasiosSabidos\(\)\[regiao\];/);
+});
+
+test('janela fechada nao e janela aberta: o fantasma no DOM nao conta', () => {
+  // **Medido no jogo em 30/10/2026**: ao fechar o Desafio dos Gyms o jogo deixa o `.gym-selector`
+  // no documento, escondido — zero por zero, `offsetParent` nulo — e com os oito hotspots lá
+  // dentro. Procurar só pelo selector fazia a ferramenta ler uma janela fantasma de 3 em 3
+  // segundos, para sempre, muito depois de o jogador a ter fechado.
+  const espreitar = codigo.slice(codigo.indexOf('const espreitarGinasios = () => {'));
+  const corpo = espreitar.slice(0, espreitar.indexOf('\n    };'));
+  assert.match(corpo, /if \(!visivel\(seletor\)\) return;/, 'lê uma janela que já não está à vista');
+});
+
+test('aprender so grava o que mudou', () => {
+  // Isto corre a cada batida enquanto a janela está à vista. Gravar sempre seria escrever no
+  // armazenamento de 3 em 3 segundos para guardar exactamente o mesmo.
+  const aprender = codigo.slice(codigo.indexOf('const aprenderGinasios = (janela, regiao)'));
+  const corpo = aprender.slice(0, aprender.indexOf('\n    };'));
+  const compara = corpo.indexOf('JSON.stringify(sabidos[regiao]) === JSON.stringify(lista)');
+  const grava = corpo.indexOf('gravar(CHAVE_GINASIOS');
+  assert.ok(compara >= 0, 'não compara com o que já sabia');
+  assert.ok(compara < grava, 'grava antes de comparar');
+});
+
+test('as linhas de ginasio sao linhas, e nao quadros empilhados', () => {
+  // O painel já põe `label { flex-direction: column }`, e estas linhas são `label`. Sem a
+  // direcção escrita, cada ginásio empilhava o nome por cima da lista e o `flex-basis` passava a
+  // valer como **altura**: sete quadros de 96 px a encher a tela. Relatado com captura em
+  // 30/10/2026.
+  const regra = codigo.slice(codigo.indexOf('.porginasio .ginasio {'));
+  const corpo = regra.slice(0, regra.indexOf('}'));
+  assert.match(corpo, /flex-direction: row/, 'a linha volta a empilhar');
+  // E o `flex-basis` da lista só é largura em linha: a largura fica escrita também, para o dia em
+  // que alguém mexer na direcção.
+  const daLista = codigo.slice(codigo.indexOf('.porginasio .ginasio select {'));
+  assert.match(daLista.slice(0, daLista.indexOf('}')), /width: \d+px/);
+});
+
+test('o CSS do painel nao pode levar crases', () => {
+  // Ele vive dentro de um template literal. Uma crase num comentário fecha a string a meio, e o
+  // ficheiro inteiro deixa de carregar — aconteceu ao escrever o comentário da regra acima.
+  const estilo = codigo.slice(codigo.indexOf('estilo.textContent = `'));
+  const corpo = estilo.slice(estilo.indexOf('`') + 1);
+  assert.ok(corpo.indexOf('`') > 0, 'o estilo tem de fechar');
+  assert.doesNotMatch(
+    corpo.slice(0, corpo.indexOf('`')),
+    /`/,
+    'há uma crase dentro do CSS: o ficheiro não carrega',
+  );
+});
+
+test('o painel cabe na tela e rola por dentro', () => {
+  // Medido em 30/10/2026, com três regiões e a agenda aberta: 1185 px de painel numa tela de
+  // 785. O fim ficava inalcançável, e com ele o campo do reset e o botão de parar.
+  const raiz = codigo.slice(codigo.indexOf('#lioncode-gym {'));
+  const corpoDaRegra = raiz.slice(0, raiz.indexOf('}'));
+  // O tecto vem agora dos valores partilhados do `nucleo.js`, e nao de um numero escrito aqui.
+  assert.match(corpoDaRegra, /max-height: var\(--ppx-teto\)/, 'o painel pode passar da tela');
+  assert.match(corpoDaRegra, /flex-direction: column/, 'sem coluna, o corpo não rola sozinho');
+  // Só o corpo rola: quem rolasse o painel inteiro perdia de vista o botão de fechar.
+  const doCorpo = codigo.slice(codigo.indexOf('#lioncode-gym .corpo { overflow-y'));
+  assert.match(doCorpo.slice(0, doCorpo.indexOf('}')), /overflow-y: auto/);
+});
+
+test('o painel nao pode desfazer o esconder da agenda partilhada', () => {
+  // **Medido em 30/10/2026**: com "repetir: todo dia", as duas listas de dias da agenda estavam
+  // marcadas `hidden` e mediam 147 e 164 px — à vista. A regra `#lioncode-gym label` leva **id**
+  // e ganha à `.ppx-ag-corpo label[hidden]` da agenda, que só tem classes. É preciso uma regra
+  // com id a devolver o esconder, senão o painel estraga um componente que não é dele.
+  assert.match(codigo, /#lioncode-gym \[hidden\] \{ display: none; \}/);
+  // E a agenda continua a ser de todos: a correcção é do painel, não do componente.
+  const agenda = readFileSync(new URL('../agenda.js', import.meta.url), 'utf8');
+  assert.match(agenda, /\.ppx-ag-corpo label\[hidden\] \{ display: none; \}/);
 });

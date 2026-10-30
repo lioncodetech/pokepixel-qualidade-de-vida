@@ -671,12 +671,54 @@ recusa carregar `../times.js`.
 ## Ginásio do dia
 
 Sai da caçada, troca para o time de ginásio, desafia o ginásio marcado **HOJE**, volta ao time de
-caçada e reentra na mesma caçada de onde saiu. Uma região por vez — Kanto e Johto têm times
-diferentes. A **Elite Four fica fora da automação de combate**, mas o painel tem dois botões
-manuais — Kanto e Johto — para marcar se cada uma já foi feita no dia. As marcas usam o mesmo
+caçada e reentra na mesma caçada de onde saiu. Uma região por vez — cada região tem times
+diferentes. São **Kanto, Johto e Hoenn**: o Hoenn entrou em 30/10/2026, quando o jogo acrescentou
+os ginásios da terceira geração. A **Elite Four fica fora da automação de combate**, mas o painel
+tem um botão manual por região para marcar se cada uma já foi feita no dia. As marcas usam o mesmo
 horário de reset do placar e voltam automaticamente para “não feita” no dia seguinte. No modo
-minimizado, a linha **Elite 4** continua mostrando `K ✓/○` e `J ✓/○`; os indicadores também podem
-ser clicados ali.
+minimizado, a linha **Elite 4** continua mostrando `K ✓/○`, `J ✓/○` e `H ✓/○`; os indicadores
+também podem ser clicados ali.
+
+### Um time para cada ginásio
+
+O ginásio do dia roda, e o time que ganha ao Koga não é o que ganha à Erika — com um time só por
+região, era preciso trocá-lo à mão todo dia. Debaixo de **Time do ginásio** há agora um bloco
+**Time por ginásio**, fechado por omissão, com uma linha por ginásio da região. Cada linha começa
+em **“usar o da região”**: quem não mexer aqui não vê diferença nenhuma, porque a região continua
+a ser a rede.
+
+O time é guardado pela **id que o jogo dá a cada ginásio** — `kanto_brock`, `johto_chuck`,
+`hoenn_norman` —, lida do `data-gym-id` do hotspot. Pelo nome partia-se no primeiro acento, na
+primeira tradução e no `Tate & Liza`.
+
+**A lista de ginásios não está escrita no código.** Ela é aprendida do jogo: enquanto a janela do
+Desafio dos Gyms estiver aberta — aberta por si, a ver as insígnias —, a ferramenta lê a aba que
+estiver à vista e guarda os ginásios dela. Não clica em nada para isso. Uma lista escrita à mão
+fica errada no dia em que o jogo acrescentar um ginásio, e fica errada **em silêncio**. Enquanto
+uma região ainda não foi vista, o bloco diz que basta abrir lá a janela uma vez.
+
+A região vem da **aba activa**, e não da que o painel mostra: quem abriu a janela pode estar a ver
+outra. Guardar a lista do Hoenn debaixo de `KANTO` seria pior do que não ter lista — e foi
+exactamente o engano que a primeira medição deste trabalho cometeu, porque **o jogo redesenha o
+mapa inteiro ao trocar de aba** e um elemento apanhado antes da troca continua a responder com os
+ginásios da aba anterior.
+
+Para o automático poder usar isto, a corrida ganhou uma etapa: antes de montar a equipe, ela abre
+o ginásio, vê qual é o de hoje, fecha a janela e só então escolhe o time. Sem isso o time era
+escolhido com a janela ainda fechada, quando ninguém sabe qual é o ginásio do dia. Se a leitura
+falhar, usa-se o time da região e segue-se — desistir do dia por causa de um refinamento seria
+trocar o certo pelo bonito.
+
+Renomear um time no **Times** acerta também estas escolhas, como já acertava as da região: elas
+guardam o nome do time, e um renomear que não passasse por aqui deixava-as a apontar para um time
+que já não existe, descoberto só no meio de uma corrida.
+
+Medido na janela do jogo antes de mexer no código: as abas são botões de texto `KANTO`, `JOHTO` e
+`HOENN`, e o mapa do Hoenn traz os mesmos sete `gym-hotspot` mais o da liga, com o mesmo
+`is-active` e o mesmo rótulo `HOJE`. **Nada do que a ferramenta lê no jogo mudou** — o que faltava
+era ela só conhecer duas regiões. Por isso tudo o que se repete por região passou a ser desenhado
+a partir de uma lista: quando Sinnoh chegar, é uma linha, e não sete lugares com o nome escrito à
+mão.
 
 ```
 guardar a caçada → VOLTAR À CIDADE → time do ginásio → F5 → NPC GYM
@@ -867,9 +909,9 @@ e **uma rodada por janela**. O instante é sorteado dentro da janela inteira —
 08:00 em ponto é o padrão mais visível que existe. Uma janela que termina antes de começar
 atravessa a meia-noite (`22:00-02:00`).
 
-Kanto e Johto têm cada uma a sua caixa, o seu interruptor e, agora, **os seus próprios times**: a
-região escolhida no alto manda no que as duas listas mostram, e trocar de região não escreve por
-cima dos times da outra. Sem isso, agendar as duas seria agendar a mesma equipe duas vezes.
+Cada região tem a sua caixa, o seu interruptor e **os seus próprios times**: a região escolhida no
+alto manda no que as duas listas mostram, e trocar de região não escreve por cima dos times das
+outras. Sem isso, agendar várias seria agendar a mesma equipe várias vezes.
 
 A janela é marcada como usada **antes** de a corrida começar, nunca no fim. A corrida passa por um
 F5 no meio: um relógio que vivesse só na memória voltaria a disparar na mesma janela, desafiando
@@ -930,6 +972,7 @@ região com o resultado escrito ao lado — `Kanto  Vitória 22:24` — e a linh
 GYM                □ ×
 ● Kanto  Vitória 22:24  ▶
 ● Johto  —              ▶
+● Hoenn  —              ▶
 próximo: Johto hoje às 19:10
 ```
 

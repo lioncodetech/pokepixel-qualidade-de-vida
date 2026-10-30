@@ -228,8 +228,12 @@ PPX.modulo(
       #lioncode-raridades, #lioncode-raridades * { box-sizing: border-box; }
       #lioncode-raridades {
         position: fixed; z-index: 2147483000; width: 290px;
-        background: #11161f; color: #e7edf6; border: 1px solid #2a3244; border-radius: 10px;
-        font: 13px/1.45 system-ui, sans-serif; box-shadow: 0 8px 24px #0008;
+        background: var(--ppx-fundo); color: var(--ppx-texto);
+        border: 1px solid var(--ppx-borda); border-radius: var(--ppx-raio);
+        font: var(--ppx-fonte); box-shadow: var(--ppx-sombra);
+        /* Tecto e rolagem: nenhum painel pode crescer para fora da tela. */
+        max-height: var(--ppx-teto); overflow: auto;
+        scrollbar-width: thin; scrollbar-color: var(--ppx-borda) transparent;
       }
       #lioncode-raridades header {
         display: flex; align-items: center; gap: 8px; padding: 8px 10px;

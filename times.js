@@ -904,9 +904,10 @@ PPX.modulo(
       #lioncode-times, #lioncode-times * { box-sizing: border-box; }
       #lioncode-times {
         position: fixed; z-index: 2147483000; width: 260px; height: 320px; overflow: auto;
-        min-width: 210px; min-height: 140px; max-width: 92vw; max-height: 88vh;
-        background: #10151e; color: #e6e9ef; border: 1px solid #2a3240; border-radius: 12px;
-        font: 12px/1.45 system-ui, sans-serif; box-shadow: 0 14px 34px rgba(0,0,0,.55);
+        min-width: 210px; min-height: 140px; max-width: 92vw; max-height: var(--ppx-teto);
+        background: var(--ppx-fundo); color: var(--ppx-texto);
+      border: 1px solid var(--ppx-borda); border-radius: var(--ppx-raio);
+        font: var(--ppx-fonte-densa); box-shadow: var(--ppx-sombra);
         opacity: .82; transition: opacity .15s;
         /* A alca nativa do canto. Depende de overflow diferente de visible e de uma altura
            explicita: so' com max-height o navegador nao desenha alca nenhuma, que era o motivo

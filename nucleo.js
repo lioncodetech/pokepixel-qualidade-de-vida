@@ -17,6 +17,44 @@
   const CHAVE_VEZ = 'lioncode:pokepixel:vez';
   const CHAVE_SUMICO = 'lioncode:pokepixel:sumico';
 
+  /**
+   * Os valores visuais que todos os paineis do pacote partilham.
+   *
+   * Eles estavam escritos a mao em doze ficheiros, e tinham derivado em duas familias quase
+   * iguais: fundo #10151e/#11161f, borda #2a3240/#2a3244, cantos 12/10 px, letra 12/13 px. Perto
+   * demais para parecer uma escolha e longe demais para passar despercebido — le-se como engano,
+   * que e' o pior tipo de inconsistencia. Aqui ficam uma vez so'.
+   *
+   * Vao para o documento, e nao para o shadow root do menu: o menu e' fechado, os paineis vivem
+   * na pagina, e uma regra la' dentro nao chega a eles.
+   *
+   * `--ppx-teto` e' o que impede qualquer painel de crescer para fora da tela. Medido em
+   * 30/10/2026: so' quatro dos doze tinham tecto, e o Ginasio chegou a 1185 px numa tela de 785 —
+   * o fim do painel, com o campo do reset e o botao de parar, ficava inalcancavel.
+   *
+   * `--ppx-fonte-densa` existe porque densidade nao e' deriva. Os quatro paineis com listas e
+   * tabelas — Times, Loja rapida, Venda rapida e Layout — sao mais apertados de proposito.
+   * Medido em 30/10/2026 ao subi-los para 13 px: a linha de time do Times passou a pedir 491 px
+   * numa caixa de 418, contra 464 px a 12 px, e o painel ganhou barra horizontal. O que nao
+   * encolhe sao os botoes da linha, que crescem com a letra. A cor, o canto e a sombra ficam
+   * iguais aos dos outros: era isso que se lia como engano.
+   */
+  const VALORES = `:root{
+    --ppx-fundo:#11161f; --ppx-texto:#e7edf6; --ppx-suave:#8b97a8;
+    --ppx-borda:#2a3244; --ppx-campo:#182030;
+    --ppx-raio:10px; --ppx-fonte:13px/1.45 system-ui,sans-serif;
+    --ppx-fonte-densa:12px/1.45 system-ui,sans-serif;
+    --ppx-sombra:0 8px 24px rgba(0,0,0,.5); --ppx-teto:calc(100vh - 16px);
+  }`;
+  const porValores = () => {
+    if (document.getElementById('ppx-valores')) return;
+    const el = document.createElement('style');
+    el.id = 'ppx-valores';
+    el.textContent = VALORES;
+    (document.head || document.documentElement).append(el);
+  };
+  porValores();
+
   const ler = (chave, padrao) => {
     try {
       return JSON.parse(localStorage.getItem(chave)) ?? padrao;
