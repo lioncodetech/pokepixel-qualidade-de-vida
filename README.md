@@ -54,7 +54,7 @@ O `RampageLiveArena.result` foi considerado como fonte e **não serve**: naquele
 A banca `testes/banca-rampage.html` exercita o resto fora do jogo: o teto de dez, o "não medi", o
 formato dos números e o atraso do acumulado (`?lento=N` e `?nunca=1`).
 
-As dezessete ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As dezoito ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -1121,6 +1121,52 @@ e campo vazio significa "sem limite deste lado", não zero.
 
 Fica a contagem da faixa e o melhor da coleção: `19 de 117 na faixa` e `×1,688 Scyther`. O resto —
 a lista, os campos — sai da frente.
+
+## Awakening: subir a Quality, e parar onde começa a doer
+
+A Quality mora em centésimos — 1,49 é `149` — e cada raridade é uma faixa: épica 140–154, lendária
+155–169. Dentro da faixa há **cinco AWK**, cada um **+3 centésimos**, e o custo de cada um é só
+material:
+
+> **AWK nº N** = 1 Material Genético **da própria espécie** + **N** de qualquer espécie, todos da
+> **mesma raridade** do Pokémon. Não gasta gold nem diamantes.
+
+Medido na conta do dono em 03/11/2026: Magikarp no 2/5 pede 1+2, Crobat no 3/5 pede 1+3, Ralts no
+4/5 pede 1+4, Dunsparce lendário no 5/5 pede 1+5.
+
+No teto da faixa o AWK acaba e entra o **Challenge**, que promove de raridade: ou N kills com
+aquele Pokémon ativo contra inimigos de um tipo em comum, ou N Stones. Concluir cobra gold ou
+diamantes, consome materiais **e faz perder XP** — o Pokémon cai de nível. Depois do mítico vem o
+**God Tier**, com Material Genético Mítico Shiny.
+
+### Onde ela para, e por quê
+
+Ela faz **AWK**, que é o passo repetitivo e barato, e **mostra** o Challenge sem o executar: kills,
+Stones, preço, quanto de XP se perde e em que nível o Pokémon fica. Perder nível é decisão de cada
+vez, não uma caixinha ligada de antemão — e uma ferramenta que a tomasse sozinha estaria a decidir
+a coisa mais cara do ecrã. Há um teste que falha se alguém acrescentar a chamada do Challenge ou do
+God Tier.
+
+### O gargalo é sempre o mesmo
+
+Falta o material **da espécie certa**. Por isso o painel começa por essa conta, antes de qualquer
+botão: *"até o teto faltam 2 de Ralts e 9 de qualquer espécie"*. Saber isso antes é o que evita
+ficar a meio caminho com o material no fim — e é a regra aritmética do jogo, não um palpite: do AWK
+de agora até o último, o passo N custa 1 da espécie e N quaisquer.
+
+É aqui que a [Genética](#genética-trocar-os-épicos-fracos-por-material-sem-abrir-o-npc) fecha o
+círculo: o material da espécie vem de extrair outro Pokémon daquela espécie e raridade.
+
+### Duas coisas que o pedido leva, e não são enfeite
+
+O `expected_quality_cents` vai com cada AWK: é o número que você viu no painel. Se a Quality mudou
+entretanto — outro separador, outra janela —, o servidor **recusa** em vez de fazer outra coisa.
+Com material que se consome para sempre, recusar é a resposta certa.
+
+E a escolha dos materiais genéricos gasta **o mais abundante primeiro**, e só toca no material do
+próprio Pokémon até onde o requisito de espécie continua pago. Quem tem 6 Ariados e 1 Abra não quer
+ver o Abra ir primeiro: ele pode ser o único daquela espécie, e a espécie é o requisito caro do AWK
+seguinte.
 
 ## Expedição: tudo pronto até a verificação, que é sua
 
