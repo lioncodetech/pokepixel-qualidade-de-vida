@@ -2708,6 +2708,32 @@ o localStorage é da origem, e a página do jogo lê tudo o que estiver lá — 
 legível pelo próprio jogo. E a carga seguinte, já com a extensão viva, leria do `chrome.storage` e
 diria *"nada guardado"*: guardar num lugar e ler de outro é pior do que dizer que falhou.
 
+### Por que a Senha perdia a configuração a cada versão
+
+Medido em **03/11/2026**, e a causa não estava nesta extensão: estava em como ela é instalada.
+
+O LionMultInstance grava **cada versão na sua própria pasta** (`extension-store.ts`: *"Pasta por
+versao: uma janela que ainda usa a versao antiga nao para de funcionar no meio"*), e o Chromium
+deriva o **ID de uma extensão descompactada a partir do caminho**. Pasta nova a cada versão → ID
+novo → `chrome.storage.local` vazio. Nada se perdia de verdade: ficava na gaveta do ID antigo.
+
+E só a Senha sofria disso porque **só ela usa `chrome.storage`**. As outras dezassete ferramentas
+guardam tetos, horários e posições no `localStorage` do site do jogo, que é por origem e não liga
+nenhuma para o ID da extensão. A Senha é diferente de propósito: ali está uma senha, e o
+`localStorage` do jogo **é legível pelo JavaScript da própria página**. Mudá-la para lá resolveria
+o sintoma e poria o segredo ao alcance de qualquer script do site — por isso não foi esse o
+caminho.
+
+A correção é o campo **`key`** no `manifest.json`: com ele o Chromium deriva o ID **da chave**, e
+não do caminho. As pastas por versão continuam como estão, e o armazenamento atravessa as
+atualizações. O ID fixo passa a ser `bbcijmobchbblfofkanefakkfbebaifn`, e dá para conferir na
+página de extensões.
+
+Duas coisas que ficam ditas: ao fixar o ID, o que estivesse guardado **antes** se perde uma última
+vez; e o `key` é só a metade pública de um par RSA — não assina nem autentica nada aqui, serve de
+nome.
+
+
 ## O que não aparece na mochila é zero
 
 A mochila só lista o que existe: item zerado não aparece nela. A extensão lia essa ausência como
