@@ -118,6 +118,7 @@ const NA_FILA = [
   'rampage.js',
   'eventos.js',
   'ilhas.js',
+  'genetica.js',
 ];
 
 /**
@@ -153,6 +154,8 @@ const FORA = {
   'eventos-main.js':
     'peça: lê e resgata os eventos só quando eventos.js pede — e eventos.js já tem a vez',
   'times-main.js': 'só lê a equipe pela API; quem clica é times.js, e quem o chama já tem a vez',
+  'genetica-main.js':
+    'peça: só lê e extrai quando genetica.js pede — e genetica.js pede a vez antes de a chamar',
 };
 
 test('toda ferramenta nova escolhe um lado da fila', () => {

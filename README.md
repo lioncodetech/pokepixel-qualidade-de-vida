@@ -54,7 +54,7 @@ O `RampageLiveArena.result` foi considerado como fonte e **não serve**: naquele
 A banca `testes/banca-rampage.html` exercita o resto fora do jogo: o teto de dez, o "não medi", o
 formato dos números e o atraso do acumulado (`?lento=N` e `?nunca=1`).
 
-As quinze ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As dezesseis ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -1121,6 +1121,136 @@ e campo vazio significa "sem limite deste lado", não zero.
 
 Fica a contagem da faixa e o melhor da coleção: `19 de 117 na faixa` e `×1,688 Scyther`. O resto —
 a lista, os campos — sai da frente.
+
+## Genética: trocar os épicos fracos por material, sem abrir o NPC
+
+O NPC **Geneticista Pokémon** tem a aba *"Extrair material"*: cada Pokémon vira **1 Material
+Genético da própria espécie** e é **apagado permanentemente**. Pela tela isso é um Pokémon de cada
+vez; aqui é a coleção inteira de uma vez, pela mesma API que o NPC usa.
+
+O painel tem **uma linha por raridade** — uma caixa para ligar, um mínimo e um máximo — e dois
+botões que fazem coisas bem diferentes:
+
+- **Procurar** só lê e conta. Varre as espécies, aplica o filtro e mostra a lista: quantos, de que
+  espécies. Não apaga nada, e diz isso na própria linha de estado;
+- **Extrair** é o que apaga. O **primeiro clique não apaga**: o botão fica vermelho e passa a
+  `Confirmar: apagar 248`. Só o segundo começa.
+
+### A raridade é uma chave, e não um intervalo de números
+
+Cada raridade tem a **sua** faixa, e ligar uma é marcar uma caixa. Parece que bastaria um mínimo e
+um máximo globais — as faixas não se sobrepõem, afinal. Mas quem escrevesse "1,40 a 1,60" sem
+pensar apanharia **lendário** pelo meio, e nunca mais saberia qual foi. Não há desfazer.
+
+Isso foi medido, e não imaginado: na conta do dono, em 03/11/2026, dos **387** Pokémon que o jogo
+dava como extraíveis, **383 eram épicos e 4 eram lendários** (1,6147 a 1,6811).
+
+Os limites de cada linha vêm do **jogo** (`PokemonCardData.qualityBand`), nunca cravados aqui —
+mesma lição das Raridades: um número escrito no código é uma mentira silenciosa no dia em que o
+jogo o mudar. Hoje são: fraca 0,90–0,99, comum 1,00–1,09, incomum 1,10–1,24, rara 1,25–1,39, épica
+1,40–1,54, lendária 1,55–1,69. A **mítica não tem faixa** neste jogo, e por isso não vira linha
+enquanto não aparecer uma.
+
+Shiny, travado ("Protegido") e o que está na equipe ficam de fora **sempre**, mesmo que caibam no
+número.
+
+#### Este jogo só extrai de épico para cima
+
+As quatro raridades de baixo aparecem riscadas no painel, e é por um motivo medido. Um Charmander
+**fraco** (0,923), destravado, no depósito, da **mesma espécie** de dois épicos extraíveis, não
+aparece na lista de extraíveis do jogo. Não é a conta do dono que não tem: é o jogo que não
+oferece.
+
+Então as linhas existem — se o jogo abrir a mão um dia, a ferramenta já acompanha —, mas hoje não
+vem nada delas. E quando uma busca volta vazia o painel diz **o que o jogo ofereceu** (`épica 383,
+lendária 4`) em vez de mostrar um zero mudo: "a minha faixa não pegou" e "esta raridade o jogo
+nunca dá" são perguntas diferentes, e um zero responderia as duas igual.
+
+Quem já tinha o teto antigo ("épicos até N") não perde a escolha: ela vira a faixa épica de 1,40
+até N, ligada.
+
+### Pausar, e o que a pausa consegue mesmo fazer
+
+Pedido do dono: *"coloca um botão de pausa, para caso eu clique sem querer e não queira fazer
+nada"*. São três travões, e eles param em sítios diferentes:
+
+1. o primeiro clique em Extrair só arma a confirmação — e mexer em qualquer outra coisa desarma;
+2. **Pausar** trava o resto e guarda o lugar; **Retomar** continua de onde ficou;
+3. **Parar** desiste do que falta. Fechar o painel no meio também para, em vez de perder a corrida
+   de vista.
+
+Uma honestidade que o painel precisa de ter: **a pausa pega entre espécies**. Uma espécie é uma
+chamada só, e o servidor apaga todos os dela de uma vez — não dá para parar no meio dessa chamada,
+e um botão que fingisse que dava seria pior do que não haver botão. É por isso que o progresso é
+contado em espécies (`12 de 61`) e não em Pokémon.
+
+### A cidade, o ritmo e a agenda
+
+Três coisas pedidas pelo dono em **03/11/2026**, depois da primeira corrida de verdade.
+
+**Vai à cidade antes de extrair.** O servidor não exige isso — foi medido, a extração correu com a
+caçada a andar e o treinador longe do NPC. Quem exige é ele, e a razão é boa: *a janela do
+Geneticista só abre na cidade*, então uma extração no meio do mato não é uma coisa que ele pudesse
+ter feito à mão. Ir à cidade **é** parar a caçada, como na Escada; por isso há também **voltar à
+caçada no fim**, e a volta acontece por todos os caminhos de saída — acabou, parou ou falhou. A
+caçada de origem é lida **antes** da ida: depois do `stopHunt` já não há o que perguntar, e era
+assim que se voltava para lugar nenhum.
+
+**O intervalo entre espécies é sorteado**, entre um mínimo e um máximo que você escreve (padrão 3 a
+8 s). Um relógio que dispara sempre com o mesmo intervalo não se parece com ninguém a jogar — é o
+mesmo princípio que o calendário já usa para escolher o instante dentro da janela. E, de quebra, é
+o que evita bater no intervalo do servidor a cada passo: antes, cada espécie gastava uma tentativa
+a levar com o "aguarde" antes de passar.
+
+**A agenda é a mesma de todas as outras**: horário, e listas de dia da semana, dia do mês ou um dia
+por mês, atrás do mesmo botão. Ligada, ela **procura e extrai sozinha, sem perguntar** — e o botão
+diz isso com todas as letras, porque ligar a agenda é uma decisão diferente de clicar em Extrair.
+Pedir confirmação às 04:00 com ninguém à frente do ecrã não é proteção, é uma corrida que não
+acontece.
+
+Duas regras do calendário que valem aqui como valem no resto do pacote: procura-se **sempre** antes
+de extrair (um plano de ontem é uma lista de Pokémon que podem já não existir — ou, pior, outros
+que entraram e que ninguém viu), e o carimbo da última corrida é gravado **antes** dela, para uma
+falha a meio não devolver a mesma janela e pôr a ferramenta a tentar em laço. O carimbo e o
+"ligada" não viajam no exportar: o relógio de uma conta não é configuração de outra.
+
+### O servidor tem um intervalo entre rituais
+
+Medido na conta do dono em **03/11/2026**, na primeira corrida de verdade: a primeira espécie
+passou e a segunda voltou com *"Aguarde um instante antes de iniciar outro ritual."* — uma frase
+que não existe em nenhum ficheiro de idioma do jogo, ou seja, veio do servidor.
+
+A ferramenta tratava qualquer erro como definitivo. Resultado: **extraiu uma espécie e desistiu das
+outras sessenta**, dizendo que tinha parado. A causa foi atirar fora os campos do erro: o cliente
+do jogo levanta um `Error` com `code`, `status` e `retryAfterMs`, e a ponte só mandava a frase
+para o painel — justamente o campo que não distingue *"não pode"* de *"ainda não"*.
+
+Agora esperar é parte do trabalho. Quando o jogo diz quanto esperar, espera-se isso; quando não
+diz, começa em 3 s e dobra, até oito tentativas (perto de dois minutos). Entre espécies há um
+respiro de 1,5 s mesmo quando tudo correu bem, que evita bater no intervalo a cada passo. Repetir é
+seguro porque a chave de idempotência é a **do plano**: se o servidor recusou, nada aconteceu; se
+tinha acontecido, a chave impede a segunda.
+
+O que **não** espera: `SELECTION_CHANGED` e `NO_ELIGIBLE_CREATURES`. Esses dizem que a coleção
+mudou debaixo do plano, e repetir um plano velho é exatamente o que não se faz quando o que está em
+jogo é apagar bicho. E a espera dorme aos bocados, de olho no Pausar e no Parar: uma espera de um
+minuto inteiriça faria os botões parecerem mortos, que é a mesma queixa que eles existem para não
+ter.
+
+### O plano é congelado no "Procurar"
+
+Os ids ficam do lado da página, em `genetica-main.js`, e o painel só manda o **índice** da espécie.
+Assim o que se apaga é exatamente o que foi contado na tela: nada de uma releitura esperta entre o
+"vi 248" e o "apaguei 251". A chave de idempotência nasce com a varredura, e não com a chamada —
+uma repetição depois de uma resposta ambígua é o *mesmo* pedido, não um segundo pedido igual.
+
+A seleção enviada é a do próprio jogo: `{ mode: 'ids', creature_ids }`, em lotes de 500, que é o
+`EXTRACTION_BATCH_SIZE` do `NpcInteraction.js`.
+
+E ela não precisa da cidade — isto foi confirmado na corrida real de 03/11/2026, não deduzido: com
+a caçada a andar e o treinador longe do NPC, Abra e Ariados foram extraídos e o saldo de material
+dessas espécies subiu para 1 e 6. O servidor não exige estar ao pé do Geneticista, então esta ferramenta não mexe no mapa nem
+interrompe caçada nenhuma — mas pede a vez na fila, como toda automação deste pacote.
 
 ## Caçadas: atalhos para voltar numa tecla
 
