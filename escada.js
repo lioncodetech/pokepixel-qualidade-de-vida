@@ -255,6 +255,18 @@ PPX.modulo(
         /** De quanto em quanto sobe o alvo, no modo `'passo'`. */
         passo: null,
         /**
+         * O teto do modo `'passo'`: chegados ali, **ninguem sobe mais**.
+         *
+         * Pedido em 03/11/2026 — "chegou no lvl que eu coloquei, aqueles pokees nao upam mais".
+         * Sem isto o passo nao tinha fim: fechava rodada atras de rodada enquanto a escada
+         * estivesse ligada, que e' o que ele quer para subir **ate' um ponto** e nao para sempre.
+         *
+         * Vazio = sem fim, como era antes. E **vale sozinho**, sem minimo nem passo: so' o teto
+         * escrito quer dizer "vao todos a este nivel e ficam la'" — e' a forma dele de dizer
+         * "upar de 0 em 0", e recusa-la mandaria-o trocar de modo para pedir a mesma coisa.
+         */
+        ate: null,
+        /**
          * Quantas rodadas de `passo` ja' fecharam. O alvo de agora sai daqui.
          *
          * E' o unico estado que o modo de grupo guarda, e e' porque o jogo nao o tem: "ja' subiram
@@ -1172,8 +1184,23 @@ PPX.modulo(
       if (cfg.modo === 'grupo') return Number(g.alvo) || null;
       const minimo = Number(g.minimo);
       const passo = Number(g.passo);
-      if (!minimo || !passo) return null;
-      return minimo + passo * ((Number(g.rodada) || 0) + 1);
+      const ate = Number(g.ate) || 0;
+      // So' o teto: um alvo fixo, sem rodada nenhuma. Ver `ate` no PADRAO.
+      if (!passo) return ate || null;
+      if (!minimo) return null;
+      const alvo = minimo + passo * ((Number(g.rodada) || 0) + 1);
+      return ate ? Math.min(ate, alvo) : alvo;
+    };
+
+    /**
+     * O alvo de agora ja' e' o teto do passo — ou seja, nao ha' rodada seguinte.
+     *
+     * E' o que separa "todos chegaram, subo mais um passo" de "todos chegaram, acabou". Sem teto
+     * e' sempre falso, e o passo continua sem fim como sempre foi.
+     */
+    const noTetoDoPasso = (alvo) => {
+      const ate = Number(cfg.grupo.ate) || 0;
+      return Boolean(ate) && Boolean(alvo) && alvo >= ate;
     };
 
     /** O que falta escolher para o modo de grupo poder correr, ou `''`. */
@@ -1218,7 +1245,7 @@ PPX.modulo(
       if (!alvoDoGrupo())
         return cfg.modo === 'grupo'
           ? 'Diga o nível em que eles saem do grupo.'
-          : 'Diga o nível mínimo e de quantos em quantos níveis subir.';
+          : 'Diga o nível mínimo e de quantos em quantos níveis subir — ou só o teto, se eles param num nível e ficam lá.';
       return '';
     };
 
@@ -1393,9 +1420,11 @@ PPX.modulo(
           ? turnosDoGrupo().reduce((n, t) => n + piscinaDoTurno(t, colecao).length, 0)
           : m.piscina.length;
         const todos = `Todos os ${quantos} chegaram ao Lv ${alvo}`;
-        return cfg.modo === 'passo'
-          ? `${todos}. Rodada nova a caminho.`
-          : `${todos}. Ficam fora do grupo e eu continuo a farmar ${onde}.`;
+        if (cfg.modo === 'passo')
+          return noTetoDoPasso(alvo)
+            ? `${todos}, o teto. Ninguém sobe mais e eu continuo a farmar ${onde}.`
+            : `${todos}. Rodada nova a caminho.`;
+        return `${todos}. Ficam fora do grupo e eu continuo a farmar ${onde}.`;
       }
       const grupo = m.escolhidos
         .slice(1)
@@ -2181,7 +2210,9 @@ PPX.modulo(
       //
       // A rodada fecha **antes** de a equipe ser desfeita: subir o alvo primeiro poupa tirar cinco
       // Pokemon para os por de volta um instante depois.
-      if (!m.faltam.length && cfg.modo === 'passo') {
+      // No teto nao se abre rodada nova: quem chegou fica onde esta', e a equipe continua a
+      // caçar com o lider que sobrou — o mesmo que o modo de grupo faz quando todos se formam.
+      if (!m.faltam.length && cfg.modo === 'passo' && !noTetoDoPasso(alvo)) {
         g.rodada = (Number(g.rodada) || 0) + 1;
         gravar();
         desenhar(false);
@@ -2716,6 +2747,11 @@ PPX.modulo(
             mínimo Lv <input type="number" min="1" data-minimo placeholder="—">
             e mais <input type="number" min="1" data-passo placeholder="—"> níveis
           </label>
+          <label class="caixa" data-so-passo
+                 title="Chegados a este nível, ninguém sobe mais. Vazio: o passo não tem fim">
+            até o Lv <input type="number" min="1" data-ate placeholder="—">
+          </label>
+          <p class="vazio" data-passo-diz></p>
         </div>
         <datalist data-cacadas id="lioncode-escada-cacadas"></datalist>
         <div data-config></div>
@@ -3498,8 +3534,18 @@ PPX.modulo(
         campo('[data-alvo]').value = cfg.grupo.alvo ?? '';
         campo('[data-minimo]').value = cfg.grupo.minimo ?? '';
         campo('[data-passo]').value = cfg.grupo.passo ?? '';
+        campo('[data-ate]').value = cfg.grupo.ate ?? '';
         campo('[data-so-grupo]').style.display = cfg.modo === 'grupo' ? '' : 'none';
-        campo('[data-so-passo]').style.display = cfg.modo === 'passo' ? '' : 'none';
+        // Duas linhas levam `data-so-passo` (o mínimo com o passo, e o teto), por isso o
+        // `querySelectorAll`: com o `campo` só a primeira aparecia, e o teto ficava escondido no
+        // único modo onde ele existe.
+        for (const el of painel.querySelectorAll('[data-so-passo]'))
+          el.style.display = cfg.modo === 'passo' ? '' : 'none';
+        const dizPasso = campo('[data-passo-diz]');
+        dizPasso.style.display = cfg.modo === 'passo' ? '' : 'none';
+        dizPasso.textContent = cfg.grupo.ate
+          ? `Sobem de ${cfg.grupo.passo || '?'} em ${cfg.grupo.passo || '?'} níveis até o Lv ${cfg.grupo.ate} e param ali.`
+          : 'Sem teto o passo não tem fim: fecha uma rodada e abre outra enquanto a escada estiver ligada.';
       }
       campo('[data-trocar]').checked = cfg.trocar !== false;
       campo('[data-teto]').value = cfg.teto ?? '';
@@ -3733,6 +3779,7 @@ PPX.modulo(
       ['[data-alvo]', 'alvo'],
       ['[data-minimo]', 'minimo'],
       ['[data-passo]', 'passo'],
+      ['[data-ate]', 'ate'],
     ])
       campo(campoNome).addEventListener('change', (e) => {
         const v = Number(e.target.value);
@@ -3740,7 +3787,12 @@ PPX.modulo(
           e.target.value === '' || !Number.isFinite(v) || v < 1 ? null : Math.round(v);
         // Mexer no alvo e' mudar de ideia sobre onde se chega: as rodadas ja' fechadas nao valem
         // para o alvo novo, e guarda-las faria o proximo alvo sair de uma conta que ele nao fez.
-        cfg.grupo.rodada = 0;
+        //
+        // **O teto e' a excecao, e de proposito.** Ele nao muda a conta do passo, so' diz onde ela
+        // para: zerar a rodada ao subir o teto mandaria a equipe de volta ao primeiro degrau, e
+        // como todos ja' estao acima dele a escada gastaria uma batida por rodada a recuperar o
+        // numero que ja' tinha — a dizer "rodada nova" em cada uma.
+        if (chave !== 'ate') cfg.grupo.rodada = 0;
         gravar();
         desenhar();
         void conferir();
@@ -4014,6 +4066,7 @@ PPX.modulo(
           alvo: cfg.grupo.alvo,
           minimo: cfg.grupo.minimo,
           passo: cfg.grupo.passo,
+          ate: cfg.grupo.ate,
         },
       }),
       aplicar: (dados) => {
@@ -4066,6 +4119,7 @@ PPX.modulo(
         cfg.grupo.alvo = limparNivel(grupo.alvo);
         cfg.grupo.minimo = limparNivel(grupo.minimo);
         cfg.grupo.passo = limparNivel(grupo.passo);
+        cfg.grupo.ate = limparNivel(grupo.ate);
         // Estado desta janela, e nao configuracao: a escada importada comeca parada e sem
         // degrau aplicado, que e' o unico comeco honesto numa conta que nao e' a de origem.
         cfg.ligada = false;

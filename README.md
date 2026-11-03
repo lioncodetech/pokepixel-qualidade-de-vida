@@ -1823,6 +1823,28 @@ três Pokémon em Lv 10, 13 e 16, mínimo 20 e 5 níveis — as rodadas são **2
 chão de onde se parte, não o primeiro alvo. Fechada a rodada (todos no alvo), ela sobe o alvo e
 recomeça do primeiro.
 
+#### O passo pode ter um teto: chegados ali, ninguém sobe mais
+
+Pedido em 03/11/2026: *"eu quero colocar um level e upar de 0 em 0, ou seja, chegou no lvl que eu
+coloquei aqueles pokees nao upam mais"*. Sem teto o `subindo de N em N` não tinha fim — fechava uma
+rodada e abria a seguinte enquanto a escada estivesse ligada, que é o certo para manter a equipe
+nivelada e o errado para subir **até** um ponto.
+
+Então o modo ganhou um terceiro campo: **até o Lv X**. O alvo da rodada continua a ser mínimo + N ×
+rodada, mas nunca passa do teto; chegados lá, **não há rodada nova**. Quem chegou fica onde está, a
+equipe continua a caçar com quem sobrou à frente, e o painel diz `Todos os 12 chegaram ao Lv 60, o
+teto` em vez de prometer uma rodada que não vem. Vazio, é o comportamento de sempre: sem fim.
+
+E o teto **vale sozinho**, sem mínimo e sem passo: só ele escrito quer dizer "vão todos a este nível
+e ficam lá". É literalmente o "de 0 em 0" do pedido, e é por isso que ele não é recusado — obrigá-lo
+a trocar de modo para pedir a mesma coisa seria uma regra de arquivo, não do jogo.
+
+Uma diferença de propósito: mexer no mínimo ou no passo **zera as rodadas já fechadas**, porque muda
+a conta de onde sai o alvo; mexer no teto **não**. O teto não muda a conta, só diz onde ela para —
+zerar ali mandaria a equipe de volta ao primeiro degrau, e, como todos já estão acima dele, a escada
+gastaria uma batida por rodada a recuperar o número que já tinha, a anunciar "rodada nova" em cada
+uma.
+
 #### Cada turno escolhe onde caça
 
 Até 26/10/2026 a caçada era **uma só para todos os turnos com pedra**: a lista do grupo. Isso tinha

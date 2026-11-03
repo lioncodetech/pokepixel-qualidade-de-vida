@@ -801,12 +801,45 @@ test('o alvo do modo passo sobe de rodada em rodada', () => {
   // A rodada fecha ANTES de a equipe ser desfeita: subir o alvo primeiro poupa tirar cinco Pokémon
   // para os pôr de volta um instante depois.
   const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
-  const fecha = batida.indexOf("if (!m.faltam.length && cfg.modo === 'passo')");
+  // Sem o `)` no fim: desde 03/11/2026 a linha leva mais um guarda, o do teto. Ver o teste do teto.
+  const fecha = batida.indexOf("if (!m.faltam.length && cfg.modo === 'passo'");
   assert.ok(fecha >= 0, 'a rodada fecha na batida do grupo');
   assert.ok(fecha < batida.indexOf('times.montar('), 'fecha antes de mexer na equipe');
   // E mexer no alvo zera as rodadas: guardá-las faria o próximo alvo sair de uma conta que ele não
   // fez.
   assert.match(codigo, /cfg\.grupo\.rodada = 0;/);
+});
+
+test('o passo pode ter teto, e no teto nao ha rodada nova', () => {
+  // Pedido em 03/11/2026: "chegou no lvl que eu coloquei aqueles pokees nao upam mais". Sem teto o
+  // passo fechava rodada atrás de rodada enquanto a escada estivesse ligada.
+  const bloco = codigo.slice(codigo.indexOf('const alvoDoGrupo ='));
+  const corpo = bloco.slice(0, bloco.indexOf('\n    };'));
+  // O alvo da rodada nunca passa do teto.
+  assert.match(corpo, /return ate \? Math\.min\(ate, alvo\) : alvo;/);
+  // E o teto vale sozinho, sem mínimo nem passo: é o "de 0 em 0" do pedido.
+  assert.match(corpo, /if \(!passo\) return ate \|\| null;/);
+  // No teto a rodada NÃO fecha. Casa-se a linha inteira, e não só o nome do guarda: a condição de
+  // antes (`cfg.modo === 'passo'` sozinha) é um prefixo desta, e um `includes` frouxo passaria com
+  // o guarda apagado.
+  const batida = codigo.slice(codigo.indexOf('async function conferirGrupo'));
+  assert.match(
+    batida,
+    /if \(!m\.faltam\.length && cfg\.modo === 'passo' && !noTetoDoPasso\(alvo\)\) \{/,
+  );
+  // O teto compara-se com >=, e não com ===: um teto baixado para debaixo do alvo de agora ainda é
+  // um teto, e com === a escada voltaria a subir sem fim.
+  const guarda = codigo.slice(codigo.indexOf('const noTetoDoPasso ='));
+  assert.match(guarda.slice(0, 300), /alvo >= ate/);
+  // Mexer no teto NÃO zera as rodadas fechadas: ele não muda a conta do alvo, só diz onde ela para.
+  assert.match(codigo, /if \(chave !== 'ate'\) cfg\.grupo\.rodada = 0;/);
+  // O campo existe no painel, e aparece: são duas linhas com `data-so-passo`, e o `campo` só
+  // devolve a primeira — por isso o `querySelectorAll`.
+  assert.match(ler('escada.js'), /data-ate placeholder/);
+  assert.match(codigo, /painel\.querySelectorAll\('\[data-so-passo\]'\)/);
+  // Viaja no exportar e é limpo no importar, como o mínimo e o passo.
+  assert.match(codigo, /ate: cfg\.grupo\.ate,/);
+  assert.match(codigo, /cfg\.grupo\.ate = limparNivel\(grupo\.ate\);/);
 });
 
 test('quem mexe na equipe do grupo e a ferramenta Times', () => {
