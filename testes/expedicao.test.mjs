@@ -105,3 +105,32 @@ test('ela esta no catalogo, no manifest e pede a vez', () => {
     'a vez é pedida antes de mexer no jogo',
   );
 });
+
+test('uma preparacao que falha pelo meio devolve o time e a cacada', () => {
+  // O BUG, achado na revisão de 03/11/2026: `preparar` trocava o time, falhava a ida à cidade e
+  // saía com um "não entrei" — e o `devolver()` da batida só corre quando um grupo **existiu** e
+  // desapareceu. Como nunca houve grupo, o dono ficava com o time de expedição montado e fora da
+  // caçada, sem ninguém lhe dizer. E a janela ficava queimada por uma falha passageira.
+  const corrida = painel.slice(painel.indexOf('const preparar = async'), painel.indexOf('const desfazer ='));
+  assert.match(corrida, /let falhou = false;/);
+  assert.match(corrida, /const falha = \(texto\) => \{/);
+  // O único `return dizer(` que resta na preparação é o de dentro do próprio `falha`: nenhuma
+  // saída de erro escapa a quem marca o desfazer.
+  assert.equal(
+    (corrida.match(/return dizer\(/g) || []).length,
+    1,
+    'nenhuma saída de erro da preparação escapa ao `falha`',
+  );
+  assert.equal((corrida.match(/return falha\(/g) || []).length, 4);
+  assert.match(corrida, /if \(falhou\) await desfazer\(\);/);
+  assert.ok(
+    corrida.indexOf('if (falhou) await desfazer()') < corrida.indexOf('if (soltar) soltar()'),
+    'devolve-se o time com a vez ainda na mão: quem mexe no jogo tem a vez',
+  );
+  assert.match(corrida, /if \(porMinha && !falhou\) janelaFeita = visto\?\.fecha \|\| '';/);
+  // E o desfazer é o mesmo trabalho do devolver, calado: a mensagem que fica é a do erro.
+  const desfazer = painel.slice(painel.indexOf('const desfazer ='), painel.indexOf('const devolver ='));
+  assert.match(desfazer, /if \(!cfg\.voltar \|\| !antes\) return;/);
+  assert.match(desfazer, /times\?\.usar\?\.\(guardado\.time\)/);
+  assert.match(desfazer, /cacadas\?\.ir\?\.\(guardado\.cacada\.nome\)/);
+});

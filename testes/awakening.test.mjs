@@ -105,3 +105,16 @@ test('ela esta no catalogo, no manifest e pede a vez', () => {
   assert.ok(laco.indexOf('if (parar) break;') < laco.indexOf("acao: 'awk'"));
   assert.ok(laco.indexOf('if (pausado)') < laco.indexOf("acao: 'awk'"));
 });
+
+test('o alvo guardado sobrevive ao proprio AWK', () => {
+  // O BUG, achado na revisão de 03/11/2026: o alvo era procurado pelo rótulo, e o rótulo tem o
+  // nível e a Quality dentro. Um AWK muda a Quality — é o que a ferramenta FAZ —, o rótulo passa a
+  // ser outro, o `find` devolve null e o painel voltava a "Escolha um Pokémon" no primeiro `↻`.
+  // Agora quem manda é o id, e o rótulo é reescrito a partir de quem ele é.
+  assert.match(painel, /const PADRAO = \{ alvo: '', alvoId: '' \};/);
+  const bloco = painel.slice(painel.indexOf('const escolhido ='), painel.indexOf('const encherLista ='));
+  assert.match(bloco, /cfg\.alvoId && bichos\.find\(\(b\) => b\.id === cfg\.alvoId\)/);
+  assert.match(painel, /cfg\.alvoId = bichos\.find\(\(b\) => rotulo\(b\) === cfg\.alvo\)\?\.id \|\| '';/);
+  const reler = painel.slice(painel.indexOf('const relerBichos ='), painel.indexOf("campo('[data-alvo]').addEventListener"));
+  assert.match(reler, /cfg\.alvo = rotulo\(alvo\);/);
+});

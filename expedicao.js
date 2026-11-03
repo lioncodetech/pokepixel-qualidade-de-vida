@@ -228,9 +228,23 @@ PPX.modulo(
       correndo = true;
       desenharBotoes();
       let soltar = null;
+      /**
+       * Esta preparacao falhou pelo meio?
+       *
+       * Importa por duas razoes. Uma: quem trocou o time e nao chegou ao grupo tem de o devolver
+       * aqui mesmo — o `devolver()` da batida so' corre quando um grupo **existiu** e desapareceu,
+       * e numa falha nunca houve grupo nenhum. Sem isto o dono ficava com o time de expedicao
+       * montado, fora da caçada, e so' com um "nao entrei" na tela. Duas: uma falha passageira nao
+       * pode queimar a janela inteira no `janelaFeita`.
+       */
+      let falhou = false;
+      const falha = (texto) => {
+        falhou = true;
+        return dizer(texto, true);
+      };
       try {
         soltar = await esperarAVez(dizer);
-        if (!soltar) return dizer('Desisti: o jogo ficou ocupado tempo demais.', true);
+        if (!soltar) return falha('Desisti: o jogo ficou ocupado tempo demais.');
 
         // Lido ANTES de mexer em nada: depois da troca de time e do `stopHunt` já não há o que
         // perguntar, e era assim que se devolvia o lugar errado.
@@ -245,13 +259,13 @@ PPX.modulo(
         if (cfg.time) {
           dizer(`Montando o time “${cfg.time}”…`);
           const troca = await globalThis.PPX?.times?.usar?.(cfg.time);
-          if (!troca?.ok) return dizer(`Não montei o time: ${troca?.erro || 'falhou'}`, true);
+          if (!troca?.ok) return falha(`Não montei o time: ${troca?.erro || 'falhou'}`);
         }
 
         if (cfg.cidade) {
           dizer('Indo para a cidade…');
           const ida = await ponte({ acao: 'cidade' });
-          if (ida?.erro) return dizer(`Não consegui ir para a cidade: ${ida.erro}`, true);
+          if (ida?.erro) return falha(`Não consegui ir para a cidade: ${ida.erro}`);
         }
 
         if (!cfg.entrar) {
@@ -261,7 +275,7 @@ PPX.modulo(
 
         dizer(cfg.codigo ? `Entrando no grupo ${cfg.codigo}…` : 'Entrando num grupo público…');
         const entrou = await ponte({ acao: 'entrar', codigo: cfg.codigo });
-        if (entrou?.erro) return dizer(`Não entrei: ${entrou.erro}`, true);
+        if (entrou?.erro) return falha(`Não entrei: ${entrou.erro}`);
         visto = entrou;
         resumo();
         // **O fim do caminho desta ferramenta.** Não existe aqui nenhuma chamada ao `ready`, e é
@@ -272,10 +286,32 @@ PPX.modulo(
             : 'Entrei no grupo. Agora é com você: marque Pronto.',
         );
       } finally {
+        // Desfazer antes de soltar a vez: enquanto se devolve o time ainda se esta' a mexer no
+        // jogo, e quem mexe no jogo tem a vez.
+        if (falhou) await desfazer();
         if (soltar) soltar();
         correndo = false;
-        if (porMinha) janelaFeita = visto?.fecha || '';
+        // So' uma janela **preparada** conta como feita. Queimar a janela por causa de um "o jogo
+        // ficou ocupado" seria perder a corrida do dia por um segundo mau.
+        if (porMinha && !falhou) janelaFeita = visto?.fecha || '';
         desenhar();
+      }
+    };
+
+    /**
+     * Devolver o que se tirou quando a preparacao **nao chegou ao fim**.
+     *
+     * Mesmo trabalho do `devolver()`, outra ocasiao: aqui nao houve expedicao nenhuma, e a
+     * mensagem que fica na tela e' a do erro — por isso esta nao escreve nada quando corre bem.
+     */
+    const desfazer = async () => {
+      if (!cfg.voltar || !antes) return;
+      const guardado = antes;
+      antes = null;
+      if (guardado.time) await globalThis.PPX?.times?.usar?.(guardado.time);
+      if (guardado.cacada?.nome) {
+        const volta = await globalThis.PPX?.cacadas?.ir?.(guardado.cacada.nome);
+        if (!volta?.ok) dizer(`${campo('[data-estado]').textContent} (e não voltei à caçada)`, true);
       }
     };
 

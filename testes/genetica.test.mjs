@@ -278,3 +278,17 @@ test('ela esta no catalogo, no manifest e pede a vez', () => {
     'a vez é pedida antes da primeira chamada que apaga',
   );
 });
+
+test('escrever um numero numa raridade desligada nao parte a faixa', () => {
+  // O BUG, achado na revisão de 03/11/2026: o campo gravava `{ ...cfg.faixas[chave], [qual]: v }`,
+  // e numa raridade que o dono nunca ligou essa chave não existe. O spread de `undefined` gravava
+  // uma faixa com um limite só: o outro campo ficava em branco no redesenho e, se a caixa fosse
+  // marcada, `faixasLigadas` fazia `Math.min(undefined, x)` → NaN, que não casa com nada e não
+  // explica porque. Parte-se do `f` desenhado, que tem sempre os dois limites e o `liga`.
+  const bloco = painel.slice(painel.indexOf('const desenharFaixas ='), painel.indexOf('const desenhar ='));
+  assert.match(bloco, /cfg\.faixas\[chave\] = \{ liga: false, \.\.\.f, \[qual\]: duasCasas\(preso\) \};/);
+  assert.ok(
+    !/\.\.\.cfg\.faixas\[chave\], \[qual\]/.test(bloco),
+    'o spread não parte de uma chave que pode não existir',
+  );
+});

@@ -35,7 +35,14 @@ PPX.modulo(
     const MIN_MS = 2000;
     const MAX_MS = 5000;
 
-    const PADRAO = { alvo: '' };
+    /**
+     * `alvo` e' o rotulo escrito no campo; `alvoId` e' quem ele e' de verdade.
+     *
+     * Os dois, e nao so' o rotulo: o rotulo tem o nivel e a Quality dentro, e as duas mudam —
+     * a Quality muda **por causa desta ferramenta**, a cada AWK. Guardar so' o texto fazia a
+     * escolha morrer no primeiro uso e o painel voltar a "Escolha um Pokemon".
+     */
+    const PADRAO = { alvo: '', alvoId: '' };
 
     const ler = (chave, padrao) => {
       try {
@@ -185,7 +192,12 @@ PPX.modulo(
       `${b.apelido && b.apelido !== b.especie ? `${b.apelido} (${b.especie})` : b.especie}` +
       ` Lv ${b.nivel} · ${comoQuality(b.cents)}${b.brilhante ? ' ✨' : ''}`;
 
-    const escolhido = () => bichos.find((b) => rotulo(b) === cfg.alvo) || null;
+    // Pelo id primeiro; o rotulo fica como reserva para quem ja' tinha um alvo guardado antes
+    // de o id passar a ser gravado.
+    const escolhido = () =>
+      (cfg.alvoId && bichos.find((b) => b.id === cfg.alvoId)) ||
+      bichos.find((b) => rotulo(b) === cfg.alvo) ||
+      null;
 
     const encherLista = () => {
       const lugar = campo('[data-bichos]');
@@ -343,12 +355,21 @@ PPX.modulo(
       if (r?.erro) return dizer(r.erro, true);
       bichos = Array.isArray(r.bichos) ? r.bichos : [];
       encherLista();
+      // O rotulo do alvo e' reescrito a partir de quem ele e': depois de um AWK a Quality dele
+      // mudou, e o campo tem de mostrar a de agora em vez de uma que ja' nao existe.
+      const alvo = escolhido();
+      if (alvo) {
+        cfg.alvo = rotulo(alvo);
+        cfg.alvoId = alvo.id;
+        gravar();
+      }
       await verPrevia();
       dizer(`${bichos.length} Pokémon na lista.`);
     };
 
     campo('[data-alvo]').addEventListener('change', (e) => {
       cfg.alvo = String(e.target.value || '').slice(0, 120);
+      cfg.alvoId = bichos.find((b) => rotulo(b) === cfg.alvo)?.id || '';
       gravar();
       void verPrevia();
     });

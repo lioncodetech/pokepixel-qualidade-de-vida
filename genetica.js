@@ -429,7 +429,11 @@ PPX.modulo(
                 ? Math.min(banda.max, Math.max(banda.min, v))
                 : v
               : f[qual];
-            cfg.faixas[chave] = { ...cfg.faixas[chave], [qual]: duasCasas(preso) };
+            // Parte-se do `f` DESENHADO, e nao de `cfg.faixas[chave]`: numa raridade que o dono
+            // ainda nao ligou essa chave nao existe, e o spread de `undefined` gravava uma faixa
+            // com um limite so' — campo em branco no redesenho, e `Math.min(undefined, x)` a dar
+            // NaN na varredura, que nao casa com nada e nao explica porque.
+            cfg.faixas[chave] = { liga: false, ...f, [qual]: duasCasas(preso) };
             mudouAFaixa();
           });
           campos.push(n);
