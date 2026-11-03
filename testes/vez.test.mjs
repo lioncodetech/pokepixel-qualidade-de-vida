@@ -135,6 +135,8 @@ const FORA = {
   'nucleo-main.js': 'ponte para o mundo da página, não age',
   'agenda.js': 'calendário puro: diz quando, nunca age',
   'config.js': 'exporta e importa configuração; não toca no jogo, só no armazenamento',
+  'telegram.js':
+    'manda recado para fora do computador; não toca no jogo — e um aviso não pode ficar atrás de uma caçada na fila',
   'senha.js': 'só preenche campos quando a pessoa clica',
   'tipos.js':
     'conta pura: recebe números e devolve qual caçada serve — não lê o jogo, não viaja, não clica',

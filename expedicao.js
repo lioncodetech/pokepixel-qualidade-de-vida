@@ -41,6 +41,14 @@ PPX.modulo(
       codigo: '',
       /** No fim, devolver o time e a caçada de antes. */
       voltar: true,
+      /**
+       * Mandar recado no Telegram quando a janela abrir.
+       *
+       * Aqui fica so' o liga-desliga. O token do bot e o chat id **nao** moram nesta configuracao:
+       * moram no `chrome.storage.local`, pelo `PPX.telegram` — ver o cabecalho do `telegram.js`.
+       * Um token no `localStorage` seria uma senha a' vista do JavaScript da pagina.
+       */
+      recado: false,
     };
 
     const ler = (chave, padrao) => {
@@ -129,6 +137,18 @@ PPX.modulo(
           código <input type="text" maxlength="12" placeholder="público" data-codigo>
         </label>
         <label class="caixa"><input type="checkbox" data-voltar> devolver time e caçada no fim</label>
+        <label class="caixa" title="Quando a janela abrir, mando um recado no Telegram">
+          <input type="checkbox" data-recado> avisar no Telegram
+        </label>
+        <div class="telegram" data-telegram hidden>
+          <label class="campo" title="O token que o @BotFather te deu">
+            token <input type="password" autocomplete="off" placeholder="123456789:AA…" data-token>
+          </label>
+          <label class="campo" title="O id da conversa — fale com o bot e veja em /getUpdates">
+            chat id <input type="text" inputmode="numeric" maxlength="32" data-chat>
+          </label>
+          <button type="button" data-testar>Mandar um recado de teste</button>
+        </div>
         <p class="nota" data-regras></p>
         <div data-config></div>
       </div>
@@ -157,7 +177,11 @@ PPX.modulo(
       #lioncode-expedicao .estado{padding:0 10px 10px}
       #lioncode-expedicao .estado.mau{color:#f85149}
       #lioncode-expedicao .aviso{padding:0 10px 8px;color:#f0c674}
-      #lioncode-expedicao .aviso:empty{display:none}`;
+      #lioncode-expedicao .aviso:empty{display:none}
+      #lioncode-expedicao .telegram{display:grid;gap:6px;border:1px solid #2a3244;border-radius:6px;padding:7px}
+      #lioncode-expedicao .telegram[hidden]{display:none}
+      #lioncode-expedicao .telegram button{cursor:pointer;border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:5px;font-size:12px}
+      #lioncode-expedicao .telegram button:disabled{opacity:.45;cursor:default}`;
 
     const campo = (seletor) => painel.querySelector(seletor);
     const dizer = (texto, mau = false) => {
@@ -174,6 +198,8 @@ PPX.modulo(
     let antes = null;
     /** A janela em que já se preparou, para não se preparar duas vezes na mesma. */
     let janelaFeita = '';
+    /** A janela de que já se mandou recado. Um recado por janela, e não um a cada meio minuto. */
+    let janelaAvisada = '';
 
     const relogio = (segundos) => {
       const s = Math.max(0, Math.round(segundos));
@@ -213,6 +239,20 @@ PPX.modulo(
       if (visto.umPorIp) partes.push('uma conta por IP');
       if (visto.exigeVerificacao) partes.push('verificação por integrante');
       nota.textContent = partes.join(' · ');
+    };
+
+    // ------------------------------------------------------------- recado
+    //
+    // O recado sai do computador porque o dono **nao esta' nele** — foi a objecao dele em
+    // 03/11/2026 ao aviso na tela. Ver o cabecalho do `telegram.js`.
+    //
+    // E o que ele diz para' onde esta ferramenta para': que a janela abriu, quanto falta e, quando
+    // ela ja' entrou no grupo, que a verificacao espera. **Nunca a resolve** — ver o cabecalho do
+    // `expedicao-main.js` e o teste que guarda isso.
+    const recado = async (texto) => {
+      if (!cfg.recado) return;
+      const r = await globalThis.PPX?.telegram?.avisar?.(texto);
+      if (r?.erro) dizer(`Não mandei o recado: ${r.erro}`, true);
     };
 
     // ---------------------------------------------------------- preparação
@@ -285,6 +325,11 @@ PPX.modulo(
             ? 'Entrei no grupo. Agora é com você: resolva a verificação e marque Pronto.'
             : 'Entrei no grupo. Agora é com você: marque Pronto.',
         );
+        await recado(
+          `No grupo ${entrou.grupo?.codigo || '?'} (${entrou.grupo?.membros || 0}/${entrou.grupo?.lugares || 0}).` +
+            ` A janela fecha em ${relogio(entrou.restantes)}.` +
+            (entrou.exigeVerificacao ? ' Falta a verificação e o Pronto — é com você.' : ' Falta marcar Pronto.'),
+        );
       } finally {
         // Desfazer antes de soltar a vez: enquanto se devolve o time ainda se esta' a mexer no
         // jogo, e quem mexe no jogo tem a vez.
@@ -354,6 +399,19 @@ PPX.modulo(
       }
       tinhaGrupo = temGrupo;
 
+      // A janela abriu: um recado por janela, e **antes** de qualquer preparação, para quem está
+      // longe decidir se vale ir ao computador.
+      if (r.aberta && r.ligada && cfg.recado && janelaAvisada !== r.fecha) {
+        janelaAvisada = r.fecha || '';
+        const quantas = r.corridas + r.extras;
+        await recado(
+          quantas
+            ? `Expedição ABERTA. Fecha em ${relogio(r.restantes)} · ${quantas} corrida(s).` +
+                (cfg.ligada ? ' Vou preparar tudo e parar na verificação.' : ' A preparação é no seu clique.')
+            : `Expedição aberta, mas as corridas desta janela já foram usadas.`,
+        );
+      }
+
       if (!cfg.ligada || !r.ligada || !r.aberta) return;
       if (temGrupo) return; // já está num grupo: não há o que preparar.
       if (r.corridas + r.extras < 1) return;
@@ -382,6 +440,56 @@ PPX.modulo(
       const quantos = globalThis.PPX?.times?.nomes?.().length || 0;
       dizer(quantos ? `${quantos} time(s) relido(s).` : 'Nenhum time guardado foi encontrado.', !quantos);
     });
+    /**
+     * O que o painel mostra do Telegram: "guardado" ou "falta".
+     *
+     * O valor **nunca** volta para o campo. Um campo de senha repovoado e' um segredo que qualquer
+     * extensao, qualquer print e qualquer ombro leem de novo — e aqui nao ha' razao para o reler:
+     * o painel so' precisa de saber se esta' configurado.
+     */
+    const desenharTelegram = async () => {
+      const caixa = campo('[data-telegram]');
+      caixa.hidden = !cfg.recado;
+      if (!cfg.recado) return;
+      const d = (await globalThis.PPX?.telegram?.ler?.()) || { token: '', chat: '' };
+      const token = campo('[data-token]');
+      token.value = '';
+      token.placeholder = d.token ? 'guardado — escreva outro para trocar' : '123456789:AA…';
+      campo('[data-chat]').value = d.chat;
+    };
+
+    const guardarTelegram = async () => {
+      const token = campo('[data-token]').value;
+      const chat = campo('[data-chat]').value;
+      // Token vazio com chat escrito quer dizer "fica o token de antes": e' o unico jeito de mexer
+      // no chat id sem ter de reescrever o segredo inteiro.
+      const antigo = (await globalThis.PPX?.telegram?.ler?.()) || { token: '' };
+      const r = await globalThis.PPX?.telegram?.guardar?.({ token: token || antigo.token, chat });
+      if (r?.erro) return dizer(`Não guardei: ${r.erro}`, true);
+      dizer(r?.tem ? 'Telegram guardado. Mande um recado de teste.' : 'Falta o token ou o chat id.', !r?.tem);
+      await desenharTelegram();
+    };
+    for (const seletor of ['[data-token]', '[data-chat]'])
+      campo(seletor).addEventListener('change', () => void guardarTelegram());
+    campo('[data-testar]').addEventListener('click', async () => {
+      const botao = campo('[data-testar]');
+      botao.disabled = true;
+      dizer('Mandando…');
+      const r = await globalThis.PPX?.telegram?.avisar?.(
+        'Teste do PokePixel: o recado da expedição chega aqui. Eu aviso quando a janela abrir — a verificação continua sua.',
+      );
+      botao.disabled = false;
+      dizer(r?.ok ? 'Chegou? Então está pronto.' : `Não deu: ${r?.erro || 'falhou'}`, !r?.ok);
+    });
+    campo('[data-recado]').addEventListener('change', (e) => {
+      cfg.recado = e.target.checked;
+      // Desligar e voltar a ligar nao pode reaproveitar o "ja' avisei" de uma janela que ele nao viu.
+      janelaAvisada = '';
+      gravar();
+      desenhar();
+      void desenharTelegram();
+    });
+
     for (const [seletor, chave] of [
       ['[data-cidade]', 'cidade'],
       ['[data-entrar]', 'entrar'],
@@ -423,6 +531,10 @@ PPX.modulo(
         entrar: cfg.entrar !== false,
         codigo: cfg.codigo,
         voltar: cfg.voltar !== false,
+        // `recado` viaja; o token e o chat id **nao** — nao estao nesta configuracao e nao e'
+        // descuido: um token de bot num ficheiro que se manda para outra maquina e' uma senha
+        // partilhada. Quem importar liga a caixa e escreve o seu.
+        recado: cfg.recado === true,
         // `ligada` não viaja: importar uma expedição ligada poria a outra janela a arrastar o
         // jogador para um grupo sem ninguém ter mandado. Ver o `config.js`.
       }),
@@ -436,11 +548,14 @@ PPX.modulo(
           .toUpperCase()
           .slice(0, 12);
         cfg.voltar = d?.voltar !== false;
+        cfg.recado = d?.recado === true;
         cfg.ligada = false;
         janelaFeita = '';
+        janelaAvisada = '';
         gravar();
         preencherTimes();
         desenhar();
+        void desenharTelegram();
       },
       avisar: dizer,
     });
@@ -468,6 +583,8 @@ PPX.modulo(
       campo('[data-entrar]').checked = cfg.entrar !== false;
       campo('[data-voltar]').checked = cfg.voltar !== false;
       campo('[data-codigo]').value = cfg.codigo;
+      campo('[data-recado]').checked = cfg.recado === true;
+      campo('[data-telegram]').hidden = !cfg.recado;
       campo('[data-codigo]').closest('.campo').style.display = cfg.entrar ? '' : 'none';
       preencherTimes();
       desenharBotoes();
@@ -512,6 +629,7 @@ PPX.modulo(
 
     document.documentElement.append(estilo, painel);
     desenhar();
+    void desenharTelegram();
     globalThis.PPX?.controlar?.('expedicao', mostrar);
     mostrar(globalThis.PPX?.visivel?.('expedicao') !== false);
     void bater();

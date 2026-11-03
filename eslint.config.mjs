@@ -57,6 +57,13 @@ export default [
         chrome: 'readonly',
         DOMParser: 'readonly',
         fetch: 'readonly',
+        // O recado no Telegram: corpo de formulario e prazo de rede. Ver `telegram.js`.
+        URLSearchParams: 'readonly',
+        AbortController: 'readonly',
+        // O `new Option(texto, valor)` de cada lista do painel. Faltava, e os onze erros que isso
+        // dava escondiam os de verdade — que e' exactamente o que esta verificacao existe para nao
+        // deixar acontecer.
+        Option: 'readonly',
         structuredClone: 'readonly',
         // O `module.exports` que `times.js` usa para o teste de mesa; no navegador nao existe.
         module: 'readonly',
@@ -83,7 +90,8 @@ export default [
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
-      globals: { console: 'readonly', URL: 'readonly' },
+      // `Buffer` e' do Node: `senha.test.mjs` deriva o ID da extensao da chave do manifest.
+      globals: { console: 'readonly', URL: 'readonly', Buffer: 'readonly' },
     },
     rules: { 'no-undef': 'error', 'no-unused-vars': 'warn' },
   },

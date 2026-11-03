@@ -1196,6 +1196,32 @@ Com `Preparar sozinha` ligado, assim que a janela abre ela:
 Quem prefere entrar no grupo à mão desliga o `entrar num grupo sozinha`: ela prepara o time, leva
 você à cidade, e espera.
 
+### O recado no Telegram, para quem não está no computador
+
+Um aviso na tela não serve a quem está na rua, e a janela da expedição é curta. Marcando **avisar no
+Telegram**, quando a janela abre você recebe no celular *"Expedição ABERTA. Fecha em 28 min · 1
+corrida(s)"* — e, se a preparação automática estiver ligada, um segundo recado quando ela já entrou
+no grupo, dizendo que a verificação espera. Um recado por janela, não um a cada meio minuto.
+
+Precisa de duas coisas suas: o **token** que o `@BotFather` dá a um bot novo, e o **chat id** da
+conversa com ele. Escreva os dois no painel e use `Mandar um recado de teste` antes de confiar nele.
+
+Três decisões que valem explicação:
+
+- **O token não fica no `localStorage`.** Esse armazenamento é da origem do jogo, e o JavaScript da
+  própria página o lê. Com o token manda-se mensagem em nome do bot: é uma senha, e vive onde vive a
+  do login — no armazenamento da extensão. O campo é de senha, nunca é repovoado com o valor
+  guardado, e o token não entra no arquivo de configuração que você exporta: quem importar liga a
+  caixa e escreve o seu.
+- **Não há service worker.** O `api.telegram.org` responde com CORS aberto, então o pedido sai do
+  próprio content script. Isso não é atalho: o pacote roda dentro do LionMultInstance, que é
+  Electron, e Electron não executa service workers de extensão — um fundo MV3 funcionaria no Chrome
+  e ficaria calado exatamente na janela onde você joga. Pela mesma medição, o corpo vai como
+  formulário e não como JSON: o *preflight* daquele servidor responde `501`, e um POST em JSON
+  morreria antes de sair.
+- **O recado avisa, não responde.** Ele diz que a janela abriu e que a verificação espera. Não há
+  nenhum caminho aqui que a resolva, e há teste que cai se alguém abrir um.
+
 ### O que ela devolve no fim
 
 Quando a expedição acaba — o grupo existia no estado do jogo e deixou de existir — ela repõe o time

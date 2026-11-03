@@ -120,12 +120,20 @@ test('a identidade da extensao esta presa a chave, e nao ao caminho', () => {
   assert.equal(id, 'bbcijmobchbblfofkanefakkfbebaifn');
 });
 
-test('so a senha usa o armazenamento da extensao, e e de proposito', () => {
+test('so os segredos usam o armazenamento da extensao, e e de proposito', () => {
   // O `localStorage` é da origem do jogo: o script da própria página lê o que estiver lá. Serve
-  // para tetos, horários e posições de painel; não serve para uma senha. É a razão de a Senha ser
-  // a única diferente — e a razão de ela não poder ser "consertada" mudando para localStorage.
+  // para tetos, horários e posições de painel; não serve para um segredo. É a razão de a Senha ser
+  // diferente — e a razão de ela não poder ser "consertada" mudando para localStorage.
+  //
+  // Em 1.37.0 passaram a ser **duas**: o token do bot do Telegram é uma senha pela mesma medida
+  // (com ele manda-se mensagem em nome do bot), e vive na mesma gaveta. Tudo o mais continua no
+  // localStorage, e esta lista é o que impede a terceira entrar sem ninguém pensar nisso.
   const senha = semComentarios(ler('senha.js'));
+  const telegram = semComentarios(ler('telegram.js'));
   assert.match(senha, /chrome\.storage && chrome\.storage\.local/);
+  assert.match(telegram, /chrome\.storage && chrome\.storage\.local/);
+  // E o token não desce para o localStorage por nenhum caminho.
+  assert.ok(!/localStorage/.test(telegram), 'o token não passa pelo armazenamento da página');
   for (const arquivo of ['genetica.js', 'awakening.js', 'expedicao.js', 'escada.js']) {
     assert.ok(
       !/chrome\.storage/.test(semComentarios(ler(arquivo))),
