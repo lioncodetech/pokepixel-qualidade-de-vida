@@ -54,7 +54,7 @@ O `RampageLiveArena.result` foi considerado como fonte e **não serve**: naquele
 A banca `testes/banca-rampage.html` exercita o resto fora do jogo: o teto de dez, o "não medi", o
 formato dos números e o atraso do acumulado (`?lento=N` e `?nunca=1`).
 
-As dezesseis ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
+As dezessete ferramentas de qualidade de vida do PokePixel num pacote só, com um menu para ligar e desligar cada uma na
 janela em que você está.
 
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
@@ -1121,6 +1121,48 @@ e campo vazio significa "sem limite deste lado", não zero.
 
 Fica a contagem da faixa e o melhor da coleção: `19 de 117 na faixa` e `×1,688 Scyther`. O resto —
 a lista, os campos — sai da frente.
+
+## Expedição: tudo pronto até a verificação, que é sua
+
+A expedição tem quatro passos: entrar no grupo, **resolver a verificação**, marcar pronto, e o
+líder iniciar. Esta ferramenta faz o primeiro e para ali.
+
+A verificação é um CAPTCHA do próprio jogo — `expedition.captcha.prompt` é *"Clique em {species}"*,
+com a dica *"Cada integrante resolve o próprio desafio antes de marcar pronto"*. Ela existe para
+garantir que há uma pessoa em cada corrida, e responder por ela é a única coisa que tornaria a
+resposta falsa. Por isso **nem esta ferramenta nem a ponte chamam o `setExpeditionReady`** — no
+cliente do jogo essa chamada leva o pronto e o comprovativo da verificação juntos, de propósito. Há
+um teste que falha se alguém acrescentar essa chamada, e ele existe para falhar.
+
+### O que ela tira de cima de você
+
+Vigiar o relógio, que é o trabalho chato de verdade: a janela abre por horário de servidor e dura
+pouco. Ela pergunta ao jogo de meio em meio minuto e mostra se está aberta, quanto falta para
+fechar e quantas corridas lhe restam.
+
+Com `Preparar sozinha` ligado, assim que a janela abre ela:
+
+1. monta o time que você escolheu (ou deixa a equipe como está);
+2. para a caçada e vai para a cidade;
+3. entra num grupo público — ou no grupo do **código** que você escreveu;
+4. **para**, e diz: *"Agora é com você: resolva a verificação e marque Pronto."*
+
+Quem prefere entrar no grupo à mão desliga o `entrar num grupo sozinha`: ela prepara o time, leva
+você à cidade, e espera.
+
+### O que ela devolve no fim
+
+Quando a expedição acaba — o grupo existia no estado do jogo e deixou de existir — ela repõe o time
+de antes e a caçada de antes. Durante a corrida não mexe em nada: a equipe ali é a que está a
+lutar, e tirar um Pokémon dela no meio seria o pior momento possível.
+
+Duas regras que vêm do servidor e aparecem no painel, porque mudam o que dá para fazer: **uma conta
+por IP** (importa a quem joga em várias janelas no mesmo computador) e **uma corrida por janela**.
+Nenhuma delas está escrita no código — são lidas do estado, e se o jogo as mudar o painel acompanha
+sozinho.
+
+E uma janela, uma preparação: sem isso, sair de um grupo faria a ferramenta voltar a arrastar você
+para dentro de outro, sem ninguém ter pedido.
 
 ## Genética: trocar os épicos fracos por material, sem abrir o NPC
 

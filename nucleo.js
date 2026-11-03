@@ -288,6 +288,7 @@
     { id: 'eventos', nome: 'Eventos', atalhos: 'configuração pelo menu (Alt+Q)' },
     { id: 'ilhas', nome: 'Ilhas Lendárias', atalhos: 'configuração pelo menu (Alt+Q)' },
     { id: 'genetica', nome: 'Genética', atalhos: 'configuração pelo menu (Alt+Q)' },
+    { id: 'expedicao', nome: 'Expedição', atalhos: 'configuração pelo menu (Alt+Q)' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;
