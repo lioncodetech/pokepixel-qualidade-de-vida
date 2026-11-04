@@ -189,7 +189,7 @@ test('so um numero de 1 a 9 vira clique, e o silencio nao vira nada', async () =
 });
 
 test('o rele nao olha para a figura, nao a guarda e nao sugere nada', () => {
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   // Não lê o que está desenhado: nada de `alt`, `title` ou `aria-label` dos quadrados — que é onde
   // um solucionador iria primeiro.
   assert.ok(!/\.alt|getAttribute\('aria-label'\)|\.title/.test(rele), 'o relé não lê rótulo nenhum dos quadrados');
@@ -207,7 +207,7 @@ test('o rele nao olha para a figura, nao a guarda e nao sugere nada', () => {
 test('nao se clica numa grade que ja nao e a da foto', () => {
   // Entre a pergunta e a resposta passam-se até 72 s. Se o desafio trocou nesse tempo, clicar no
   // número que o dono disse seria clicar às cegas num desafio que ele nunca viu.
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   assert.match(rele, /const mesma = agora === grade && document\.querySelector\(RETRATO\)\?\.src === retrato\.src;/);
   assert.match(rele, /if \(!alvo \|\| !mesma\) \{/);
   assert.match(rele, /Não cliquei\./);
@@ -222,7 +222,7 @@ test('nao se clica numa grade que ja nao e a da foto', () => {
 // deixá-la aberta até a corrida entrar no mapa.
 
 test('sem resposta no prazo, sai do grupo em vez de ficar la dentro', () => {
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   assert.match(rele, /await desistir\(`Ninguém respondeu em \$\{ATE_RESPONDER\}s\.`\)/);
   assert.match(rele, /return 'saiu';/);
   const desistir = painel.slice(painel.indexOf('const desistir ='), painel.indexOf('const responderPelaFoto'));
@@ -232,14 +232,14 @@ test('sem resposta no prazo, sai do grupo em vez de ficar la dentro', () => {
   // E o dono fica a saber, esteja onde estiver.
   assert.match(desistir, /await recado\(/);
   // Sair deixa o time e a caçada como estavam, igual a uma falha.
-  const corrida = painel.slice(painel.indexOf('const preparar ='), painel.indexOf('const desfazer ='));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
   assert.match(corrida, /if \(fim === 'saiu'\) saiu = true;/);
   assert.match(corrida, /if \(falhou \|\| saiu\) await desfazer\(\);/);
 });
 
 test('a licenca e perguntada antes de tocar no jogo, e o nao e respeitado', async () => {
-  const corrida2 = painel.slice(painel.indexOf('const preparar ='), painel.indexOf('const desfazer ='));
-  const corrida = painel.slice(painel.indexOf('const preparar ='), painel.indexOf('const desfazer ='));
+  const corrida2 = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
   assert.ok(corrida.indexOf('pedirLicenca') < corrida.indexOf('esperarAVez'));
   assert.ok(corrida.indexOf('pedirLicenca') < corrida.indexOf("times?.usar"), 'ninguém troca de time antes do sim');
   const licenca = painel.slice(painel.indexOf('const pedirLicenca'), painel.indexOf('const abrirJanela'));
@@ -266,7 +266,7 @@ test('a licenca e perguntada antes de tocar no jogo, e o nao e respeitado', asyn
 });
 
 test('a janela do jogo abre antes de entrar, e fica aberta ate a corrida comecar', () => {
-  const corrida = painel.slice(painel.indexOf('const preparar ='), painel.indexOf('const desfazer ='));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
   // Antes de entrar, porque é dentro dela que a verificação e o "Estou pronto" existem.
   assert.ok(corrida.indexOf('abrirJanela()') < corrida.indexOf("acao: 'entrar'"));
   // Depois do Pronto, a vigia corre **sem** ser esperada: segurar a vez quinze minutos por causa
@@ -292,7 +292,7 @@ test('espera-se pelo desafio PREENCHIDO, e nao pelo elemento vazio', () => {
   const pronto = painel.slice(painel.indexOf('const desafioPronto'), painel.indexOf('const botaoPronto'));
   assert.match(pronto, /grade\.children\.length !== 9/, 'nove quadrados, não um elemento vazio');
   assert.match(pronto, /retrato\.currentSrc \|\| retrato\.src/, 'e a figura já com fonte');
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   // Espera-se duas vezes: ao abrir, e outra vez a cada ronda — entre rondas o jogo troca o desafio
   // e a grade fica vazia de novo.
   assert.equal((rele.match(/ate\(\(\) => Boolean\(desafioPronto\(\)\), 12000\)/g) || []).length, 2);
@@ -311,7 +311,7 @@ test('vai-se a aba Meu Grupo antes de procurar o botao', () => {
   assert.match(aba, /\[data-tab="group"\]/);
   assert.match(aba, /is-active/, 'não se clica numa aba que já está aberta');
   assert.match(aba, /ate\(\(\) => Boolean\(botaoPronto\(\)\), 5000\)/, 'espera-se o botão aparecer');
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   assert.ok(
     rele.indexOf('await abaDoGrupo()') < rele.indexOf('const abrir = botaoPronto()'),
     'a aba primeiro: sem ela o botão nem existe no DOM',
@@ -322,7 +322,7 @@ test('so o fim do prazo faz sair do grupo; conflito e rede nao', async () => {
   // O defeito, visto a tempo em 04/11/2026 ao pensar em duas janelas no mesmo bot: o relé tratava
   // QUALQUER erro como "ninguém respondeu" e saía da expedição. Bastava outra janela arrancar e
   // roubar o `getUpdates` para esta desistir sozinha — sem o dono ter feito nada.
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   assert.match(rele, /if \(r\.prazo\) \{/);
   assert.ok(
     rele.indexOf('if (r.prazo) {') < rele.indexOf('await desistir('),
@@ -371,7 +371,7 @@ test('duas janelas no mesmo bot nao se queimam uma a outra', () => {
   // A pergunta do dono em 04/11/2026: "e se eu puser duas janelas no mesmo range?". Elas sorteiam
   // minutos independentes e podem calhar juntas — e a licença segura o bot até dez minutos à
   // espera do sim, portanto o cruzamento acontece mesmo com ranges diferentes.
-  const corrida = painel.slice(painel.indexOf('const preparar ='), painel.indexOf('const desfazer ='));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
   // Um "não" dele encerra a janela; um conflito NÃO — senão a corrida do dia perdia-se em silêncio
   // por causa de outra janela, sem ele ter escrito nada.
   assert.match(corrida, /if \(licenca === 'nao'\) \{/);
@@ -442,7 +442,7 @@ test('os botoes do Telegram: o toque vale, e o toque de uma pergunta velha nao',
 });
 
 test('os nove botoes vem arrumados como a figura, e a licenca tem dois', () => {
-  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const preparar ='));
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
   // Três linhas de três, na mesma arrumação da grade: o dedo cai onde o olho está.
   assert.match(rele, /\[1, 2, 3\],\n\s*\[4, 5, 6\],\n\s*\[7, 8, 9\],/);
   const licenca = painel.slice(painel.indexOf('const pedirLicenca'), painel.indexOf('const abrirJanela'));
@@ -450,4 +450,76 @@ test('os nove botoes vem arrumados como a figura, e a licenca tem dois', () => {
   assert.match(licenca, /valor: 'nao'/);
   // O escrito continua a valer: o toque é o caminho curto, não o único.
   assert.match(licenca, /ou escreva SIM ou NÃO, se preferir/);
+});
+
+test('toda mensagem diz de que conta e', () => {
+  // Pedido do dono em 04/11/2026, e é preciso justamente porque ele joga em várias janelas: com
+  // três contas no mesmo bot, "posso entrar?" sem nome não se sabe de quem é.
+  const marca = painel.slice(painel.indexOf('const quem ='), painel.indexOf('const recado ='));
+  assert.match(marca, /\.pokeidle-trainer-hud__name/);
+  // O servidor também: a mesma conta pode existir em mundos diferentes.
+  assert.match(marca, /\.world-servers-fab__name/);
+  assert.match(painel, /const comConta = \(texto\) => `\[\$\{quem\(\)\}\] \$\{texto\}`;/);
+  // As três saídas levam o carimbo: o recado, a pergunta da licença e a legenda da figura.
+  assert.match(painel, /avisar\?\.\(comConta\(texto\)\)/);
+  assert.match(painel, /legenda: comConta\(/);
+  // Três, e são exatamente as três que saem daqui para o telefone.
+  assert.equal((painel.match(/comConta\(/g) || []).length, 3, 'nenhuma mensagem sai sem conta');
+});
+
+test('errar a verificacao traz outra figura, em vez de desistir', () => {
+  // Pedido do dono em 04/11/2026: "quero poder errar a verificação e se eu errar voltar a me fazer
+  // a pergunta". O jogo troca o desafio; manda-se o novo.
+  assert.match(painel, /const RONDAS = 5;/);
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
+  assert.match(rele, /for \(let ronda = 1; ronda <= RONDAS; ronda \+= 1\)/);
+  assert.match(rele, /não foi aceito\. Vai outra figura/);
+  // E a espera pelo desafio novo repete-se: entre rondas a grade fica vazia outra vez.
+  assert.equal((rele.match(/ate\(\(\) => Boolean\(desafioPronto\(\)\), 12000\)/g) || []).length, 2);
+});
+
+test('sair do grupo volta a primeira pergunta, e nao desfaz o que vai servir outra vez', () => {
+  // Pedido do dono em 04/11/2026: "quero poder sair daquele grupo e achar outro... voltamos para a
+  // primeira pergunta".
+  const rele = painel.slice(painel.indexOf('const responderPelaFoto'), painel.indexOf('const umaVolta'));
+  assert.match(rele, /valor: 'outro'/);
+  assert.match(rele, /if \(r\.resposta === 'outro'\) \{/);
+  assert.match(rele, /ponte\(\{ acao: 'sair' \}\)/);
+  assert.match(rele, /return 'outro';/);
+  // "outro" também se escreve, para quem responde pelo teclado.
+  assert.match(rele, /d === 'outro' \? 'outro' : null/);
+
+  const laco = painel.slice(painel.indexOf('const preparar = async'), painel.indexOf('let tinhaGrupo'));
+  assert.match(laco, /for \(let volta = inicio; volta <= GRUPOS; volta \+= 1\)/);
+  assert.match(laco, /if \(fim !== 'outro'\) break;/);
+  // Há tecto: o laço não fica a procurar grupos sozinho até a janela fechar.
+  assert.match(painel, /const GRUPOS = 4;/);
+  assert.match(laco, /Já foram \$\{GRUPOS\} grupos/);
+
+  // E o que vai servir na volta seguinte não é desfeito pelo caminho: o time de antes lê-se uma
+  // vez só, senão na segunda volta guardava-se o time de expedição como sendo "o de antes".
+  const volta = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const preparar = async'));
+  assert.match(volta, /antes = antes \|\| \{/);
+  assert.match(volta, /const sóEntrar = volta > 1;/);
+  assert.match(volta, /if \(cfg\.time && !sóEntrar\)/);
+  assert.match(volta, /if \(cfg\.cidade && !sóEntrar\)/);
+});
+
+test('ser expulso nao e o mesmo que a corrida ter acabado', () => {
+  // Pedido do dono em 04/11/2026: se o líder o remover, voltar à primeira pergunta. As duas coisas
+  // têm a mesma aparência — o grupo desaparece —, e o que as separa é o `inRun` do próprio jogo:
+  // se nunca se chegou a correr, não houve expedição nenhuma, houve um lugar perdido.
+  const batida = painel.slice(painel.indexOf('let tinhaGrupo'));
+  assert.match(batida, /const corrida = await ponte\(\{ acao: 'corrida' \}\);/);
+  assert.match(batida, /const expulso =\s*\n?\s*!corrida\?\.correndo/);
+  // Devolver o time e a caçada aqui seria tratar um lugar perdido como uma corrida feita, e ele
+  // perdia a corrida do dia por decisão de um estranho.
+  assert.ok(
+    batida.indexOf('if (expulso) {') < batida.indexOf('await devolver();'),
+    'o expulso não passa pelo devolver',
+  );
+  assert.match(batida, /janelaFeita = '';/, 'a janela não fica dada por tratada');
+  assert.match(batida, /await preparar\(true, 2\);/, 'volta ao laço já montado e já na cidade');
+  // E só quando ainda há o que fazer: janela aberta, corrida por usar, e ele a querer.
+  assert.match(batida, /r\.aberta && r\.ligada && r\.corridas \+ r\.extras > 0 && \(cfg\.ligada \|\| cfg\.licenca\)/);
 });

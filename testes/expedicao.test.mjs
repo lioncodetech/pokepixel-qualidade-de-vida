@@ -48,7 +48,7 @@ test('a verificacao e o pronto ficam com a pessoa, e o codigo nao os toca', () =
 });
 
 test('ela vai ate a porta: time, cidade e grupo, nessa ordem', () => {
-  const corrida = painel.slice(painel.indexOf('const preparar = async'));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'));
   const corpo = corrida.slice(0, corrida.indexOf('const devolver = async'));
   // O estado de antes lê-se ANTES de mexer em nada: depois da troca de time e do `stopHunt` já não
   // há o que perguntar, e era assim que se devolvia o lugar errado.
@@ -99,7 +99,7 @@ test('ela esta no catalogo, no manifest e pede a vez', () => {
   assert.ok(isolado.js.includes('expedicao.js'));
   assert.ok(pagina.js.includes('expedicao-main.js'));
   assert.match(painel, /const MINHA_VEZ = 'expedicao';/);
-  const corrida = painel.slice(painel.indexOf('const preparar = async'));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'));
   assert.ok(
     corrida.indexOf('esperarAVez') < corrida.indexOf('times?.usar'),
     'a vez é pedida antes de mexer no jogo',
@@ -111,14 +111,14 @@ test('uma preparacao que falha pelo meio devolve o time e a cacada', () => {
   // saía com um "não entrei" — e o `devolver()` da batida só corre quando um grupo **existiu** e
   // desapareceu. Como nunca houve grupo, o dono ficava com o time de expedição montado e fora da
   // caçada, sem ninguém lhe dizer. E a janela ficava queimada por uma falha passageira.
-  const corrida = painel.slice(painel.indexOf('const preparar = async'), painel.indexOf('const desfazer ='));
+  const corrida = painel.slice(painel.indexOf('const umaVolta'), painel.indexOf('const desfazer ='));
   assert.match(corrida, /let falhou = false;/);
   assert.match(corrida, /const falha = \(texto\) => \{/);
   // O único `return dizer(` que resta na preparação é o de dentro do próprio `falha`: nenhuma
   // saída de erro escapa a quem marca o desfazer.
   assert.equal(
     (corrida.match(/return dizer\(/g) || []).length,
-    1,
+    0,
     'nenhuma saída de erro da preparação escapa ao `falha`',
   );
   assert.equal((corrida.match(/return falha\(/g) || []).length, 4);
@@ -135,7 +135,8 @@ test('uma preparacao que falha pelo meio devolve o time e a cacada', () => {
     corrida.indexOf('if (falhou || saiu) await desfazer()') < corrida.indexOf('if (soltar) soltar()'),
     'devolve-se o time com a vez ainda na mão: quem mexe no jogo tem a vez',
   );
-  assert.match(corrida, /if \(porMinha && !falhou\) janelaFeita = visto\?\.fecha \|\| '';/);
+  const laco = painel.slice(painel.indexOf('const preparar = async'), painel.indexOf('let tinhaGrupo'));
+  assert.match(laco, /if \(porMinha && fim !== 'falhou' && fim !== 'adiado'\) janelaFeita = visto\?\.fecha \|\| '';/);
   // E o desfazer é o mesmo trabalho do devolver, calado: a mensagem que fica é a do erro.
   const desfazer = painel.slice(painel.indexOf('const desfazer ='), painel.indexOf('const devolver ='));
   assert.match(desfazer, /if \(!cfg\.voltar \|\| !antes\) return;/);

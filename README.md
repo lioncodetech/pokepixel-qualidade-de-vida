@@ -1285,6 +1285,25 @@ botões: as mensagens ficam na conversa para sempre e os botões continuam clic�
 toque no "4" de ontem seria lido como a resposta de hoje. Respondida a pergunta, os botões são
 retirados da mensagem.
 
+**Cada mensagem diz de que conta é.** O nome do treinador e o servidor saem do HUD do próprio jogo
+e abrem toda mensagem: `[RisaKwon · Pixel BR 8] Posso procurar grupo e entrar?`. Com várias janelas
+no mesmo bot, uma pergunta sem nome não se sabe de quem é.
+
+**Errar faz parte.** Se o quadrado tocado não for aceito, vem a figura seguinte — até cinco no mesmo
+grupo — em vez de desistir. É o que você faria no computador.
+
+**E o grupo pode não servir.** A figura chega com um terceiro botão, *Sair e procurar outro grupo*.
+Tocando nele a extensão sai, e volta à primeira pergunta — *posso procurar grupo e entrar?* — como
+se a janela tivesse acabado de abrir. Até quatro grupos por janela; depois disso ela para, devolve
+o time e a caçada e avisa, em vez de ficar a procurar sozinha até a janela fechar. Entre uma
+tentativa e outra o time e a cidade não são refeitos: já estão como têm de estar.
+
+**E se o líder o remover do grupo**, a extensão volta à primeira pergunta, como se tivesse saído
+por vontade própria. Um kick e uma corrida terminada têm a mesma aparência — o grupo desaparece —,
+e o que as separa é o `inRun` do jogo: se nunca se chegou a correr, não houve expedição, houve um
+lugar perdido. Tratá-lo como corrida feita devolvia o time e a caçada e encerrava a janela, e você
+perdia a corrida do dia por decisão de um estranho.
+
 **Várias janelas no mesmo bot, e a fila entre elas.** Mandar recado pelo mesmo bot em várias
 janelas funciona. **Ler a resposta não**: o Telegram só deixa um `getUpdates` de cada vez, e quem
 chega depois expulsa quem estava a ler, com `409`. Como a janela de expedição é do servidor e abre

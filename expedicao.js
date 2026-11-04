@@ -341,9 +341,27 @@ PPX.modulo(
     // E o que ele diz para' onde esta ferramenta para': que a janela abriu, quanto falta e, quando
     // ela ja' entrou no grupo, que a verificacao espera. **Nunca a resolve** — ver o cabecalho do
     // `expedicao-main.js` e o teste que guarda isso.
+    /**
+     * Quem e' esta janela, para o recado dizer de quem fala.
+     *
+     * Pedido do dono em 04/11/2026, e e' preciso justamente porque ele joga em varias janelas: com
+     * tres contas no mesmo bot, "posso entrar?" sem nome nao se sabe de quem e'. Sai do HUD do
+     * proprio jogo — medido no mesmo dia: `.pokeidle-trainer-hud__name` e o servidor em
+     * `.world-servers-fab__name`, porque a mesma conta pode existir em mundos diferentes.
+     */
+    const quem = () => {
+      const texto = (s) => document.querySelector(s)?.textContent?.trim() || '';
+      const nome = texto('.pokeidle-trainer-hud__name');
+      const mundo = texto('.world-servers-fab__name');
+      return [nome, mundo].filter(Boolean).join(' · ') || 'conta sem nome';
+    };
+
+    /** Toda mensagem que sai daqui leva o carimbo de quem a mandou. */
+    const comConta = (texto) => `[${quem()}] ${texto}`;
+
     const recado = async (texto) => {
       if (!cfg.recado) return;
-      const r = await globalThis.PPX?.telegram?.avisar?.(texto);
+      const r = await globalThis.PPX?.telegram?.avisar?.(comConta(texto));
       if (r?.erro) dizer(`Não mandei o recado: ${r.erro}`, true);
     };
 
@@ -360,8 +378,16 @@ PPX.modulo(
     const ABAS = '.expedition-tab';
     /** Quanto se espera pela pessoa. O desafio do jogo expira em ~90 s; aqui para-se antes. */
     const ATE_RESPONDER = 72;
-    /** Quantas vezes se repete, se o jogo trocar o desafio ou a resposta nao for aceite. */
-    const RONDAS = 3;
+    /**
+     * Quantas figuras se chega a mandar no mesmo grupo.
+     *
+     * Errar e' suposto poder acontecer — pedido do dono em 04/11/2026. Se o quadrado tocado nao
+     * fechar a verificacao, manda-se a figura seguinte em vez de desistir: o jogo troca o desafio
+     * e ele tenta de novo, como teria feito ao computador.
+     */
+    const RONDAS = 5;
+    /** Quantos grupos diferentes se chega a tentar na mesma janela, se ele pedir outro. */
+    const GRUPOS = 4;
     /** Quanto se espera pelo "sim" para entrar. Dez minutos: a janela dura bem mais do que isso. */
     const ATE_LICENCA = 600;
     /** Ate' quando se vigia a janela do jogo depois do Pronto, se a corrida nao comecar. */
@@ -378,15 +404,16 @@ PPX.modulo(
       const quantas = (r?.corridas || 0) + (r?.extras || 0);
       dizer('Pedi licença no Telegram. Esperando o seu sim…');
       const resposta = await globalThis.PPX?.telegram?.perguntar?.({
-        legenda:
+        legenda: comConta(
           `Expedição aberta — fecha em ${relogio(r?.restantes || 0)}, ${quantas} corrida(s).\n` +
-          'Posso entrar? Toque num botão — ou escreva SIM ou NÃO, se preferir.',
+            'Posso procurar grupo e entrar? Toque num botão — ou escreva SIM ou NÃO, se preferir.',
+        ),
         segundos: ATE_LICENCA,
         // Dois botoes no proprio Telegram, pedido do dono em 04/11/2026: responder de dentro do
         // bolso, sem teclado. O escrito continua a valer — o toque e' o caminho curto, nao o unico.
         botoes: [
           [
-            { texto: '✅ Pode entrar', valor: 'sim' },
+            { texto: '✅ Procurar e entrar', valor: 'sim' },
             { texto: '✋ Agora não', valor: 'nao' },
           ],
         ],
@@ -593,17 +620,26 @@ PPX.modulo(
         dizer(`Mandei a verificação no Telegram (${ronda}/${RONDAS}). Responda 1 a 9.`);
         const r = await globalThis.PPX?.telegram?.perguntar?.({
           imagem,
-          legenda: `${pergunta}\nToque no número do quadrado. O 1 é o de cima à esquerda.`,
+          legenda: comConta(`${pergunta}\nToque no número do quadrado. O 1 é o de cima à esquerda.`),
           segundos: ATE_RESPONDER,
           // Os nove botoes na mesma arrumacao da figura: tres linhas de tres, para o dedo cair
           // onde o olho esta'. Uma fila de nove nao casava com a grade e convidava ao engano.
           botoes: [
-            [1, 2, 3],
-            [4, 5, 6],
-            [7, 8, 9],
-          ].map((linha) => linha.map((n) => ({ texto: String(n), valor: String(n) }))),
+            ...[
+              [1, 2, 3],
+              [4, 5, 6],
+              [7, 8, 9],
+            ].map((linha) => linha.map((n) => ({ texto: String(n), valor: String(n) }))),
+            // A terceira saida, pedida em 04/11/2026: este grupo nao serve — sai e procura outro.
+            [{ texto: '🔁 Sair e procurar outro grupo', valor: 'outro' }],
+          ],
           // Um numero, e nada mais. Nem "o 3", nem "acho que 3": o que vier torto nao vira clique.
-          aceitar: (texto) => (/^[1-9]$/.test(String(texto).trim()) ? Number(String(texto).trim()) : null),
+          aceitar: (texto) => {
+            const d = String(texto).trim().toLowerCase();
+            if (/^[1-9]$/.test(d)) return Number(d);
+            // "outro" tambem se escreve, para quem responde pelo teclado.
+            return d === 'outro' ? 'outro' : null;
+          },
         });
         if (r?.erro) {
           // **So' o prazo faz sair.** Sair do grupo foi um pedido do dono para UM caso: ele nao
@@ -618,6 +654,21 @@ PPX.modulo(
           dizer(`Não consegui perguntar: ${r.erro}. A verificação ficou aberta para você.`, true);
           await recado(`Não consegui levar a verificação até você: ${r.erro}. Ela ficou aberta no computador.`);
           return 'parado';
+        }
+
+        if (r.resposta === 'outro') {
+          // Ele viu o grupo e nao o quis. Sai-se, e quem chamou volta a' primeira pergunta — sem
+          // devolver o time nem a caçada, que ainda vamos precisar deles no grupo seguinte.
+          const fechar = document.querySelector(`${VERIFICACAO} .pokeidle-panel__close`);
+          if (fechar) fechar.click();
+          const fora = await ponte({ acao: 'sair' });
+          if (fora?.erro) {
+            dizer(`Você pediu outro grupo, mas não consegui sair: ${fora.erro}`, true);
+            await recado(`Você pediu outro grupo, mas não consegui sair deste: ${fora.erro}`);
+            return 'parado';
+          }
+          dizer('Saí do grupo. Vou perguntar de novo se procuro outro.');
+          return 'outro';
         }
 
         // Entre a pergunta e a resposta passaram-se ate' 72 s: a grade de agora pode ja' nao ser
@@ -647,7 +698,8 @@ PPX.modulo(
         }
         // Continua aberta: ou a resposta nao foi aceite, ou o jogo trocou o desafio. Manda-se o
         // novo, em vez de insistir no mesmo numero.
-        dizer(`O ${r.resposta} não fechou a verificação. Mandando o desafio novo…`);
+        dizer(`O ${r.resposta} não foi aceito. Mandando o desafio novo…`);
+        await recado(`O ${r.resposta} não foi aceito. Vai outra figura — ${RONDAS - ronda} tentativa(s) ainda.`);
       }
 
       dizer('A verificação continua aberta. É com você.', true);
@@ -663,10 +715,13 @@ PPX.modulo(
      * A vez é pedida para o caminho inteiro e solta no fim: a partir daí a expedição é dele, e as
      * outras ferramentas já sabem esperar enquanto ela durar (ver `naExpedicao`, na Escada).
      */
-    const preparar = async (porMinha = false) => {
-      if (correndo) return;
-      correndo = true;
-      desenharBotoes();
+    /**
+     * Uma volta inteira: pedir licenca, montar, entrar num grupo e levar a verificacao ate' ele.
+     *
+     * Devolve o que aconteceu, para o laco de fora saber se ha' outra volta. `'outro'` quer dizer
+     * que ele viu o grupo, nao o quis, e ja' se saiu dele.
+     */
+    const umaVolta = async (porMinha, volta) => {
       let soltar = null;
       /**
        * Esta preparacao falhou pelo meio?
@@ -682,7 +737,8 @@ PPX.modulo(
       let saiu = false;
       const falha = (texto) => {
         falhou = true;
-        return dizer(texto, true);
+        dizer(texto, true);
+        return 'falhou';
       };
       try {
         // Antes de tudo, e antes da fila: o "sim" dele. Entrar gasta a corrida da janela.
@@ -695,7 +751,7 @@ PPX.modulo(
             // Disse que nao: a janela fica dada como tratada, senao a batida seguinte pergunta
             // outra vez. Ele muda de ideias no botao `Preparar agora`, que nao passa por aqui.
             if (porMinha) janelaFeita = visto?.fecha || '';
-            return;
+            return 'nao';
           }
           if (licenca !== 'sim') {
             // Nao chegou a haver pergunta. A janela **nao** e' dada por tratada: tenta-se outra
@@ -704,7 +760,7 @@ PPX.modulo(
             // adiamento e' sorteado — e' o desempate entre elas.
             adiadoAte = Date.now() + (licenca === 'conflito' ? 60000 + Math.random() * 120000 : 60000);
             janelaAvisada = '';
-            return;
+            return 'adiado';
           }
         }
 
@@ -713,21 +769,25 @@ PPX.modulo(
 
         // Lido ANTES de mexer em nada: depois da troca de time e do `stopHunt` já não há o que
         // perguntar, e era assim que se devolvia o lugar errado.
-        antes = {
+        // Na segunda volta ja' se esta' com o time de expedicao e fora da caçada: reler aqui
+        // guardava **isso** como "o de antes", e no fim devolvia-se o que se queria desfazer.
+        antes = antes || {
           cacada: globalThis.PPX?.cacadas?.atual?.() || null,
           // `qual()` é o nome do time guardado que casa com a equipe de agora — por id, e não por
           // nome de espécie. Vazio quer dizer "a equipe de agora não é nenhum time guardado", e aí
           // não há o que devolver: montar um palpite seria pior do que não mexer.
           time: cfg.time ? globalThis.PPX?.times?.qual?.() || '' : '',
         };
+        // Da segunda volta em diante o time ja' esta' montado e ja' se esta' na cidade.
+        const sóEntrar = volta > 1;
 
-        if (cfg.time) {
+        if (cfg.time && !sóEntrar) {
           dizer(`Montando o time “${cfg.time}”…`);
           const troca = await globalThis.PPX?.times?.usar?.(cfg.time);
           if (!troca?.ok) return falha(`Não montei o time: ${troca?.erro || 'falhou'}`);
         }
 
-        if (cfg.cidade) {
+        if (cfg.cidade && !sóEntrar) {
           dizer('Indo para a cidade…');
           const ida = await ponte({ acao: 'cidade' });
           if (ida?.erro) return falha(`Não consegui ir para a cidade: ${ida.erro}`);
@@ -735,7 +795,7 @@ PPX.modulo(
 
         if (!cfg.entrar) {
           dizer('Pronto para você: time montado e na cidade. Entre no grupo quando quiser.');
-          return;
+          return 'parado';
         }
 
         // A janela de expedições do jogo, aberta antes de entrar: é dentro dela que a verificação
@@ -769,7 +829,9 @@ PPX.modulo(
           // Clicou e marcou Pronto: dali ate' a corrida entrar no mapa, a janela do jogo fica
           // aberta — e e' por isso que isto nao e' esperado aqui dentro, com a vez na mao.
           if (fim === 'pronto') void vigiarJanela();
+          return fim;
         }
+        return 'parado';
       } finally {
         // Desfazer antes de soltar a vez: enquanto se devolve o time ainda se esta' a mexer no
         // jogo, e quem mexe no jogo tem a vez.
@@ -777,10 +839,39 @@ PPX.modulo(
         // expedicao montado e fora da caçada, e isso nao se deixa assim.
         if (falhou || saiu) await desfazer();
         if (soltar) soltar();
+        desenhar();
+      }
+    };
+
+    /**
+     * O laço: enquanto ele pedir outro grupo, volta-se a' primeira pergunta.
+     *
+     * Pedido do dono em 04/11/2026: *"quero poder sair daquele grupo e achar outro... voltamos
+     * para a primeira pergunta"*. O tecto existe para o laço nao ficar a procurar grupos sozinho
+     * ate' a janela fechar — passadas as voltas, para e diz.
+     */
+    const preparar = async (porMinha = false, inicio = 1) => {
+      if (correndo) return;
+      correndo = true;
+      desenharBotoes();
+      let fim = 'parado';
+      try {
+        for (let volta = inicio; volta <= GRUPOS; volta += 1) {
+          fim = await umaVolta(porMinha, volta);
+          if (fim !== 'outro') break;
+          if (volta === GRUPOS) {
+            dizer(`Já foram ${GRUPOS} grupos. Paro por aqui.`);
+            await recado(`Já tentei ${GRUPOS} grupos nesta janela e paro por aqui. O time e a caçada voltaram ao que eram.`);
+            // Saiu-se do ultimo grupo e nao se volta a entrar: devolve-se o que se montou.
+            await desfazer();
+          }
+        }
+      } finally {
         correndo = false;
         // So' uma janela **preparada** conta como feita. Queimar a janela por causa de um "o jogo
-        // ficou ocupado" seria perder a corrida do dia por um segundo mau.
-        if (porMinha && !falhou) janelaFeita = visto?.fecha || '';
+        // ficou ocupado" seria perder a corrida do dia por um segundo mau. E um "outro grupo" que
+        // esgotou as voltas tambem a encerra: ficar a perguntar em ciclo seria pior.
+        if (porMinha && fim !== 'falhou' && fim !== 'adiado') janelaFeita = visto?.fecha || '';
         desenhar();
       }
     };
@@ -831,11 +922,29 @@ PPX.modulo(
       regras();
       if (r?.erro) return;
 
-      // A expedição acabou: o grupo existia e deixou de existir. É aqui, e só aqui, que se devolve
-      // o que se tirou — durante a corrida a equipe é a que está a lutar.
+      // O grupo existia e deixou de existir. São **duas** coisas diferentes com a mesma aparência:
+      // a corrida terminou, ou o líder expulsou-nos antes de ela começar. O que as separa é o
+      // `inRun` do próprio jogo — se nunca se chegou a correr, não houve expedição nenhuma.
+      //
+      // Pedido do dono em 04/11/2026: se o líder o remover, voltar à primeira pergunta. Devolver o
+      // time e a caçada aí seria tratar um lugar perdido como uma corrida feita, e ele perdia a
+      // corrida do dia por decisão de um estranho.
       const temGrupo = Boolean(r.grupo);
       if (tinhaGrupo && !temGrupo) {
         tinhaGrupo = false;
+        const corrida = await ponte({ acao: 'corrida' });
+        const expulso =
+          !corrida?.correndo && r.aberta && r.ligada && r.corridas + r.extras > 0 && (cfg.ligada || cfg.licenca);
+        if (expulso) {
+          dizer('Fiquei fora do grupo antes de começar. Vou perguntar se procuro outro.');
+          await recado('Fiquei fora do grupo antes de a corrida começar — o líder deve ter me removido.');
+          // A janela **não** fica dada por tratada, e não se desfaz nada: o time e a cidade ainda
+          // servem para o grupo seguinte. Por isso também se começa na volta 2.
+          janelaFeita = '';
+          janelaAvisada = '';
+          await preparar(true, 2);
+          return;
+        }
         await devolver();
         return;
       }
