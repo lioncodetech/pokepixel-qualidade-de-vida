@@ -12,6 +12,13 @@
 // alguem acrescentar essa chamada a este ficheiro, o teste `testes/expedicao.test.mjs` cai — e e'
 // para cair.
 //
+// O QUE ESTA PONTE PASSOU A FAZER EM 04/11/2026, E PORQUE ISSO NAO MEXE NA LINHA ACIMA. Abrir a
+// janela de expedicoes (`ExpeditionWindow.open`), perguntar se a corrida ja' comecou
+// (`ExpeditionStore.inRun`) e **sair do grupo** (`Api.leaveExpedition`). Abrir a janela e' preciso
+// porque o botao da verificacao so' existe no DOM com ela aberta; sair e' o pedido do dono para
+// quando ele nao responder a tempo — nao ficar a prender um lugar num grupo que vai comecar sem
+// ele. Nenhuma das tres toca na verificacao, e o `setExpeditionReady` continua a nao existir aqui.
+//
 // O QUE FOI MEDIDO NA CONTA DO DONO EM 03/11/2026:
 //
 //   PokeIdle.Api.getExpeditionState()
@@ -150,6 +157,42 @@
     return { ok: true, ...depois };
   };
 
+  /**
+   * Abrir a janela de expedicoes do jogo, e dizer se ela ficou aberta.
+   *
+   * Nao e' enfeite. Medido em 04/11/2026: o "Estou pronto" e a propria verificacao **so existem no
+   * DOM enquanto aquela janela esta' aberta**. Quem responde pelo telefone nao esta' ca' para a
+   * abrir, entao quem a abre e' isto — e quem a mantem aberta ate' a corrida comecar tambem, porque
+   * uma janela que se fecha no meio leva com ela o botao em que se ia clicar.
+   */
+  const janela = () => {
+    const w = globalThis.PokeIdle?.ExpeditionWindow;
+    if (typeof w?.open !== 'function') return { erro: 'este jogo não tem a janela de expedições' };
+    if (w.isOpen?.() !== true) w.open();
+    return { ok: true, aberta: w.isOpen?.() === true };
+  };
+
+  /**
+   * A corrida ja' comecou — ou seja, ja' se entrou no mapa da expedicao?
+   *
+   * `ExpeditionStore.inRun()` e' do proprio jogo. E' o sinal de parar de vigiar a janela: dali em
+   * diante quem manda e' a corrida.
+   */
+  const naCorrida = () => ({ ok: true, correndo: globalThis.PokeIdle?.ExpeditionStore?.inRun?.() === true });
+
+  /**
+   * Sair do grupo.
+   *
+   * Existe por um pedido do dono em 04/11/2026: se ele nao responder a' verificacao a tempo, nao
+   * quer ficar la' dentro a prender um lugar de um grupo que vai comecar sem ele. `leaveExpedition`
+   * e' a mesma porta do botao vermelho "Sair do grupo".
+   */
+  const sair = async (api) => {
+    if (typeof api.leaveExpedition !== 'function') return { erro: 'este jogo não tem saída de grupo' };
+    await api.leaveExpedition();
+    return { ok: true, ...(await estado(api)) };
+  };
+
   addEventListener(PEDIDO, async (evento) => {
     const eco = evento?.detail?.eco;
     const responder = (detalhe) => dispatchEvent(new CustomEvent(RESPOSTA, { detail: { eco, ...detalhe } }));
@@ -163,6 +206,9 @@
       if (acao === 'estado') return void responder(await estado(api));
       if (acao === 'cidade') return void responder(await irParaCidade());
       if (acao === 'entrar') return void responder(await entrar(api, evento?.detail));
+      if (acao === 'janela') return void responder(janela());
+      if (acao === 'corrida') return void responder(naCorrida());
+      if (acao === 'sair') return void responder(await sair(api));
       responder({ erro: 'não sei fazer isso' });
     } catch (erro) {
       responder({

@@ -1236,6 +1236,72 @@ sozinho.
 E uma janela, uma preparação: sem isso, sair de um grupo faria a ferramenta voltar a arrastar você
 para dentro de outro, sem ninguém ter pedido.
 
+### Responder a verificação pela foto, de longe
+
+Dentro da caixa do Telegram há uma segunda caixa: **responder a verificação pela foto**. Com ela
+ligada, quando a extensão entra no grupo ela abre a verificação, manda a figura para o seu telefone
+com os nove quadrados **numerados de 1 a 9**, e espera. Você olha, responde só o número, e ela
+clica naquele quadrado. Se o desafio trocar nesse meio tempo, ela não clica em nada e diz.
+
+Repare no que ela continua a não fazer. Medido em 04/11/2026, com a verificação aberta: os nove
+estão numa **única** imagem embutida na página, com nove botões transparentes por cima rotulados só
+por `coluna N, linha N`. Não há `alt`, não há `title`, não há URL de sprite com o id — **o jogo não
+põe o nome do Pokémon em lugar nenhum do DOM**. A resposta só existe nos pixels, e isso é uma
+escolha de quem fez o jogo: aquilo quer um olho humano.
+
+Então o relé é transporte, e só. A extensão não olha para a figura, não a compara com nada, **não
+guarda o que ela era** e não sugere nem ordena nenhum quadrado. Quem reconhece é você; o que mudou
+foi o lugar de onde você clica. Três coisas que a quebrariam, e por isso têm teste que cai:
+
+- ler o rótulo dos quadrados para descobrir qual é qual;
+- guardar "esta figura é tal Pokémon" para a próxima vez;
+- a extensão escolher, pré-selecionar ou ordenar por probabilidade.
+
+Dois detalhes práticos: o relé espera **72 segundos** pela sua resposta — o desafio do jogo expira
+perto dos 90, e parar antes evita clicar em cima da expiração. E ele corre segurando a vez na fila,
+porque entre a foto e o clique ninguém mais pode mexer no jogo: uma caçada que trocasse de mapa no
+meio fecharia a janela debaixo do clique. São até 72 segundos de fila parada, e é o preço de a
+resposta ser sua.
+
+Se **ninguém responder** nos 72 segundos, ela não fica lá dentro: fecha o desafio, **sai do grupo**
+pela mesma porta do botão vermelho, devolve o time e a caçada, e avisa. Um lugar preso num grupo de
+quatro é um grupo que não começa, e quem espera são outras três pessoas.
+
+Há ainda **pedir licença antes de entrar**: com essa caixa ligada, quando a janela abre ela pergunta
+no Telegram se pode entrar e só entra com o seu sim — "não" fecha o assunto e nada é tocado. A
+pergunta acontece **antes** de pedir a vez na fila, porque esperar dez minutos por uma resposta não
+pode ser dez minutos com a caçada parada atrás dela.
+
+E a janela de expedições do jogo passou a ser aberta pela extensão, e **mantida aberta** até a
+corrida entrar no mapa. Não é gosto: medido em 04/11/2026, o "Estou pronto" e a verificação só
+existem no DOM enquanto aquela janela está aberta — fechada, não há onde clicar.
+
+**Responde-se por botões.** A licença chega com dois botões — *Pode entrar* e *Agora não* — e a
+verificação chega com nove, em três linhas de três, na mesma arrumação da figura, para o dedo cair
+onde o olho está. Escrever continua a valer, para quem preferir o teclado.
+
+Cada botão leva um **selo** da pergunta a que pertence. Sem isso havia um buraco próprio dos
+botões: as mensagens ficam na conversa para sempre e os botões continuam clicáveis, portanto um
+toque no "4" de ontem seria lido como a resposta de hoje. Respondida a pergunta, os botões são
+retirados da mensagem.
+
+**Várias janelas no mesmo bot, e a fila entre elas.** Mandar recado pelo mesmo bot em várias
+janelas funciona. **Ler a resposta não**: o Telegram só deixa um `getUpdates` de cada vez, e quem
+chega depois expulsa quem estava a ler, com `409`. Como a janela de expedição é do servidor e abre
+à mesma hora para todas as contas, esse cruzamento seria o caso normal, não o raro.
+
+Duas coisas lidam com isso. A primeira: **só o fim do prazo faz sair do grupo**. Um conflito de bot
+ou um erro de rede deixam a verificação aberta e avisam — antes disto, bastava outra janela arrancar
+para esta desistir da expedição sozinha. A segunda: os campos **entrar entre X e Y min**, que dão a
+cada janela um intervalo diferente contado desde que a expedição abriu (0 a 5 numa, 5 a 10 noutra),
+para elas passarem uma de cada vez. O minuto é sorteado uma vez por janela, nunca cai nos últimos
+três minutos, e zero nos dois campos entra logo, como sempre foi. Ainda assim, **um bot por janela**
+é mais simples e não depende de os intervalos não se tocarem.
+
+Uma resposta antiga nunca vira clique. O Telegram guarda o que o bot ainda não confirmou, então um
+`3` escrito ontem continuaria na fila; antes de perguntar, a fila é esvaziada, e só se aceita
+mensagem **daquela conversa** e **posterior à pergunta**.
+
 ## Genética: trocar os épicos fracos por material, sem abrir o NPC
 
 O NPC **Geneticista Pokémon** tem a aba *"Extrair material"*: cada Pokémon vira **1 Material

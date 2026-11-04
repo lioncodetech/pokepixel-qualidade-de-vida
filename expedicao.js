@@ -9,6 +9,20 @@
 // Pedido do dono assim, em 03/11/2026: *"quero que construa tudo, até chegar na parte de
 // confirmar, eu mesmo resolvo"*. É exactamente esta a fronteira.
 //
+// O RELÉ PELA FOTO, E PORQUE ELE NÃO MUDA ESSA FRONTEIRA. Medido na conta do dono em 04/11/2026:
+// a verificação desenha os nove numa **única** `<img class="expedition-captcha__image">` — um
+// `data:` URI de ~40 KB — com nove `<button class="expedition-captcha__tile">` transparentes por
+// cima, rotulados só por `aria-label="coluna N, linha N"`. Não há `alt`, não há `title`, não há
+// URL de sprite com o id: **o jogo não põe o nome em lado nenhum do DOM**. A resposta só existe
+// nos pixels, e isso é uma decisão de quem fez o jogo.
+//
+// Então o relé faz só o transporte: manda essa imagem ao Telegram com os nove quadrados numerados,
+// espera que **uma pessoa** a reconheça e responda 1 a 9, e clica no quadrado que ela disse. A
+// extensão não olha para a figura, não a compara com nada, não guarda o que era e não sugere nem
+// ordena nada. Quem reconhece continua a ser o dono; o que mudou foi só o sítio de onde ele clica.
+// Tirar qualquer uma dessas três — olhar, guardar ou sugerir — passava a fronteira, e há testes
+// que caem se alguém o fizer.
+//
 // O QUE ELA TIRA DE CIMA DELE. Vigiar o relógio da janela — que abre por horário de servidor e
 // dura pouco —, trocar para o time certo, parar a caçada, ir à cidade e entrar num grupo. E, no
 // fim, devolver tudo: o time de antes e a caçada de antes. O trabalho chato é dela; os dois
@@ -49,6 +63,32 @@ PPX.modulo(
        * Um token no `localStorage` seria uma senha a' vista do JavaScript da pagina.
        */
       recado: false,
+      /**
+       * Deixar o dono responder a verificacao pelo Telegram.
+       *
+       * Desligado por omissao: isto manda uma foto e espera que ele esteja com o telefone na mao.
+       * Ligado sem ninguem do outro lado, so' queima a janela a' espera.
+       */
+      pelaFoto: false,
+      /**
+       * Esperar entre `esperaMin` e `esperaMax` minutos depois de a janela abrir, antes de entrar.
+       *
+       * E' a fila entre as janelas do dono, pedida em 04/11/2026. A janela de expedicao e' do
+       * servidor, nao da conta: abre a' MESMA hora para todas as contas dele. Sem isto, todas
+       * perguntam no mesmo instante e disputam o mesmo bot. Dando a cada janela um intervalo
+       * diferente — 0 a 5 numa, 5 a 10 noutra — elas passam uma de cada vez.
+       *
+       * Zero nos dois desliga, e entra-se assim que a janela abre, como sempre foi.
+       */
+      esperaMin: 0,
+      esperaMax: 0,
+      /**
+       * Perguntar no Telegram antes de entrar no grupo, e so' entrar se o dono deixar.
+       *
+       * Pedido dele em 04/11/2026. A razao e' simples: entrar gasta a corrida da janela, e ele pode
+       * estar no meio de outra coisa. O "sim" dele e' que faz a corrida comecar.
+       */
+      licenca: false,
     };
 
     const ler = (chave, padrao) => {
@@ -133,6 +173,13 @@ PPX.modulo(
         </label>
         <label class="caixa"><input type="checkbox" data-cidade> ir à cidade antes</label>
         <label class="caixa"><input type="checkbox" data-entrar> entrar num grupo sozinha</label>
+        <label class="campo" title="Entro num minuto sorteado entre os dois, contado desde que a janela abriu. Zero nos dois: entro logo">
+          entrar entre
+          <input type="number" min="0" max="180" step="1" data-esperamin>
+          e
+          <input type="number" min="0" max="180" step="1" data-esperamax>
+          min
+        </label>
         <label class="campo" title="Vazio: entro num grupo público. Com código: entro naquele grupo">
           código <input type="text" maxlength="12" placeholder="público" data-codigo>
         </label>
@@ -148,6 +195,12 @@ PPX.modulo(
             chat id <input type="text" inputmode="numeric" maxlength="32" data-chat>
           </label>
           <button type="button" data-testar>Mandar um recado de teste</button>
+          <label class="caixa" title="Mando a foto da verificação numerada; você responde 1 a 9 e eu clico ali">
+            <input type="checkbox" data-pelafoto> responder a verificação pela foto
+          </label>
+          <label class="caixa" title="Antes de entrar no grupo, pergunto no Telegram e espero o seu sim">
+            <input type="checkbox" data-licenca> pedir licença antes de entrar
+          </label>
         </div>
         <p class="nota" data-regras></p>
         <div data-config></div>
@@ -200,6 +253,45 @@ PPX.modulo(
     let janelaFeita = '';
     /** A janela de que já se mandou recado. Um recado por janela, e não um a cada meio minuto. */
     let janelaAvisada = '';
+    /** O minuto sorteado para esta janela, para não mudar a cada batida. */
+    let sorteado = { janela: '', segundos: 0 };
+    /** Ate' quando nao se volta a tentar, depois de a leitura do bot ter sido roubada. */
+    let adiadoAte = 0;
+
+    /**
+     * Quantos segundos esperar depois de a janela abrir, nesta janela.
+     *
+     * Sorteia-se **uma vez por janela** — sortear a cada batida fazia a hora de entrar fugir para
+     * a frente de meio em meio minuto, e nunca chegava. E o sorteio e' cortado para caber: nunca
+     * passa de três minutos antes de a janela fechar, senão a espera comia a corrida do dia.
+     */
+    const esperaDaJanela = (r) => {
+      const min = Math.max(0, Math.min(180, Number(cfg.esperaMin) || 0));
+      const max = Math.max(min, Math.min(180, Number(cfg.esperaMax) || 0));
+      if (!max) return 0;
+      if (sorteado.janela !== r.fecha) {
+        const bruto = Math.round((min + Math.random() * (max - min)) * 60);
+        const cabe = Math.max(0, (Number(r.restantes) || 0) - 180);
+        sorteado = { janela: r.fecha || '', segundos: Math.min(bruto, cabe) };
+      }
+      return sorteado.segundos;
+    };
+
+    /**
+     * Ja' passou o tempo sorteado desde que a janela abriu?
+     *
+     * Conta-se de `opens_at` (medido em 04/11/2026: ISO com `Z`, que o `Date.parse` le'), e nao do
+     * momento em que a extensao acordou — senao um F5 reiniciava a contagem e duas janelas voltavam
+     * a cair em cima uma da outra. Sem `opens_at` legivel nao se adia nada: perder a corrida por
+     * uma data que nao se soube ler seria pior do que entrar cedo.
+     */
+    const naHoraDeEntrar = (r) => {
+      const espera = esperaDaJanela(r);
+      if (!espera) return true;
+      const abriu = Date.parse(String(r.abre || ''));
+      if (!Number.isFinite(abriu)) return true;
+      return Date.now() - abriu >= espera * 1000;
+    };
 
     const relogio = (segundos) => {
       const s = Math.max(0, Math.round(segundos));
@@ -255,6 +347,314 @@ PPX.modulo(
       if (r?.erro) dizer(`Não mandei o recado: ${r.erro}`, true);
     };
 
+    // ------------------------------------------------------- o relé da foto
+
+    /**
+     * Os sitios medidos na conta do dono em 04/11/2026. Se o jogo mudar as classes, o relé desiste
+     * e diz porque — nao tenta adivinhar outra coisa parecida e clicar nela.
+     */
+    const VERIFICACAO = '.expedition-captcha-window';
+    const GRADE = '.expedition-captcha__grid';
+    const RETRATO = '.expedition-captcha__image';
+    /** As abas da janela de expedicoes. A do grupo e' `[data-tab="group"]`. */
+    const ABAS = '.expedition-tab';
+    /** Quanto se espera pela pessoa. O desafio do jogo expira em ~90 s; aqui para-se antes. */
+    const ATE_RESPONDER = 72;
+    /** Quantas vezes se repete, se o jogo trocar o desafio ou a resposta nao for aceite. */
+    const RONDAS = 3;
+    /** Quanto se espera pelo "sim" para entrar. Dez minutos: a janela dura bem mais do que isso. */
+    const ATE_LICENCA = 600;
+    /** Ate' quando se vigia a janela do jogo depois do Pronto, se a corrida nao comecar. */
+    const ATE_COMECAR = 900000;
+
+    /**
+     * Pedir licenca para entrar, e esperar.
+     *
+     * Corre **antes** de pedir a vez na fila, de proposito: ate' dez minutos a' espera de uma
+     * resposta nao podem ser dez minutos com a caçada parada atras de nos. Enquanto ele nao
+     * responde, nada no jogo foi tocado — nao ha' nada para desfazer se ele disser que nao.
+     */
+    const pedirLicenca = async (r) => {
+      const quantas = (r?.corridas || 0) + (r?.extras || 0);
+      dizer('Pedi licença no Telegram. Esperando o seu sim…');
+      const resposta = await globalThis.PPX?.telegram?.perguntar?.({
+        legenda:
+          `Expedição aberta — fecha em ${relogio(r?.restantes || 0)}, ${quantas} corrida(s).\n` +
+          'Posso entrar? Toque num botão — ou escreva SIM ou NÃO, se preferir.',
+        segundos: ATE_LICENCA,
+        // Dois botoes no proprio Telegram, pedido do dono em 04/11/2026: responder de dentro do
+        // bolso, sem teclado. O escrito continua a valer — o toque e' o caminho curto, nao o unico.
+        botoes: [
+          [
+            { texto: '✅ Pode entrar', valor: 'sim' },
+            { texto: '✋ Agora não', valor: 'nao' },
+          ],
+        ],
+        aceitar: (texto) => {
+          const d = String(texto)
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+          if (/^(sim|s|ok|pode|vai|entra|bora)$/.test(d)) return true;
+          if (/^(nao|n|negativo|deixa|para)$/.test(d)) return false;
+          return null;
+        },
+      });
+      if (resposta?.erro) {
+        // **Nao e' um "nao".** Se duas janelas do dono partilham o bot, a que chega depois rouba a
+        // leitura desta e ela apanha um `409` sem ele ter escrito nada. Dar isso por recusa queimava
+        // a corrida do dia em silencio. Entao: diz-se o que foi, e devolve-se `'erro'` — quem chama
+        // tenta mais logo, em vez de dar a janela por tratada.
+        dizer(`Não perguntei: ${resposta.erro}.`, true);
+        return resposta.conflito ? 'conflito' : 'erro';
+      }
+      if (resposta.resposta !== true) {
+        dizer('Você disse que não. Não entrei.');
+        await recado('Combinado: não entrei nesta janela.');
+        return 'nao';
+      }
+      return 'sim';
+    };
+
+    /**
+     * Abrir a janela de expedicoes do jogo e **deixa-la aberta** ate' a corrida comecar.
+     *
+     * Pedido do dono em 04/11/2026, e nao e' so' gosto: medido no mesmo dia, o "Estou pronto" e a
+     * verificacao so' existem no DOM com aquela janela aberta. Quem responde pelo telefone nao
+     * esta' ca' para a abrir — nem para a reabrir se alguma coisa a fechar no meio.
+     *
+     * Vigia **sem a vez na mao**: abrir um painel nao mexe no personagem, e segurar a fila por
+     * quinze minutos para isto seria prender a caçada por causa de uma janela.
+     */
+    const abrirJanela = () => ponte({ acao: 'janela' });
+
+    const vigiarJanela = async () => {
+      const fim = Date.now() + ATE_COMECAR;
+      while (Date.now() < fim) {
+        const r = await ponte({ acao: 'corrida' });
+        if (r?.correndo) return;
+        await abrirJanela();
+        await new Promise((ok) => setTimeout(ok, 4000));
+      }
+    };
+
+    /**
+     * Desistir: fechar a verificacao e sair do grupo.
+     *
+     * Tambem de 04/11/2026: *"se eu nao responder ate' os 72 segundos, cancela o desafio e sai da
+     * expedicao"*. O porque e' do dono, e e' justo — um lugar preso num grupo de quatro e' um grupo
+     * que nao comeca, e quem fica a' espera sao outras tres pessoas.
+     */
+    const desistir = async (motivo) => {
+      const fechar = document.querySelector(`${VERIFICACAO} .pokeidle-panel__close`);
+      if (fechar) fechar.click();
+      const saiu = await ponte({ acao: 'sair' });
+      const bem = !saiu?.erro;
+      dizer(bem ? `${motivo} Saí da expedição.` : `${motivo} E não consegui sair: ${saiu.erro}`, true);
+      await recado(
+        bem
+          ? `${motivo} Saí do grupo e devolvi o time e a caçada — o lugar não ficou preso.`
+          : `${motivo} E não consegui sair do grupo: ${saiu.erro}. Veja no computador.`,
+      );
+      return bem;
+    };
+
+    /**
+     * O desafio desenhado e **preenchido**, ou nada.
+     *
+     * Isto existe por um erro meu, apanhado no teste do dono em 04/11/2026: a grade e a imagem
+     * aparecem no DOM **vazias** e so' depois sao preenchidas. Eu esperava pelos elementos, lia no
+     * instante seguinte e via zero quadrados — e desistia a dizer que a verificacao tinha mudado
+     * de formato, quando ela so' ainda nao tinha acabado de nascer. Esperar pelo conteudo, e nao
+     * pelo elemento, e' a diferenca entre as duas coisas.
+     */
+    const desafioPronto = () => {
+      const grade = document.querySelector(GRADE);
+      const retrato = document.querySelector(RETRATO);
+      if (!grade || !retrato || grade.children.length !== 9) return null;
+      return (retrato.currentSrc || retrato.src) ? { grade, retrato } : null;
+    };
+
+    /**
+     * Levar a janela do jogo a' aba **Meu Grupo**.
+     *
+     * Apanhado pelo dono no teste de 04/11/2026, com um circulo a volta da aba: a janela abre na
+     * aba "Expedicao", e o "Estou pronto" nao esta' la' — esta' na "Meu Grupo", que ninguem abriu.
+     * Quem joga carrega nela sem pensar; o rele nao, e ficava a procurar um botao que existe noutro
+     * ecra. Medido no mesmo dia: as abas sao `.expedition-tab[data-tab]`, e a do grupo e' `group`.
+     */
+    const abaDoGrupo = async () => {
+      const aba = document.querySelector(`${ABAS}[data-tab="group"]`);
+      if (!aba) return false;
+      if (!aba.classList.contains('is-active')) aba.click();
+      return ate(() => Boolean(botaoPronto()), 5000);
+    };
+
+    /** O "Estou pronto" do jogo, achado pelo texto: a classe dele e' a de qualquer botao. */
+    const botaoPronto = () =>
+      [...document.querySelectorAll('button')].find(
+        (b) => /estou pronto/i.test(b.textContent || '') && !b.disabled,
+      ) || null;
+
+    /**
+     * Numerar os nove quadrados **na propria foto**, de 1 a 9, da esquerda para a direita.
+     *
+     * Sem isto o dono teria de descrever o lugar por palavras. Os quadrados sao tercos exactos da
+     * imagem (medido: grade de 336x304 em tiles de 112x101), entao os numeros caem onde devem sem
+     * se saber nada do que esta' desenhado. O `data:` URI nao suja a tela, por ser da propria
+     * pagina — um sprite servido de outro dominio sujaria, e o `toBlob` falharia.
+     */
+    const numerar = (fonte) =>
+      new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const tela = document.createElement('canvas');
+            tela.width = img.naturalWidth;
+            tela.height = img.naturalHeight;
+            const c = tela.getContext('2d');
+            c.drawImage(img, 0, 0);
+            const lx = tela.width / 3;
+            const ly = tela.height / 3;
+            const corpo = Math.max(14, Math.round(ly / 3.4));
+            c.font = `bold ${corpo}px sans-serif`;
+            c.textBaseline = 'top';
+            for (let i = 0; i < 9; i += 1) {
+              const x = (i % 3) * lx + 5;
+              const y = Math.floor(i / 3) * ly + 5;
+              c.fillStyle = 'rgba(0,0,0,.72)';
+              c.fillRect(x, y, corpo * 0.95, corpo * 1.15);
+              c.fillStyle = '#fff';
+              c.fillText(String(i + 1), x + corpo * 0.22, y + corpo * 0.08);
+            }
+            tela.toBlob((b) => ok(b || null), 'image/png');
+          } catch {
+            ok(null);
+          }
+        };
+        img.onerror = () => ok(null);
+        img.src = fonte;
+      });
+
+    /**
+     * Mandar a verificacao ao telefone e clicar onde o dono disser.
+     *
+     * Corre **com a vez na mao**, de propósito: entre mandar a foto e clicar passam-se ate' 72
+     * segundos, e nesse intervalo ninguem mais pode estar a mexer no jogo — uma caçada que trocasse
+     * de mapa no meio fechava a janela debaixo do clique. E' muito tempo para a fila, e e' por isso
+     * que ha' um tecto: passado o prazo, larga-se.
+     *
+     * Devolve `'pronto'` se chegou a clicar num quadrado (e nao se a resposta estava certa — isso
+     * quem diz e' o jogo), `'saiu'` se desistiu e saiu do grupo, e `'parado'` se parou e deixou a
+     * verificacao para o dono resolver no computador.
+     */
+    const responderPelaFoto = async () => {
+      // Primeiro a aba certa: sem ela, o botao que se procura a seguir nem existe no DOM.
+      await abaDoGrupo();
+      const abrir = botaoPronto();
+      if (!abrir) {
+        dizer('Não achei o “Estou pronto” na aba Meu Grupo. A verificação é com você.', true);
+        await recado('Entrei no grupo, mas não achei o botão da verificação. É com você, no computador.');
+        return 'parado';
+      }
+      abrir.click();
+      if (!(await ate(() => Boolean(desafioPronto()), 12000))) {
+        dizer('A verificação não abriu (ou não terminou de desenhar). É com você.', true);
+        await recado('Entrei no grupo, mas a verificação não abriu sozinha. É com você, no computador.');
+        return 'parado';
+      }
+
+      for (let ronda = 1; ronda <= RONDAS; ronda += 1) {
+        if (!document.querySelector(VERIFICACAO)) break;
+        // Outra vez a espera pelo conteudo: entre rondas o jogo troca o desafio, e por um instante
+        // a grade fica vazia de novo.
+        if (!(await ate(() => Boolean(desafioPronto()), 12000))) {
+          dizer('A verificação não terminou de desenhar. Não mexo.', true);
+          await recado('A verificação não acabou de carregar e eu não mexo nela às cegas. É com você, no computador.');
+          return 'parado';
+        }
+        const caixa = document.querySelector(VERIFICACAO);
+        const { grade, retrato } = desafioPronto();
+        const imagem = await numerar(retrato.currentSrc || retrato.src);
+        if (!imagem) {
+          dizer('Não consegui preparar a foto. É com você.', true);
+          await recado('Não consegui preparar a foto da verificação. É com você, no computador.');
+          return 'parado';
+        }
+        // A pergunta e' do jogo ("Clique em …"), e vai como legenda para o dono a ler. A extensao
+        // nao a usa para nada: ela nao sabe qual dos nove e' aquele, e e' esse o ponto.
+        const pergunta =
+          (caixa.innerText || '')
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => /^clique em/i.test(l)) || 'Resolva a verificação da expedição';
+
+        dizer(`Mandei a verificação no Telegram (${ronda}/${RONDAS}). Responda 1 a 9.`);
+        const r = await globalThis.PPX?.telegram?.perguntar?.({
+          imagem,
+          legenda: `${pergunta}\nToque no número do quadrado. O 1 é o de cima à esquerda.`,
+          segundos: ATE_RESPONDER,
+          // Os nove botoes na mesma arrumacao da figura: tres linhas de tres, para o dedo cair
+          // onde o olho esta'. Uma fila de nove nao casava com a grade e convidava ao engano.
+          botoes: [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9],
+          ].map((linha) => linha.map((n) => ({ texto: String(n), valor: String(n) }))),
+          // Um numero, e nada mais. Nem "o 3", nem "acho que 3": o que vier torto nao vira clique.
+          aceitar: (texto) => (/^[1-9]$/.test(String(texto).trim()) ? Number(String(texto).trim()) : null),
+        });
+        if (r?.erro) {
+          // **So' o prazo faz sair.** Sair do grupo foi um pedido do dono para UM caso: ele nao
+          // respondeu a tempo. Um erro de rede, um token recusado ou outra janela a usar o mesmo
+          // bot nao sao esse caso — nesses, a verificacao fica aberta para ele, e o lugar fica.
+          // Antes disto, qualquer erro mandava sair: bastava outra janela arrancar para esta
+          // desistir da expedicao sozinha, sem ele ter feito nada.
+          if (r.prazo) {
+            await desistir(`Ninguém respondeu em ${ATE_RESPONDER}s.`);
+            return 'saiu';
+          }
+          dizer(`Não consegui perguntar: ${r.erro}. A verificação ficou aberta para você.`, true);
+          await recado(`Não consegui levar a verificação até você: ${r.erro}. Ela ficou aberta no computador.`);
+          return 'parado';
+        }
+
+        // Entre a pergunta e a resposta passaram-se ate' 72 s: a grade de agora pode ja' nao ser
+        // aquela da foto. Entao vai-se buscar o quadrado **outra vez**, e so' se clica se a
+        // verificacao ainda for a mesma — clicar as cegas acertaria no quadrado errado de um
+        // desafio que o dono nunca viu.
+        const agora = document.querySelector(GRADE);
+        const alvo = agora?.children?.[r.resposta - 1];
+        const mesma = agora === grade && document.querySelector(RETRATO)?.src === retrato.src;
+        if (!alvo || !mesma) {
+          dizer('A verificação trocou antes da sua resposta. Não cliquei.', true);
+          await recado('Cheguei tarde: o desafio trocou antes da sua resposta, e eu não cliquei em nada.');
+          return 'parado';
+        }
+        // **O clique, e nada guardado.** O numero vive ate' aqui e acaba aqui: nao ha' ficheiro
+        // nenhum a aprender que figura era esta. Ver o cabecalho.
+        alvo.click();
+        await ate(() => document.querySelector(GRADE) !== grade, 6000);
+        if (!document.querySelector(VERIFICACAO)) {
+          const marcar = botaoPronto();
+          if (marcar) marcar.click();
+          dizer(`Cliquei no ${r.resposta} que você disse${marcar ? ' e marquei Pronto' : ''}.`);
+          await recado(
+            `Cliquei no ${r.resposta}${marcar ? ' e marquei Pronto' : ''}. O resto da corrida é com o grupo.`,
+          );
+          return 'pronto';
+        }
+        // Continua aberta: ou a resposta nao foi aceite, ou o jogo trocou o desafio. Manda-se o
+        // novo, em vez de insistir no mesmo numero.
+        dizer(`O ${r.resposta} não fechou a verificação. Mandando o desafio novo…`);
+      }
+
+      dizer('A verificação continua aberta. É com você.', true);
+      await recado(`Depois de ${RONDAS} tentativas a verificação continua aberta. É com você, no computador.`);
+      return 'parado';
+    };
+
     // ---------------------------------------------------------- preparação
 
     /**
@@ -278,11 +678,36 @@ PPX.modulo(
        * pode queimar a janela inteira no `janelaFeita`.
        */
       let falhou = false;
+      /** Saiu do grupo por ninguem ter respondido: desfaz-se tudo, mas a janela conta como usada. */
+      let saiu = false;
       const falha = (texto) => {
         falhou = true;
         return dizer(texto, true);
       };
       try {
+        // Antes de tudo, e antes da fila: o "sim" dele. Entrar gasta a corrida da janela.
+        if (cfg.recado && cfg.licenca && cfg.entrar) {
+          // Marcada ANTES de perguntar: a batida seguinte chega daqui a meio minuto, e ele ainda
+          // esta' a olhar para a primeira pergunta. Uma por janela.
+          janelaAvisada = visto?.fecha || janelaAvisada;
+          const licenca = await pedirLicenca(visto);
+          if (licenca === 'nao') {
+            // Disse que nao: a janela fica dada como tratada, senao a batida seguinte pergunta
+            // outra vez. Ele muda de ideias no botao `Preparar agora`, que nao passa por aqui.
+            if (porMinha) janelaFeita = visto?.fecha || '';
+            return;
+          }
+          if (licenca !== 'sim') {
+            // Nao chegou a haver pergunta. A janela **nao** e' dada por tratada: tenta-se outra
+            // vez mais logo. Mas nao ja': duas janelas a tentarem de meio em meio minuto roubavam
+            // a leitura uma a' outra para sempre, e nenhuma chegava a perguntar. Por isso o
+            // adiamento e' sorteado — e' o desempate entre elas.
+            adiadoAte = Date.now() + (licenca === 'conflito' ? 60000 + Math.random() * 120000 : 60000);
+            janelaAvisada = '';
+            return;
+          }
+        }
+
         soltar = await esperarAVez(dizer);
         if (!soltar) return falha('Desisti: o jogo ficou ocupado tempo demais.');
 
@@ -313,6 +738,12 @@ PPX.modulo(
           return;
         }
 
+        // A janela de expedições do jogo, aberta antes de entrar: é dentro dela que a verificação
+        // e o "Estou pronto" existem. Se não abrir, segue-se mesmo assim — o relé é que não vai ter
+        // onde clicar, e diz isso quando lá chegar.
+        const abriu = await abrirJanela();
+        if (abriu?.erro) dizer(`Não abri a janela de expedições: ${abriu.erro}`, true);
+
         dizer(cfg.codigo ? `Entrando no grupo ${cfg.codigo}…` : 'Entrando num grupo público…');
         const entrou = await ponte({ acao: 'entrar', codigo: cfg.codigo });
         if (entrou?.erro) return falha(`Não entrei: ${entrou.erro}`);
@@ -330,10 +761,21 @@ PPX.modulo(
             ` A janela fecha em ${relogio(entrou.restantes)}.` +
             (entrou.exigeVerificacao ? ' Falta a verificação e o Pronto — é com você.' : ' Falta marcar Pronto.'),
         );
+        // O relé, se ele o ligou: a foto vai para o telefone e o clique espera por uma pessoa.
+        // Fica **dentro** do `try`, com a vez ainda na mão — ver o cabeçalho do `responderPelaFoto`.
+        if (cfg.recado && cfg.pelaFoto && entrou.exigeVerificacao) {
+          const fim = await responderPelaFoto();
+          if (fim === 'saiu') saiu = true;
+          // Clicou e marcou Pronto: dali ate' a corrida entrar no mapa, a janela do jogo fica
+          // aberta — e e' por isso que isto nao e' esperado aqui dentro, com a vez na mao.
+          if (fim === 'pronto') void vigiarJanela();
+        }
       } finally {
         // Desfazer antes de soltar a vez: enquanto se devolve o time ainda se esta' a mexer no
         // jogo, e quem mexe no jogo tem a vez.
-        if (falhou) await desfazer();
+        // Uma falha desfaz; uma saida por prazo tambem — em ambos os casos ficou-se com o time de
+        // expedicao montado e fora da caçada, e isso nao se deixa assim.
+        if (falhou || saiu) await desfazer();
         if (soltar) soltar();
         correndo = false;
         // So' uma janela **preparada** conta como feita. Queimar a janela por causa de um "o jogo
@@ -401,7 +843,16 @@ PPX.modulo(
 
       // A janela abriu: um recado por janela, e **antes** de qualquer preparação, para quem está
       // longe decidir se vale ir ao computador.
-      if (r.aberta && r.ligada && cfg.recado && janelaAvisada !== r.fecha) {
+      // A pergunta vem PRIMEIRO, e quando ela vem nao ha' aviso nenhum antes dela.
+      //
+      // Pedido do dono em 04/11/2026: *"tem que me perguntar primeiro se e' para entrar"*. O aviso
+      // "Expedicao ABERTA" dizia o mesmo que a pergunta ja' diz — quanto falta e quantas corridas
+      // ha' — e dizia-o a anunciar que ia preparar. Duas mensagens, e a primeira a dar por
+      // decidido o que ele ainda nao tinha decidido. Entao quando a licenca vai ser pedida, o
+      // aviso cala-se e a pergunta e' a primeira coisa que chega ao telefone.
+      const vaiPerguntar =
+        cfg.licenca && cfg.ligada && cfg.entrar && r.aberta && r.ligada && r.corridas + r.extras > 0;
+      if (r.aberta && r.ligada && cfg.recado && !vaiPerguntar && janelaAvisada !== r.fecha) {
         janelaAvisada = r.fecha || '';
         const quantas = r.corridas + r.extras;
         await recado(
@@ -418,6 +869,15 @@ PPX.modulo(
       // Uma janela, uma preparação. Sem isto, sair de um grupo faria a ferramenta voltar a
       // arrastar o jogador para dentro de outro, sem ninguém ter pedido.
       if (janelaFeita && janelaFeita === r.fecha) return;
+      if (Date.now() < adiadoAte) {
+        dizer(`O bot estava ocupado por outra janela. Tento de novo em ${relogio((adiadoAte - Date.now()) / 1000)}.`);
+        return;
+      }
+      if (!naHoraDeEntrar(r)) {
+        const falta = esperaDaJanela(r) - Math.round((Date.now() - Date.parse(String(r.abre))) / 1000);
+        dizer(`Minha vez é daqui a ${relogio(falta)} (fila entre as janelas).`);
+        return;
+      }
       await preparar(true);
     };
 
@@ -456,6 +916,8 @@ PPX.modulo(
       token.value = '';
       token.placeholder = d.token ? 'guardado — escreva outro para trocar' : '123456789:AA…';
       campo('[data-chat]').value = d.chat;
+      campo('[data-pelafoto]').checked = cfg.pelaFoto === true;
+      campo('[data-licenca]').checked = cfg.licenca === true;
     };
 
     const guardarTelegram = async () => {
@@ -481,6 +943,51 @@ PPX.modulo(
       botao.disabled = false;
       dizer(r?.ok ? 'Chegou? Então está pronto.' : `Não deu: ${r?.erro || 'falhou'}`, !r?.ok);
     });
+    for (const [seletor, chave] of [
+      ['[data-esperamin]', 'esperaMin'],
+      ['[data-esperamax]', 'esperaMax'],
+    ])
+      campo(seletor).addEventListener('change', (e) => {
+        const n = Math.max(0, Math.min(180, Math.round(Number(e.target.value) || 0)));
+        cfg[chave] = n;
+        // O maximo nunca fica abaixo do minimo: um intervalo ao contrario nao sorteia nada.
+        if (cfg.esperaMax < cfg.esperaMin) cfg.esperaMax = cfg.esperaMin;
+        // Mexer no intervalo manda o sorteio desta janela fora: o novo e' que vale.
+        sorteado = { janela: '', segundos: 0 };
+        gravar();
+        desenharEspera();
+        dizer(
+          cfg.esperaMax
+            ? `Entro entre ${cfg.esperaMin} e ${cfg.esperaMax} min depois de a janela abrir.`
+            : 'Entro assim que a janela abrir.',
+        );
+      });
+
+    const desenharEspera = () => {
+      campo('[data-esperamin]').value = String(cfg.esperaMin || 0);
+      campo('[data-esperamax]').value = String(cfg.esperaMax || 0);
+    };
+
+    campo('[data-licenca]').addEventListener('change', (e) => {
+      cfg.licenca = e.target.checked;
+      gravar();
+      dizer(
+        cfg.licenca
+          ? 'Antes de entrar, pergunto no Telegram e espero o seu sim.'
+          : 'Volto a entrar sem perguntar.',
+      );
+    });
+
+    campo('[data-pelafoto]').addEventListener('change', (e) => {
+      cfg.pelaFoto = e.target.checked;
+      gravar();
+      dizer(
+        cfg.pelaFoto
+          ? 'Quando a verificação abrir, mando a foto numerada. Responda 1 a 9 — quem reconhece é você.'
+          : 'A verificação volta a ser no computador.',
+      );
+    });
+
     campo('[data-recado]').addEventListener('change', (e) => {
       cfg.recado = e.target.checked;
       // Desligar e voltar a ligar nao pode reaproveitar o "ja' avisei" de uma janela que ele nao viu.
@@ -535,6 +1042,10 @@ PPX.modulo(
         // descuido: um token de bot num ficheiro que se manda para outra maquina e' uma senha
         // partilhada. Quem importar liga a caixa e escreve o seu.
         recado: cfg.recado === true,
+        pelaFoto: cfg.pelaFoto === true,
+        licenca: cfg.licenca === true,
+        esperaMin: Number(cfg.esperaMin) || 0,
+        esperaMax: Number(cfg.esperaMax) || 0,
         // `ligada` não viaja: importar uma expedição ligada poria a outra janela a arrastar o
         // jogador para um grupo sem ninguém ter mandado. Ver o `config.js`.
       }),
@@ -549,11 +1060,17 @@ PPX.modulo(
           .slice(0, 12);
         cfg.voltar = d?.voltar !== false;
         cfg.recado = d?.recado === true;
+        cfg.pelaFoto = d?.pelaFoto === true;
+        cfg.licenca = d?.licenca === true;
+        cfg.esperaMin = Math.max(0, Math.min(180, Math.round(Number(d?.esperaMin) || 0)));
+        cfg.esperaMax = Math.max(cfg.esperaMin, Math.min(180, Math.round(Number(d?.esperaMax) || 0)));
+        sorteado = { janela: '', segundos: 0 };
         cfg.ligada = false;
         janelaFeita = '';
         janelaAvisada = '';
         gravar();
         preencherTimes();
+        desenharEspera();
         desenhar();
         void desenharTelegram();
       },
@@ -629,6 +1146,7 @@ PPX.modulo(
 
     document.documentElement.append(estilo, painel);
     desenhar();
+    desenharEspera();
     void desenharTelegram();
     globalThis.PPX?.controlar?.('expedicao', mostrar);
     mostrar(globalThis.PPX?.visivel?.('expedicao') !== false);

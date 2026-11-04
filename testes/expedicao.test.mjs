@@ -122,9 +122,17 @@ test('uma preparacao que falha pelo meio devolve o time e a cacada', () => {
     'nenhuma saída de erro da preparação escapa ao `falha`',
   );
   assert.equal((corrida.match(/return falha\(/g) || []).length, 4);
-  assert.match(corrida, /if \(falhou\) await desfazer\(\);/);
+  // Em 04/11/2026 juntou-se a saida por prazo: quem desistiu da verificacao e saiu do grupo ficou
+  // com o time de expedicao montado e fora da caçada, tal e qual quem falhou. Desfaz-se igual.
+  assert.match(corrida, /if \(falhou \|\| saiu\) await desfazer\(\);/);
+  // A licenca sai com um `return` solto, e pode: ela corre ANTES da vez e antes de se tocar no
+  // jogo, entao nao ha' nada montado para devolver.
   assert.ok(
-    corrida.indexOf('if (falhou) await desfazer()') < corrida.indexOf('if (soltar) soltar()'),
+    corrida.indexOf('pedirLicenca') < corrida.indexOf('esperarAVez'),
+    'pergunta-se antes de pedir a vez: dez minutos de espera não prendem a fila',
+  );
+  assert.ok(
+    corrida.indexOf('if (falhou || saiu) await desfazer()') < corrida.indexOf('if (soltar) soltar()'),
     'devolve-se o time com a vez ainda na mão: quem mexe no jogo tem a vez',
   );
   assert.match(corrida, /if \(porMinha && !falhou\) janelaFeita = visto\?\.fecha \|\| '';/);
