@@ -46,7 +46,10 @@
     mentira: o que se mede aqui é o menu, não elas.
   </p>
   <p>Abra com <b>Alt+Q</b>, ou pelo botão:</p>
-  <p><button id="abrir">abrir o menu</button> <button id="medir">medir o menu</button></p>
+  <p>
+    <button id="abrir">abrir o menu</button> <button id="medir">medir o menu</button>
+    <button id="travar">imitar o jogo: travar a roda</button>
+  </p>
   <pre id="saida">—</pre>
 </div>
 <script>
@@ -86,6 +89,16 @@
     // é o menu aberto, não o caminho até ele.
     const raiz = [...document.querySelectorAll('*')].find((e) => e.shadowRoot?.querySelector('.menu'));
     raiz?.shadowRoot?.querySelector('.aba')?.click();
+  };
+
+  // O JOGO TRAVA A RODA, e e' por isso que este botao existe. O PokePixel escuta `wheel` no
+  // documento e chama `preventDefault` para dar zoom no mapa — e isso cancela a rolagem de
+  // qualquer coisa por baixo. Sem imitar isso aqui, a banca rola porque nao ha jogo nenhum, e
+  // teria dito que estava tudo bem no dia em que o dono dizia que nao estava (05/11/2026).
+  document.querySelector('#travar').onclick = (e) => {
+    document.addEventListener('wheel', (w) => w.preventDefault(), { passive: false });
+    e.target.textContent = 'roda travada, como no jogo';
+    e.target.disabled = true;
   };
 
   document.querySelector('#medir').onclick = () => {

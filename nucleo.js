@@ -441,6 +441,41 @@
     }
   };
 
+  /**
+   * A roda do rato rola o que for nosso — porque na pagina do jogo ela nao rolava nada.
+   *
+   * Relatado em 05/11/2026, com a 1.39.1 instalada: no menu, a barra lateral arrastava e a roda
+   * nao fazia nada. A pagina do jogo escuta `wheel` e chama `preventDefault` — e' assim que ela
+   * da' zoom no mapa —, e isso cancela a rolagem **de qualquer coisa** por baixo. Nao da' para
+   * desfazer o `preventDefault` de outro; da' para nao depender dele.
+   *
+   * POR QUE AQUI, E NAO EM CADA PAINEL. O menu foi o que o dono viu, mas o travao e' da pagina:
+   * atinge o corpo do Ginasio, a lista da Escada e todo painel que role, hoje e os que vierem.
+   * Doze copias da mesma linha seriam doze sitios para esquecer uma.
+   *
+   * So' mexe no que e' nosso — um painel `#lioncode-…` ou o proprio menu, achados pelo caminho do
+   * evento, que atravessa o shadow root. Fora disso a roda e' do jogo, e fica do jogo: a captura
+   * nao chama `preventDefault` nenhum, apenas devolve.
+   */
+  const PASSO_RODA = { 0: 1, 1: 16, 2: 100 };
+  const rolavel = (el) =>
+    el instanceof Element &&
+    el.scrollHeight > el.clientHeight &&
+    /auto|scroll/.test(getComputedStyle(el).overflowY);
+  document.addEventListener(
+    'wheel',
+    (e) => {
+      const caminho = e.composedPath();
+      if (!caminho.some((n) => n === raiz || n?.id?.startsWith?.('lioncode-'))) return;
+      const alvo = caminho.find(rolavel);
+      if (!alvo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      alvo.scrollTop += e.deltaY * (PASSO_RODA[e.deltaMode] || 1);
+    },
+    { passive: false, capture: true },
+  );
+
   const raiz = document.createElement('div');
   for (const [prop, valor] of [
     ['all', 'initial'],

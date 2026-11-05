@@ -117,3 +117,32 @@ test('o menu das ferramentas tambem tem largura e tecto', () => {
   assert.match(corpoLista, /overflow-y: auto/, 'a lista do menu não rola');
   assert.match(corpoLista, /min-height: 0/, 'sem isto o tecto não produz rolagem nenhuma');
 });
+
+test('a roda do rato rola o que e nosso, mesmo com a pagina a trava-la', () => {
+  // **Relatado em 05/11/2026**, com a 1.39.1 instalada: no menu, a barra lateral arrastava e a
+  // roda não fazia nada. A página do jogo escuta `wheel` e chama `preventDefault` — é assim que
+  // ela dá zoom no mapa —, e isso cancela a rolagem de qualquer coisa por baixo. Não dá para
+  // desfazer o `preventDefault` de outro; dá para não depender dele, rolando à mão.
+  const nucleo = ler('nucleo.js');
+  const bloco = nucleo.slice(nucleo.indexOf("document.addEventListener(\n    'wheel',"));
+  const ate = bloco.slice(0, bloco.indexOf('  );') + 4);
+  assert.match(ate, /passive: false, capture: true/, 'sem isto o travão da página ganha');
+  assert.match(ate, /scrollTop \+=/, 'a rolagem deixou de ser feita à mão');
+  // Só o que é nosso. Fora dos nossos painéis a roda é do jogo, e fica do jogo.
+  assert.match(ate, /lioncode-/, 'o atalho passou a mexer na roda da página inteira');
+  // `deltaMode` 1 é em linhas e 2 em páginas: sem converter, um rato que reporte linhas andaria
+  // três pixels por volta.
+  assert.match(nucleo, /PASSO_RODA = \{ 0: 1, 1: 16, 2: 100 \}/);
+});
+
+test('o painel do ginasio e mostrado sem matar a propria coluna', () => {
+  // A folha do Ginásio diz `display: flex` com coluna, e é disso que vive a rolagem: cabeçalho
+  // preso, só o corpo a rolar. Um `block` escrito no `mostrar` ganha à folha — e então o tecto só
+  // cortava o conteúdo. **Medido em 05/11/2026**, numa tela de 420: painel 384, corpo 626, com o
+  // fim inalcançável. É o único painel do pacote com esta arquitetura; os outros são bloco.
+  const gym = ler('gym.js');
+  assert.match(gym, /painel\.style\.display = aVista \? '' : 'none';/);
+  assert.doesNotMatch(gym, /painel\.style\.display = aVista \? 'block'/);
+  const corpo = gym.slice(gym.indexOf('#lioncode-gym .corpo { overflow-y'));
+  assert.match(corpo.slice(0, corpo.indexOf('}')), /min-height: 0/);
+});

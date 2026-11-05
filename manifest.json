@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PokePixel - qualidade de vida",
-  "version": "1.39.1",
+  "version": "1.39.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArUZlNxPbcGOWQzDMFtnM3xiK7cZJgA0YTK8pFX/XH7mPHpPj7NCAnHu+jCEPLiaTlvDwYvF5MxhIdMqBHTflSjYRpe3tIrvsUQ4Z3D5aNGPKK/iPxEbyVK5NQRAYX5KFZIwQmiL0i4sVRO6Jm8JTC5sFTXHDZdwBadov/Ytfz9wcYIqZJUi0FthSgF+9oAbMgiYHaRdmBF71dv/rgfygI2KXGtB508DbCa/AagG7lufK0mrSaQzm7aQzLyswe0jckopNR/uX6QcGjExHM+XoWJI1Y4PfXMvdnx3qyqtJFQ2goZGfHjDyLEUuC6c7QGuCsmpabnXWVslIO/Cunyfb+QIDAQAB",
   "description": "As dezoito ferramentas de qualidade de vida do PokePixel num pacote so, com um menu para ligar e desligar cada uma. Alt+Q abre o menu.",
   "permissions": [

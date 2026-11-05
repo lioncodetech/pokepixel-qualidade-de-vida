@@ -1114,7 +1114,9 @@ PPX.modulo(
       }
       /* O cabecalho nao encolhe: numa caixa flex ele cederia altura antes de o corpo rolar. */
       #lioncode-gym > header { flex: 0 0 auto; }
-      #lioncode-gym .corpo { overflow-y: auto; overscroll-behavior: contain;
+      /* O min-height: 0 nao e' enfeite: um filho de flex recusa-se a encolher abaixo do
+         proprio conteudo, e sem ele o teto do painel corta o corpo em vez de o fazer rolar. */
+      #lioncode-gym .corpo { overflow-y: auto; min-height: 0; overscroll-behavior: contain;
         scrollbar-width: thin; scrollbar-color: var(--ppx-borda) transparent; }
       /* ESTA REGRA TEM DE EXISTIR, e com o id. O painel poe uma regra de label com id, e isso
          GANHA a' regra label[hidden] da agenda partilhada, que so' tem classes — o painel
@@ -2295,7 +2297,12 @@ PPX.modulo(
 
     let aVista = true;
     const pintar = () => {
-      painel.style.display = aVista ? 'block' : 'none';
+      // VAZIO, E NAO 'block'. A folha de estilo deste painel diz `display: flex` com coluna, e e'
+      // disso que vive a rolagem: cabecalho preso, so' o corpo a rolar. Um `block` escrito aqui
+      // ganha a' folha, e entao o teto de altura so' cortava o conteudo em vez de o fazer rolar —
+      // medido em 05/11/2026, numa tela de 420: o painel media 384 e o corpo 626, com o fim
+      // inalcancavel. Vazio devolve o valor da folha, e esconder continua a ser 'none'.
+      painel.style.display = aVista ? '' : 'none';
     };
     const mostrarPainel = (sim) => {
       aVista = sim;

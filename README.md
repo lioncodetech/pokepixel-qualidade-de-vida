@@ -68,6 +68,13 @@ entre um `right` e um `left` que o navegador resolveu pela posição estática, 
 e dezoito ferramentas não cabem numa tela de portátil sem rolagem. `testes/banca-menu.html` mostra
 o menu cheio sem o jogo por baixo, que foi a única forma de ver isto.
 
+A roda do rato rola o menu — e isso precisou de ser escrito. Na página do jogo ela não rolava nada:
+só a barra lateral, arrastada à mão. O PokePixel escuta `wheel` e chama `preventDefault`, que é
+como ele dá zoom no mapa, e isso cancela a rolagem de **qualquer coisa** por baixo. Não dá para
+desfazer o `preventDefault` de outro, então a rolagem passou a ser feita à mão, no núcleo e de uma
+vez só: dentro de um painel nosso a roda rola o painel e não chega ao jogo (senão rolar o menu daria
+zoom no mapa atrás dele); fora deles, a roda continua sendo do jogo.
+
 | ferramenta | o que faz | atalhos |
 | --- | --- | --- |
 | Ocultar popups | esconde os popups que aparecem ao passar o mouse | Alt+B esconde · Alt+N mostra |
