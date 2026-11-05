@@ -1,0 +1,108 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Banca do menu (Alt+Q)</title>
+<!--
+  Banca do menu das ferramentas, com o pacote inteiro registado e nenhum jogo por baixo.
+
+  O que ela prova: como o menu se comporta **cheio**. Com vinte ferramentas ele mede mais do que
+  uma tela de portátil, e foi assim que o dono o viu em 05/11/2026 — a última entrada cortada pela
+  borda de baixo, sem nada a dizer que havia mais.
+
+  As ferramentas aqui são de mentira de propósito: o que se mede é o menu, e cada ferramenta de
+  verdade exigiria o jogo por baixo. Os nomes e a ordem são os do `nucleo.js`.
+
+  Abra pelo servidor estático do projeto; por `file://` o navegador recusa carregar `../nucleo.js`.
+-->
+<style>
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+    background: #0f1420;
+    color: #c8d2e0;
+    font: 13px system-ui, sans-serif;
+  }
+  .nota {
+    padding: 14px 16px;
+    max-width: 560px;
+    line-height: 1.5;
+  }
+  button {
+    background: #1d2433;
+    color: #e6e9ef;
+    border: 1px solid #3a4152;
+    border-radius: 7px;
+    padding: 6px 10px;
+    font: inherit;
+    cursor: pointer;
+  }
+  code {
+    color: #9ae6a8;
+  }
+</style>
+<div class="nota">
+  <p>
+    Banca do <b>menu das ferramentas</b>. O pacote inteiro está registado, com ferramentas de
+    mentira: o que se mede aqui é o menu, não elas.
+  </p>
+  <p>Abra com <b>Alt+Q</b>, ou pelo botão:</p>
+  <p><button id="abrir">abrir o menu</button> <button id="medir">medir o menu</button></p>
+  <pre id="saida">—</pre>
+</div>
+<script>
+  // O menu monta-se sozinho ao carregar o nucleo; as ferramentas registam-se depois, como no jogo.
+  const script = document.createElement('script');
+  script.src = `../nucleo.js?t=${Date.now()}`;
+  script.onload = () => {
+    const nomes = [
+      'ocultar-popups',
+      'sem-grafico',
+      'senha',
+      'loja-rapida',
+      'venda-rapida',
+      'layout-padrao',
+      'times',
+      'gym',
+      'cacadas',
+      'escada',
+      'raridades',
+      'arena',
+      'rampage',
+      'eventos',
+      'ilhas',
+      'genetica',
+      'expedicao',
+      'awakening',
+    ];
+    for (const id of nomes) {
+      // Cada uma anuncia-se como as de verdade: um `mostrar` que só guarda o que lhe pediram.
+      globalThis.PPX?.controlar?.(id, () => {});
+    }
+  };
+  document.head.append(script);
+
+  document.querySelector('#abrir').onclick = () => {
+    // Pelo próprio botão do menu: o Alt+Q é escutado no documento do jogo, e aqui o que interessa
+    // é o menu aberto, não o caminho até ele.
+    const raiz = [...document.querySelectorAll('*')].find((e) => e.shadowRoot?.querySelector('.menu'));
+    raiz?.shadowRoot?.querySelector('.aba')?.click();
+  };
+
+  document.querySelector('#medir').onclick = () => {
+    const raiz = [...document.querySelectorAll('*')].find((e) => e.shadowRoot?.querySelector('.menu'));
+    const menu = raiz?.shadowRoot?.querySelector('.menu');
+    if (!menu) return (document.querySelector('#saida').textContent = 'menu não encontrado');
+    const c = menu.getBoundingClientRect();
+    const lista = menu.querySelector('ul');
+    document.querySelector('#saida').textContent = JSON.stringify(
+      {
+        tela: { largura: innerWidth, altura: innerHeight },
+        menu: { largura: Math.round(c.width), altura: Math.round(c.height), topo: Math.round(c.top) },
+        passaDaTela: Math.round(c.bottom - innerHeight),
+        lista: { rola: lista.scrollHeight > lista.clientHeight },
+      },
+      null,
+      2,
+    );
+  };
+</script>

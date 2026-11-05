@@ -232,3 +232,31 @@ test('o calendario e um so, e as tres ferramentas usam ele', () => {
       `agenda.js tem de carregar antes de ${quem}`,
     );
 });
+
+test('a caixa da agenda nao pode passar da largura do painel', () => {
+  // **Medido em 05/11/2026**, no ginásio: aberta, a caixa saía pela borda direita do painel e
+  // caía por cima da região de baixo. A causa era `inline-flex`, que pede a largura do conteúdo
+  // (`max-content`) e não a de quem hospeda — e com largura infinita o `flex-wrap` do corpo nunca
+  // tinha onde quebrar. Os cinco painéis que usam isto medem entre 240 e 260 px.
+  const fonte = readFileSync(new URL('../agenda.js', import.meta.url), 'utf8');
+  const caixa = fonte.slice(fonte.indexOf("'.ppx-ag { display:"));
+  const ate = caixa.slice(0, caixa.indexOf("'.ppx-ag-abre {"));
+  assert.doesNotMatch(ate, /inline-flex/, 'a caixa voltou a pedir a largura do conteúdo');
+  assert.match(ate, /max-width: 100%/, 'a caixa pode passar da largura do painel');
+  // O corpo também: sem isto ele cresce e a caixa cresce com ele.
+  const corpo = fonte.slice(fonte.indexOf("'.ppx-ag-corpo { display:"));
+  assert.match(corpo.slice(0, corpo.indexOf('",') + 1 || 400), /max-width: 100%/);
+  // E o resumo fechado cabe numa linha: "última sexta · 07:00-08:00, 19:00-20:00" quebrava o
+  // botão em três linhas. Cortado com reticências, e inteiro no title.
+  assert.match(fonte, /text-overflow: ellipsis/, 'o resumo voltou a quebrar o botão');
+  assert.match(fonte, /abre\.title = /, 'o resumo cortado ficou sem o título inteiro');
+});
+
+test('um painel que hospeda a agenda nao pode estreitar a propria coluna', () => {
+  // **Medido em 05/11/2026**: a genética punha a agenda num `display: grid`, e um item de grelha
+  // tem `min-width: auto` — a caixa aberta esticava a coluna e passava 7 px pela borda direita do
+  // painel. `minmax(0, 1fr)` é o que prende a coluna à largura de quem a contém.
+  const genetica = readFileSync(new URL('../genetica.js', import.meta.url), 'utf8');
+  const corpo = genetica.slice(genetica.indexOf('#lioncode-genetica .corpo{'));
+  assert.match(corpo.slice(0, corpo.indexOf('}')), /grid-template-columns:minmax\(0,1fr\)/);
+});

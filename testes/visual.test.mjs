@@ -97,3 +97,23 @@ test('nenhuma raiz de painel volta a escrever os valores a mao', () => {
       assert.doesNotMatch(raiz, new RegExp(hex), `${id} voltou a escrever ${hex} à mão`);
   }
 });
+
+test('o menu das ferramentas tambem tem largura e tecto', () => {
+  // Os doze painéis ganharam tecto em 30/10/2026 e o menu ficou de fora — e foi ele que falhou
+  // a seguir. **Medido na banca em 05/11/2026**, numa tela de 1172x830 com as dezoito ferramentas
+  // registadas: o menu media **1156x880**. Os nomes de um lado da tela e as chaves do outro,
+  // porque a largura era `auto` entre um `right` e um `left` que o navegador resolveu pela posição
+  // estática; e as primeiras entradas acima da borda de cima, porque dezoito ferramentas não cabem
+  // numa tela de portátil e nada as mandava rolar. Ver `testes/banca-menu.html`.
+  const nucleo = ler('nucleo.js');
+  const regra = nucleo.slice(nucleo.indexOf('.menu { display: none;'));
+  const corpo = regra.slice(0, regra.indexOf('}'));
+  assert.match(corpo, /width: \d+px/, 'a largura do menu voltou a ser auto');
+  assert.match(corpo, /max-height: calc\(100vh - \d+px\)/, 'o menu pode crescer para fora da tela');
+  // O tecto sozinho corta a lista em vez de a fazer rolar: quem tem tecto tem de ter rolagem, e
+  // um filho de flex só encolhe abaixo do conteúdo com `min-height: 0`.
+  const lista = nucleo.slice(nucleo.indexOf('.menu ul {'));
+  const corpoLista = lista.slice(0, lista.indexOf('}'));
+  assert.match(corpoLista, /overflow-y: auto/, 'a lista do menu não rola');
+  assert.match(corpoLista, /min-height: 0/, 'sem isto o tecto não produz rolagem nenhuma');
+});

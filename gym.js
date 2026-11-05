@@ -1075,14 +1075,16 @@ PPX.modulo(
         <div class="agenda">
           ${REGIOES.map(
             (r, i) => `
-          <div class="linha">
-            <span class="sinal" data-sinal="${r}" data-marcar="${r}"></span>
-            <label class="liga"><input type="checkbox" data-auto="${r}"> ${nomeDe(r)}</label>
+          <div class="regiao">
+            <div class="linha">
+              <span class="sinal" data-sinal="${r}" data-marcar="${r}"></span>
+              <label class="liga"><input type="checkbox" data-auto="${r}"> ${nomeDe(r)}</label>
+              <button type="button" class="ja" data-ir-regiao="${r}"
+                title="Fazer o ginásio de ${nomeDe(r)} agora">▶</button>
+            </div>
             <input type="text" data-horas="${r}" placeholder="${EXEMPLOS[i] || '12:00-13:00'}"
               title="Uma janela por vírgula. Dentro de cada uma ele age uma única vez.">
             <span data-agenda="${r}"></span>
-            <button type="button" class="ja" data-ir-regiao="${r}"
-              title="Fazer o ginásio de ${nomeDe(r)} agora">▶</button>
           </div>`,
           ).join('')}
           <div class="linha reset">
@@ -1165,18 +1167,29 @@ PPX.modulo(
       #lioncode-gym button:disabled { opacity: .5; cursor: default; }
       #lioncode-gym .agenda { display: flex; flex-direction: column; gap: 5px;
         border-top: 1px solid #202835; padding-top: 7px; }
+      /* CADA REGIAO SAO DUAS ALTURAS, e nao uma linha so'. Numa linha unica de 220 px uteis
+         sobravam cerca de 110 px para a caixa da agenda depois do ponto, do nome e do ▶ — o
+         resumo quebrava em duas linhas e a caixa aberta passava por cima da regiao de baixo
+         (visto em 05/11/2026). Em cima quem se le' de relance: o sinal, o nome e o ▶. Em baixo,
+         com a largura inteira, a caixa que so' se abre para configurar. */
+      #lioncode-gym .agenda .regiao { display: flex; flex-direction: column; gap: 4px;
+        min-width: 0; }
       #lioncode-gym .agenda .linha { display: flex; align-items: center; gap: 6px; }
+      #lioncode-gym .agenda .liga { flex: 1 1 auto; min-width: 0; }
       #lioncode-gym .agenda .liga { flex-direction: row; align-items: center; gap: 4px;
         color: #e7edf6; font-size: 12px; white-space: nowrap; }
       #lioncode-gym .agenda input[type="text"] {
         flex: 1; min-width: 0; background: #0d1219; color: #e7edf6; border: 1px solid #2a3244;
         border-radius: 5px; padding: 3px 5px; font: inherit; font-size: 12px;
       }
+      /* Dentro da caixa da agenda o rotulo e' uma coluna: ali o flex: 1 de cima valeria como
+         ALTURA e esticava o campo do horario. Largura inteira, altura natural. */
+      #lioncode-gym .agenda .ppx-ag-corpo input[type="text"] { flex: 0 0 auto; width: 100%; }
       /* Campo que o calendario nao entendeu: marcado, porque aceitar em silencio deixaria a
          agenda ligada sem nenhum dia marcado. */
       #lioncode-gym .agenda input.erro { border-color: #7a3b3b; color: #f3b9b9; }
       /* O editor da agenda ocupa a linha inteira: fechado e' um botao, aberto sao listas. */
-      #lioncode-gym .agenda [data-agenda] { flex: 1; min-width: 0; display: flex; }
+      #lioncode-gym .agenda [data-agenda] { display: flex; min-width: 0; max-width: 100%; }
       #lioncode-gym .agenda [data-agenda] .ppx-ag { flex: 1; min-width: 0; }
       /* O botao de ir de cada regiao: pequeno, porque a linha ja' esta' cheia, e presente nas
          duas casas em que a regiao aparece — na linha da agenda e no resumo minimizado. */

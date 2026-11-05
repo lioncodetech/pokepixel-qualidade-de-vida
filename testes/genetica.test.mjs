@@ -292,3 +292,19 @@ test('escrever um numero numa raridade desligada nao parte a faixa', () => {
     'o spread não parte de uma chave que pode não existir',
   );
 });
+
+test('as faixas sao pedidas ate o jogo responder, e nao uma vez so', () => {
+  // **Visto em 05/11/2026**, no painel do dono: só a épica, sem lendária nenhuma. A linha de uma
+  // raridade nasce da faixa que o jogo informa, e a pergunta era feita uma única vez no arranque —
+  // se o `PokemonCardData` ainda não estivesse montado, a resposta vinha vazia e a lendária não
+  // voltava a aparecer, nem reabrindo o painel. Perguntar uma vez era uma aposta na ordem de
+  // carregamento, e ela não é nossa para apostar.
+  const pedido = painel.slice(painel.indexOf("ponte({ acao: 'bandas' })") - 400);
+  const ate = pedido.slice(0, pedido.indexOf('})();') + 5);
+  assert.match(ate, /for \(let tentativa/, 'voltou a perguntar as faixas uma vez só');
+  // Resposta vazia é "ainda não", e não "já respondeu": sem esta condição o laço pararia na
+  // primeira resposta, que é exactamente o defeito de antes com mais passos.
+  assert.match(ate, /Object\.keys\(r\.bandas\)\.length/, 'uma resposta vazia parou o laço');
+  // E continua sem inventar: nenhum número de faixa escrito no painel.
+  assert.doesNotMatch(painel, /1\.55|1\.69/, 'o painel cravou uma faixa que é do jogo');
+});

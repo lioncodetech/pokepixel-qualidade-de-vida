@@ -336,22 +336,43 @@
     estiloPosto = true;
     const el = document.createElement('style');
     el.textContent = [
-      '.ppx-ag { display: inline-flex; flex-direction: column; gap: 4px; align-items: stretch; }',
+      // LARGURA. Os cinco paineis que usam isto medem entre 240 e 260 px. Em `inline-flex` a caixa
+      // pedia a largura do conteudo (`max-content`) em vez da do painel: aberta, as listas e o
+      // campo de horario passavam da borda e caiam por cima da linha de baixo — foi o que o dono
+      // viu no ginasio em 05/11/2026. `flex` com `max-width: 100%` prende a caixa a' largura de
+      // quem a hospeda, e so' entao o `flex-wrap` do corpo tem como fazer o seu trabalho.
+      '.ppx-ag { display: flex; flex-direction: column; gap: 4px; align-items: stretch;',
+      '  min-width: 0; max-width: 100%; }',
       '.ppx-ag-abre { background: #1d2433; color: #cfd6e4; border: 1px solid #2a3244;',
       '  border-radius: 6px; padding: 2px 7px; font: inherit; font-size: 12px; cursor: pointer;',
-      '  display: inline-flex; gap: 6px; align-items: center; text-align: left; }',
+      '  display: flex; gap: 6px; align-items: center; text-align: left; min-width: 0;',
+      '  max-width: 100%; }',
       '.ppx-ag-abre:hover { border-color: #3d4860; }',
-      '.ppx-ag-abre .seta { color: #7f8ba1; margin-left: auto; }',
+      // O resumo cabe numa linha so': "ultima sexta · 07:00-08:00, 19:00-20:00" quebrava o botao
+      // em duas e tres linhas e empurrava tudo. Cortado com reticencias, e inteiro no `title`.
+      '.ppx-ag-abre > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden;',
+      '  text-overflow: ellipsis; white-space: nowrap; }',
+      '.ppx-ag-abre .seta { color: #7f8ba1; flex: 0 0 auto; }',
       '.ppx-ag-corpo { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;',
-      '  background: #10151e; border: 1px solid #2a3244; border-radius: 7px; padding: 7px; }',
+      '  background: #10151e; border: 1px solid #2a3244; border-radius: 7px; padding: 7px;',
+      '  max-width: 100%; }',
       '.ppx-ag-corpo[hidden] { display: none; }',
       '.ppx-ag-corpo label { display: flex; flex-direction: column; gap: 3px; font-size: 11px;',
-      '  color: #8b97a8; }',
-      '.ppx-ag-corpo label[hidden] { display: none; }',
+      '  color: #8b97a8; min-width: 0; max-width: 100%; }',
+      // O `!important` NAO E' PREGUICA. Cada painel poe uma regra `#lioncode-x label { display:
+      // flex }` com **id**, e id ganha a uma regra de classe: o esconder deste componente era
+      // desfeito por quem o hospeda. O ginásio corrigiu isso em casa, com `#lioncode-gym [hidden]`;
+      // os outros quatro não, e em 05/11/2026 o rampage mostrava as três listas ao mesmo tempo com
+      // "repetir: dias do mês". Corrigir uma vez aqui vale mais do que a mesma linha em cinco
+      // paineis — e é o componente a defender o que é dele.
+      '.ppx-ag-corpo label[hidden] { display: none !important; }',
       '.ppx-ag-corpo select, .ppx-ag-corpo input { background: #0d1219; color: #e7edf6;',
       '  border: 1px solid #2a3244; border-radius: 5px; padding: 3px 5px; font: inherit;',
-      '  font-size: 12px; }',
-      '.ppx-ag-corpo select[multiple] { padding: 2px; }',
+      '  font-size: 12px; min-width: 0; max-width: 100%; }',
+      // As listas de dias ocupam a largura toda da caixa: sao sete e trinta e uma opcoes, e ao
+      // lado de outro controle ficavam estreitas demais para se ler o nome do dia.
+      '.ppx-ag-corpo label:has(select[multiple]) { flex: 1 1 100%; }',
+      '.ppx-ag-corpo select[multiple] { padding: 2px; width: 100%; }',
     ].join('\n');
     document.head.append(el);
   };
@@ -454,7 +475,11 @@
     const marcados = (lista) => [...lista.selectedOptions].map((o) => o.value);
 
     const resumir = () => {
-      linha.textContent = (resumoDe ? resumoDe(campo.value) : '') || 'todo dia';
+      const texto = (resumoDe ? resumoDe(campo.value) : '') || 'todo dia';
+      linha.textContent = texto;
+      // O botao corta o resumo com reticencias quando o painel e' estreito; o `title` guarda-o
+      // inteiro, senao uma agenda com dois horarios ficaria ilegivel sem abrir a caixa.
+      abre.title = `${texto} — clique para configurar`;
     };
 
     // "A cada tantos minutos" nao tem dia nenhum para escolher. O painel diz por aqui se os dias

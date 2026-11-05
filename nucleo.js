@@ -462,8 +462,24 @@
       opacity: .82; transition: opacity .15s;
     }
     .menu:hover, .menu:focus-within, .aba:hover, .aba:focus { opacity: 1; }
-    .menu { display: none; flex-direction: column; min-width: 232px; }
+    /* LARGURA ESCRITA, E TECTO. Medido na banca em 05/11/2026, numa tela de 1172x830 com as
+       dezoito ferramentas registadas: o menu media **1156x880** — a largura inteira da tela e
+       cinquenta pixels mais alto do que ela. Os nomes ficavam de um lado e as chaves do outro,
+       a meia tela de distância, e as primeiras entradas saíam por cima da borda de cima
+       (top: -106). Duas causas, as duas aqui:
+
+       - a largura era auto entre um right: 14px e um left que o navegador resolveu pela
+         posição estática, e não pelo conteúdo. Uma largura escrita acaba com a ambiguidade;
+       - a lista não tinha tecto. Dezoito ferramentas não cabem numa tela de portátil, e sem
+         max-height o menu crescia para fora dela em vez de rolar. O --ppx-teto é o mesmo
+         que todos os painéis usam.
+
+       O min-height: 0 da lista não é enfeite: sem ele um filho de flex recusa-se a encolher
+       abaixo do próprio conteúdo, e o tecto não produziria rolagem nenhuma. */
+    .menu { display: none; flex-direction: column; width: 320px; max-height: calc(100vh - 72px); }
     .menu.aberto { display: flex; }
+    .menu ul { overflow-y: auto; min-height: 0; overscroll-behavior: contain;
+      scrollbar-width: thin; scrollbar-color: #3a4152 transparent; }
     .cabeca {
       display: flex; align-items: center; gap: 6px;
       padding: 6px 8px; border-bottom: 1px solid #3a4152; user-select: none;

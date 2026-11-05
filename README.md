@@ -60,6 +60,14 @@ janela em que você está.
 **Alt+Q** abre e fecha o menu. Fechado, fica só o botão `PokePixel` no canto.
 **Alt+Z** esconde todas as janelas de uma vez; **Alt+X** traz de volta as que estavam à vista.
 
+O menu tem largura escrita e tecto, e a lista das ferramentas rola dentro dele. As duas coisas são
+de uma falha medida em 05/11/2026, numa tela de 1172×830 com as dezoito registadas: ele media
+**1156×880** — a largura inteira da tela e mais alto do que ela. Os nomes ficavam de um lado e as
+chaves do outro, e as primeiras entradas saíam por cima da borda de cima. A largura era `auto`
+entre um `right` e um `left` que o navegador resolveu pela posição estática, e não pelo conteúdo;
+e dezoito ferramentas não cabem numa tela de portátil sem rolagem. `testes/banca-menu.html` mostra
+o menu cheio sem o jogo por baixo, que foi a única forma de ver isto.
+
 | ferramenta | o que faz | atalhos |
 | --- | --- | --- |
 | Ocultar popups | esconde os popups que aparecem ao passar o mouse | Alt+B esconde · Alt+N mostra |
@@ -1350,6 +1358,12 @@ jogo o mudar. Hoje são: fraca 0,90–0,99, comum 1,00–1,09, incomum 1,10–1,
 1,40–1,54, lendária 1,55–1,69. A **mítica não tem faixa** neste jogo, e por isso não vira linha
 enquanto não aparecer uma.
 
+A pergunta ao jogo é feita **até ele responder**, de dois em dois segundos. Perguntar uma vez só, no
+arranque, era uma aposta na ordem de carregamento — e ela falhou: em 05/11/2026 o painel do dono
+mostrava a épica sozinha, sem lendária nenhuma, porque o `PokemonCardData` ainda não estava montado
+no instante em que a extensão subiu. A linha de uma raridade nasce da faixa que o jogo informa, e
+sem nova pergunta a lendária não voltava a aparecer — nem reabrindo o painel, nem no dia seguinte.
+
 Shiny, travado ("Protegido") e o que está na equipe ficam de fora **sempre**, mesmo que caibam no
 número.
 
@@ -2550,6 +2564,24 @@ consequência boa: **o calendário não mudou nada**, os testes de mesa continua
 tinha escrito à mão não perde nada — as listas leem de volta. Uma mistura que as listas não sabem
 representar (`seg, 15`, escrito à mão numa versão anterior) não é sobrescrita: apagar em silêncio o
 que a pessoa montou seria pior do que não oferecer o controle.
+
+### Larga, mas nunca mais larga do que o painel
+
+"Pode ser larga" não é "pode ser infinita", e em 05/11/2026 foi. A caixa pedia a largura do
+**conteúdo** em vez da do painel, e os cinco painéis que a usam medem entre 240 e 260 px: aberta no
+Ginásio, ela saía pela borda direita e caía por cima da região de baixo. Com largura infinita, a
+quebra de linha da caixa nunca tinha onde quebrar.
+
+Agora ela está presa à largura de quem a hospeda, o resumo fechado cabe numa linha só — cortado com
+reticências, e inteiro ao parar o mouse em cima — e cada região do Ginásio ocupa **duas alturas**:
+em cima o que se lê de relance (o sinal, o nome, o ▶), em baixo e com a largura inteira a caixa que
+só se abre para configurar.
+
+No mesmo dia apareceu um defeito vizinho, e com a mesma raiz: cada painel tem uma regra
+`#lioncode-x label` com **id**, e id ganha a uma regra de classe — o esconder das listas de dias era
+desfeito por quem hospeda a caixa, e o Rampage mostrava as **três** listas ao mesmo tempo. O Ginásio
+já tinha corrigido isso em casa; agora é o componente que defende o que é dele, uma vez só, em vez
+de cinco painéis terem de se lembrar.
 
 O campo de horários continua sendo texto, como sempre foi: `20:00-21:00`, e aceita mais de uma
 janela por vírgula.

@@ -803,7 +803,28 @@ test('o painel nao pode desfazer o esconder da agenda partilhada', () => {
   // e ganha à `.ppx-ag-corpo label[hidden]` da agenda, que só tem classes. É preciso uma regra
   // com id a devolver o esconder, senão o painel estraga um componente que não é dele.
   assert.match(codigo, /#lioncode-gym \[hidden\] \{ display: none; \}/);
-  // E a agenda continua a ser de todos: a correcção é do painel, não do componente.
+  // E a agenda defende o que é dela. O ginásio corrigiu isto em casa; os outros quatro painéis
+  // não, e em **05/11/2026** o rampage mostrava as três listas de dias ao mesmo tempo. Cada painel
+  // tem uma regra `#lioncode-x label` com id, que ganha a uma regra de classe — só o `!important`
+  // devolve o esconder sem obrigar os cinco a lembrar-se dele.
   const agenda = readFileSync(new URL('../agenda.js', import.meta.url), 'utf8');
-  assert.match(agenda, /\.ppx-ag-corpo label\[hidden\] \{ display: none; \}/);
+  assert.match(agenda, /\.ppx-ag-corpo label\[hidden\] \{ display: none !important; \}/);
+});
+
+test('cada regiao da agenda ocupa duas alturas, e nao uma linha so', () => {
+  // **Medido em 05/11/2026**: numa linha única sobravam ~110 px para a caixa da agenda depois do
+  // ponto, do nome e do ▶ num painel de 240. O resumo quebrava em duas linhas e a caixa aberta
+  // passava por cima da região de baixo. Em cima o que se lê de relance; em baixo, com a largura
+  // inteira, a caixa que só se abre para configurar.
+  assert.match(codigo, /<div class="regiao">/, 'a região voltou a ser uma linha só');
+  const linha = codigo.slice(codigo.indexOf('<div class="regiao">'));
+  const ate = linha.slice(0, linha.indexOf('</div>`'));
+  const pontoNa = ate.indexOf('class="sinal"');
+  const irNa = ate.indexOf('data-ir-regiao');
+  const agendaNa = ate.indexOf('data-agenda=');
+  assert.ok(pontoNa < irNa, 'o sinal e o ▶ deixaram de partilhar a linha de cima');
+  assert.ok(irNa < agendaNa, 'a caixa da agenda voltou para dentro da linha do nome');
+  // E ela deixou de disputar a linha com o resto: nada de flex: 1 a competir com o nome.
+  const regra = codigo.slice(codigo.indexOf('#lioncode-gym .agenda [data-agenda] {'));
+  assert.match(regra.slice(0, regra.indexOf('}')), /max-width: 100%/);
 });

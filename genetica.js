@@ -252,7 +252,7 @@ PPX.modulo(
       #lioncode-genetica header{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #2a3244;cursor:move}
       #lioncode-genetica header strong{flex:1;font-size:13px}
       #lioncode-genetica header button{border:0;background:none;color:#8b97a8;font-size:16px;cursor:pointer;padding:0 2px}
-      #lioncode-genetica .corpo{display:grid;gap:8px;padding:10px}
+      #lioncode-genetica .corpo{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:10px}
       #lioncode-genetica.minimizado .corpo{display:none}
       #lioncode-genetica .campo{display:flex;align-items:center;gap:6px;color:#c3ccda}
       #lioncode-genetica .caixa{display:flex;align-items:center;gap:6px;color:#c3ccda;font-size:12px}
@@ -852,14 +852,24 @@ PPX.modulo(
     desenharJanela();
     globalThis.PPX?.controlar?.('genetica', mostrar);
     mostrar(globalThis.PPX?.visivel?.('genetica') !== false);
-    // As faixas de cada raridade são do jogo, não desta ferramenta: pedem-se uma vez, no
-    // arranque, e as linhas do painel nascem delas. Enquanto não chegarem, só se vê o que o dono
-    // já escolheu — nunca um número inventado aqui.
+    // As faixas de cada raridade são do jogo, não desta ferramenta — nunca um número inventado
+    // aqui. Mas perguntar **uma vez só** era uma aposta, e ela falhou: em 05/11/2026 o painel do
+    // dono mostrava a épica sozinha, sem lendária nenhuma, porque a resposta veio vazia. O
+    // `PokemonCardData` do jogo pode ainda não estar montado quando a extensão sobe, e sem nova
+    // pergunta a lendária não aparecia mais — nem reabrindo o painel, nem no dia seguinte.
+    //
+    // Então pergunta-se até o jogo responder: de dois em dois segundos, por dois minutos. Quem
+    // responde vazio não é erro, é "ainda não"; quem nunca responder deixa o painel exactamente
+    // como estava, com o que o dono já tinha escolhido.
     void (async () => {
-      const r = await ponte({ acao: 'bandas' });
-      if (r?.bandas && typeof r.bandas === 'object') {
-        bandas = r.bandas;
-        desenhar();
+      for (let tentativa = 0; tentativa < 60; tentativa += 1) {
+        const r = await ponte({ acao: 'bandas' });
+        if (r?.bandas && typeof r.bandas === 'object' && Object.keys(r.bandas).length) {
+          bandas = r.bandas;
+          desenhar();
+          return;
+        }
+        await new Promise((pronto) => setTimeout(pronto, 2000));
       }
     })();
     if (cfg.ligada) dizer('Agenda ligada. Dentro da janela eu procuro e extraio sozinha.');
