@@ -326,11 +326,18 @@ PPX.modulo(
      */
     const voltarParaEscolha = async () => {
       if (naEscolha()) return true;
-      if (noSorteio()) {
+      if (janela()) {
+        // **Esperar o botão, não espiar uma vez.** O jogo vira as cartas uma a uma, por conta
+        // própria — não é animação de CSS, é o JavaScript dele —, e os botões do sorteio só
+        // entram no fim. Procurar uma vez só e desistir dava "não consegui chegar à tela de
+        // escolha" com o COMPRAR NOVAMENTE visível na tela: relatado em 17/11/2026, num lote de
+        // 10, que demora dez vezes mais a abrir do que o lote de 1 em que isto foi escrito.
+        await ate(() => naEscolha() || Boolean(botaoDoSorteio('COMPRAR NOVAMENTE')), 30000);
+        if (naEscolha()) return true;
         const outra = botaoDoSorteio('COMPRAR NOVAMENTE');
         if (outra) {
           outra.click();
-          if (await ate(() => naEscolha(), 6000)) return true;
+          if (await ate(() => naEscolha(), 8000)) return true;
         }
       }
       if (!janela()) {

@@ -84,6 +84,22 @@ test('para sair do sorteio usa COMPRAR NOVAMENTE, nunca o FECHAR', () => {
   assert.ok(!/botaoDoSorteio\('FECHAR'\)/.test(codigo), 'o FECHAR fecha o Cassino inteiro');
 });
 
+test('espera o botão do sorteio aparecer em vez de espiar uma vez e desistir', () => {
+  // O jogo vira as cartas uma a uma, pelo próprio JavaScript — não há animação de CSS para
+  // desligar (medido: `animation: none` em tudo). Os botões do sorteio só entram no fim, e um
+  // lote de 10 demora dez vezes mais do que o lote de 1 em que isto foi escrito. Procurar uma vez
+  // só dava "não consegui chegar à tela de escolha" com o COMPRAR NOVAMENTE visível na tela,
+  // depois de apenas 10 dos 500 pedidos. Relatado em 17/11/2026.
+  assert.match(
+    codigo,
+    /await ate\(\(\) => naEscolha\(\) \|\| Boolean\(botaoDoSorteio\('COMPRAR NOVAMENTE'\)\), 30000\);/,
+  );
+  // E a espera vem ANTES de procurar o botão para clicar, senão não serviria de nada.
+  const espera = codigo.indexOf("Boolean(botaoDoSorteio('COMPRAR NOVAMENTE'))");
+  const clique = codigo.indexOf("const outra = botaoDoSorteio('COMPRAR NOVAMENTE');");
+  assert.ok(espera > 0 && espera < clique, 'a espera tem de vir antes do clique');
+});
+
 test('pede a vez antes de agir, como toda automação deste repositório', () => {
   assert.match(codigo, /const MINHA_VEZ = 'cassino'/);
   assert.match(codigo, /vez\.pedir\(MINHA_VEZ\)/);

@@ -2736,6 +2736,13 @@ Depois de cada compra o jogo mostra as Eevees sorteadas e oferece **COMPRAR NOVA
 - **FECHAR fecha o Cassino inteiro**, não o sorteio. A janela some e só o NPC a traz de volta. Ela
   nunca usa esse botão.
 
+### A espera entre uma compra e a seguinte
+
+O jogo vira as cartas do sorteio uma a uma, por conta própria, e os botões só aparecem no fim —
+um lote de 10 demora dez vezes mais do que um lote de 1. Não é animação de CSS e não há como
+encurtar de fora: ela espera o botão aparecer, até meio minuto, em vez de desistir achando que a
+tela não respondeu.
+
 ### Como ela sabe que acabou o dinheiro
 
 Lendo o saldo antes de cada rodada. Se o saldo não paga nem um Eevee, ela para e diz onde parou.
