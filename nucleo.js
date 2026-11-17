@@ -290,6 +290,7 @@
     { id: 'genetica', nome: 'Genética', atalhos: 'configuração pelo menu (Alt+Q)' },
     { id: 'expedicao', nome: 'Expedição', atalhos: 'configuração pelo menu (Alt+Q)' },
     { id: 'awakening', nome: 'Awakening', atalhos: 'configuração pelo menu (Alt+Q)' },
+    { id: 'cassino', nome: 'Cassino', atalhos: 'configuração pelo menu (Alt+Q)' },
   ];
   const modulos = CATALOGO.map((f) => ({ ...f, iniciar: null, vivo: false, erro: '' }));
   let montado = false;

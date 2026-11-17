@@ -2707,6 +2707,52 @@ feita. Uma participação já confirmada e uma posição já ocupada na fila
 não são clicadas novamente. Quando a vaga for liberada, o próprio sistema de fila do jogo conclui a
 entrada. Quando a raid termina, a extensão restaura o time anterior e retoma a mesma caçada.
 
+## Cassino: comprar Eevees até a quantidade que você pedir
+
+Você diz quantos Eevees quer e ela compra, parando sozinha quando o dinheiro acaba.
+
+O Cassino vende uma Eevee de raridade sorteada por **250.000 dólares**, e o seletor dele aceita
+**no máximo 10 por compra**. Então 25 Eevees são três compras — 10, 10 e 5 —, e é assim que ela faz.
+
+**O Cassino precisa estar aberto no jogo**, com o seu personagem ao lado do NPC. Ela não leva o seu
+boneco a lugar nenhum: andar pelo mapa é coisa sua, e uma ferramenta que mexesse no seu personagem
+faria coisas que você não viu pedir.
+
+### A confirmação é onde ela desconfia
+
+Clicar em COMPRAR EEVEE não compra: o jogo abre uma caixa perguntando *"Comprar 10 Eevee
+misteriosas por 2.500.000 dólares?"*. Ela confirma — mas **só uma caixa cuja quantidade escrita
+bate com a que aquele clique pediu**. Uma caixa dizendo 10 quando se pediu 5 é cancelada e a
+compra para: ou a tela mudou por baixo, ou há outra coisa ali, e nos dois casos confirmar seria
+assinar sem ler. Cada unidade são 250.000.
+
+### Os dois botões do sorteio
+
+Depois de cada compra o jogo mostra as Eevees sorteadas e oferece **COMPRAR NOVAMENTE** e
+**FECHAR**. O nome do primeiro engana, e para o seu lado:
+
+- **COMPRAR NOVAMENTE não cobra.** Ele devolve a tela de escolha com a última quantidade posta. É
+  por aí que ela continua, e é de graça;
+- **FECHAR fecha o Cassino inteiro**, não o sorteio. A janela some e só o NPC a traz de volta. Ela
+  nunca usa esse botão.
+
+### Como ela sabe que acabou o dinheiro
+
+Lendo o saldo antes de cada rodada. Se o saldo não paga nem um Eevee, ela para e diz onde parou.
+Ela **não** tenta comprar para ver se o jogo recusa: um erro no meio de uma compra é ambíguo demais
+para servir de sinal, e tentar é arriscar comprar sem querer.
+
+E a conta de quantos foram comprados vem do **saldo que saiu**, não dos cliques que ela deu. Se o
+saldo não mexeu, ela para e avisa em vez de seguir contando o que não aconteceu — foi o que
+aconteceu no primeiro teste real, e ela disse "parei em 0" em vez de inventar 10.
+
+### O que ela nunca toca
+
+A loja de diamantes mora escondida no mesmo DOM do jogo, e os botões dela também dizem "Comprar".
+Por isso aqui nada é procurado por texto solto na página nem por posição na tela: tudo é procurado
+**dentro da janela do Cassino**, pela classe própria dela. A máquina de apostas continua fora do
+alcance, como em todo o pacote.
+
 ## A fila: uma ferramenta de cada vez
 
 Três relógios automáticos vivem neste pacote — a venda, a compra e o ginásio. Até aqui cada

@@ -121,6 +121,7 @@ const NA_FILA = [
   'genetica.js',
   'expedicao.js',
   'awakening.js',
+  'cassino.js',
 ];
 
 /**

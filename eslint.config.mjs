@@ -51,6 +51,7 @@ export default [
         Element: 'readonly',
         HTMLElement: 'readonly',
         HTMLInputElement: 'readonly',
+        HTMLSelectElement: 'readonly',
         ShadowRoot: 'readonly',
         NodeFilter: 'readonly',
         // A API da propria extensao, usada por `senha.js`.
