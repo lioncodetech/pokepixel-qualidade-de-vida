@@ -133,6 +133,29 @@ test('a janela conta como aberta pelo tamanho, não pela presença no DOM', () =
   assert.match(codigo, /getBoundingClientRect\(\)\.width > 0 \? j : null/);
 });
 
+test('o painel não reescreve o campo enquanto o dono está digitando', () => {
+  // Ele redesenha-se de dois em dois segundos, e o campo só é guardado ao sair dele: reescrever no
+  // meio da digitação apagava o que estava a ser escrito, e um "25" voltava a 10 antes do fim.
+  // Relatado em 17/11/2026 — a ferramenta era inusável acima de dez por causa disto.
+  assert.match(codigo, /if \(document\.activeElement !== entrada\) entrada\.value = cfg\.quantos;/);
+});
+
+test('a digitação é acompanhada, e os limites valem ao sair do campo', () => {
+  // Dois ouvintes, de propósito: o `input` faz o custo na tela seguir o que está escrito, e o
+  // `change` fecha a conta. Prender ao limite já no `input` faria o "2" de "25" virar outra coisa
+  // antes de o 5 ser escrito.
+  assert.match(codigo, /addEventListener\('input'/);
+  assert.match(codigo, /addEventListener\('change'/);
+  assert.match(codigo, /if \(e\.target\.value === ''\) return;/);
+  const limites = /const lerCampo = [\s\S]*?\);\n/.exec(codigo)?.[0];
+  assert.ok(limites, 'não achei lerCampo');
+  const lerCampo = new Function(`const TETO_PEDIDO = 500; ${limites} return lerCampo;`)();
+  assert.equal(lerCampo('25'), 25);
+  assert.equal(lerCampo('0'), 1, 'zero Eevees não é um pedido');
+  assert.equal(lerCampo('abc'), 1);
+  assert.equal(lerCampo('9999'), 500, 'o teto existe porque aqui o dígito a mais custa caro');
+});
+
 test('está no pacote e no menu, senão não existe para quem usa', () => {
   assert.match(ler('manifest.json'), /"cassino\.js"/);
   assert.match(ler('nucleo.js'), /\{ id: 'cassino', nome: 'Cassino'/);

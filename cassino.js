@@ -286,7 +286,12 @@ PPX.modulo(
     let ultimoPreco = 0;
 
     const desenhar = () => {
-      campo('[data-quantos]').value = cfg.quantos;
+      // **Nunca enquanto o dono está digitando.** Este painel redesenha-se sozinho de dois em dois
+      // segundos, e o campo é guardado só ao sair dele: reescrevê-lo no meio da digitação apagava
+      // o que estava a ser escrito, e um "25" voltava a 10 antes de chegar ao fim. Relatado em
+      // 17/11/2026, e era isto.
+      const entrada = campo('[data-quantos]');
+      if (document.activeElement !== entrada) entrada.value = cfg.quantos;
       campo('[data-comprar]').disabled = correndo;
       campo('[data-parar]').disabled = !correndo;
       const quadro = campo('[data-conta]');
@@ -424,10 +429,25 @@ PPX.modulo(
 
     // -------------------------------------------------------------- ouvintes
 
-    campo('[data-quantos]').addEventListener('change', (e) => {
-      const n = Math.round(Number(e.target.value) || 0);
-      cfg.quantos = Math.max(1, Math.min(TETO_PEDIDO, n));
+    /**
+     * O que foi digitado, preso aos limites. Vazio e lixo valem 1, e nunca passa do teto.
+     */
+    const lerCampo = (valor) =>
+      Math.max(1, Math.min(TETO_PEDIDO, Math.round(Number(valor) || 0) || 1));
+
+    // `input` acompanha a digitação para o custo na tela ser o do número que está no campo; o
+    // `change` é quem fecha a conta ao sair, e é ele que põe o valor de volta se foi escrito algo
+    // impossível. Separar os dois é o que permite escrever "25" sem o "2" já virar outra coisa.
+    campo('[data-quantos]').addEventListener('input', (e) => {
+      if (e.target.value === '') return;
+      cfg.quantos = lerCampo(e.target.value);
       gravar();
+      desenhar();
+    });
+    campo('[data-quantos]').addEventListener('change', (e) => {
+      cfg.quantos = lerCampo(e.target.value);
+      gravar();
+      e.target.value = cfg.quantos;
       desenhar();
     });
     campo('[data-comprar]').addEventListener('click', () => void comprar());
