@@ -142,6 +142,8 @@ const FORA = {
   'tipos.js':
     'conta pura: recebe números e devolve qual caçada serve — não lê o jogo, não viaja, não clica',
   'sem-grafico.js': 'esconde o desenho do jogo, não interage com ele',
+  'cassino-main.js':
+    'troca a animação do sorteio pelo atalho que o próprio jogo usa com movimento reduzido; não clica, não compra, não abre janela — quem age é o cassino.js, que pede a vez',
   'ocultar-popups.js': 'fecha popups, não abre janela nem clica em ação do jogo',
   'layout-padrao.js': 'arruma as janelinhas, a pedido',
   'raridades.js': 'só lê a coleção pela API, não clica em nada',

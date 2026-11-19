@@ -26,6 +26,7 @@ const semComentarios = (texto) =>
     .join('\n');
 
 const codigo = semComentarios(ler('cassino.js'));
+const mundo = semComentarios(ler('cassino-main.js'));
 
 /** A conta que decide gastar, extraída e executada de verdade — não é uma cópia reescrita aqui. */
 const corpo = /const planoDeCompra = [\s\S]*?\n    \};/.exec(codigo)?.[0];
@@ -173,6 +174,50 @@ test('a digitação é acompanhada, e os limites valem ao sair do campo', () => 
 });
 
 test('está no pacote e no menu, senão não existe para quem usa', () => {
-  assert.match(ler('manifest.json'), /"cassino\.js"/);
+  const manifesto = ler('manifest.json');
+  assert.match(manifesto, /"cassino\.js"/);
+  assert.match(manifesto, /"cassino-main\.js"/);
   assert.match(ler('nucleo.js'), /\{ id: 'cassino', nome: 'Cassino'/);
+});
+
+test('pular a animação vem desligado: isto troca uma função do jogo', () => {
+  // O resto do pacote clica onde o dono clicaria e não muda uma vírgula do jogo. Esta é a única
+  // peça que substitui código dele, e ligá-la por omissão seria tomar essa decisão por ele.
+  assert.match(codigo, /const PADRAO = \{ quantos: 10, pularAnimacao: false \};/);
+  // E um arquivo de configuração importado também não a liga por acidente: só `true` vale.
+  assert.match(codigo, /cfg\.pularAnimacao = dados\?\.pularAnimacao === true;/);
+});
+
+test('a decisão é lida a cada carta, para desmarcar valer na hora', () => {
+  // Ler uma vez no arranque faria a caixinha só valer depois de um F5 — e quem a desmarca no meio
+  // de uma compra está a dizer "quero ver as cartas agora".
+  assert.match(mundo, /if \(!pular\(\)\) return original\.call\(this, card, shinyResult\);/);
+  assert.match(mundo, /const pular = \(\) => \{/);
+  // Sem conseguir ler a escolha, o jogo fica como o jogo é.
+  assert.match(mundo, /catch \{\n\s*\n?\s*return false;/);
+});
+
+test('o atalho posto no lugar é a cópia do que o próprio jogo faz', () => {
+  // `casinoReveal` começa com `if (!card || motionReduced()) { card.classList.add("is-revealed");
+  // resolve(); return; }`. Pôr ali qualquer outra coisa seria inventar um comportamento que o jogo
+  // não tem — e a carta ficaria num estado que o resto da tela não espera.
+  assert.match(mundo, /if \(card\) card\.classList\.add\('is-revealed'\);/);
+  assert.match(mundo, /return Promise\.resolve\(\);/);
+});
+
+test('substitui uma função só, e guarda a original', () => {
+  // Evolução, shiny, nível, pesca e as outras continuam como o jogo as escreveu.
+  assert.equal(mundo.match(/AnimeFX/g)?.length, 1, 'só o acesso ao objeto, nada mais');
+  // Quatro usos, e só estes: conferir que é função, comparar com a nossa, guardar a original e
+  // atribuir a substituta. Qualquer quinto é uma função do jogo a mais a ser tocada.
+  assert.equal(mundo.match(/casinoReveal/g)?.length, 4);
+  assert.match(mundo, /original = fx\.casinoReveal;/);
+  // A original é relida a cada vestida: o jogo reatribui `PI.AnimeFX` inteiro ao carregar, e
+  // guardar a primeira que vimos poria uma função velha de volta.
+  assert.match(mundo, /if \(fx\.casinoReveal === nossa\) return;/);
+  assert.match(mundo, /setInterval\(vestir, 2000\);/);
+});
+
+test('a ferramenta desligada no menu não troca função nenhuma', () => {
+  assert.match(mundo, /if \(!ligado\('cassino'\)\) return;/);
 });

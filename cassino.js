@@ -55,7 +55,9 @@ PPX.modulo(
     const ACOES = '.npc-casino-results__actions';
     const DIALOGO = '.pokeidle-dialog-overlay';
 
-    const PADRAO = { quantos: 10 };
+    // `pularAnimacao` começa **desligado**: ela troca uma função do jogo, e isso não é coisa que
+    // se liga por omissão em nome de quem usa. Quem a marca está a dizer que quer.
+    const PADRAO = { quantos: 10, pularAnimacao: false };
 
     const ler = (chave, padrao) => {
       try {
@@ -245,6 +247,9 @@ PPX.modulo(
           <input type="number" min="1" max="${TETO_PEDIDO}" step="1" data-quantos>
         </label>
         <div class="quadro" data-conta>Abra o Cassino para ver o preço.</div>
+        <label class="caixa" title="Troca a animação do sorteio pelo atalho que o próprio jogo usa com movimento reduzido. Um lote de 10 leva ~17 segundos a virar.">
+          <input type="checkbox" data-pular> Pular a animação do sorteio
+        </label>
         <div class="botoes">
           <button type="button" data-comprar>Comprar</button>
           <button type="button" data-parar disabled>Parar</button>
@@ -267,6 +272,8 @@ PPX.modulo(
       #lioncode-cassino .quadro{border:1px solid #2a3244;border-radius:6px;padding:7px;font-size:12px;color:#c3ccda;display:grid;gap:3px}
       #lioncode-cassino .quadro b{color:#e7edf6}
       #lioncode-cassino .quadro .mau{color:#f0a0a0}
+      #lioncode-cassino .caixa{display:flex;align-items:center;gap:6px;color:#c3ccda;font-size:12px;cursor:pointer}
+      #lioncode-cassino .caixa input{flex:none;margin:0}
       #lioncode-cassino .botoes{display:flex;gap:6px}
       #lioncode-cassino .botoes button{flex:1;cursor:pointer;border:1px solid #2a3244;border-radius:6px;background:#182030;color:#e7edf6;padding:6px}
       #lioncode-cassino .botoes button:disabled{opacity:.45;cursor:default}
@@ -292,6 +299,7 @@ PPX.modulo(
       // 17/11/2026, e era isto.
       const entrada = campo('[data-quantos]');
       if (document.activeElement !== entrada) entrada.value = cfg.quantos;
+      campo('[data-pular]').checked = cfg.pularAnimacao === true;
       campo('[data-comprar]').disabled = correndo;
       campo('[data-parar]').disabled = !correndo;
       const quadro = campo('[data-conta]');
@@ -457,6 +465,10 @@ PPX.modulo(
       e.target.value = cfg.quantos;
       desenhar();
     });
+    campo('[data-pular]').addEventListener('change', (e) => {
+      cfg.pularAnimacao = e.target.checked === true;
+      gravar();
+    });
     campo('[data-comprar]').addEventListener('click', () => void comprar());
     campo('[data-parar]').addEventListener('click', () => {
       parar = true;
@@ -468,15 +480,16 @@ PPX.modulo(
       nome: 'Cassino',
       // Só a quantidade viaja. Saldo e preço são o retrato desta conta, e um retrato alheio na
       // tela é um número que não é de ninguém.
-      coletar: () => ({ quantos: cfg.quantos }),
+      coletar: () => ({ quantos: cfg.quantos, pularAnimacao: cfg.pularAnimacao }),
       aplicar: (dados) => {
         if (correndo) throw new Error('espere a compra terminar antes de importar');
         const n = Math.round(Number(dados?.quantos) || 0);
-        if (n >= 1 && n <= TETO_PEDIDO) {
-          cfg.quantos = n;
-          gravar();
-          desenhar();
-        }
+        if (n >= 1 && n <= TETO_PEDIDO) cfg.quantos = n;
+        // Só `true` liga: um arquivo com lixo nesse campo não pode acabar a trocar uma função do
+        // jogo sem ninguém ter marcado nada.
+        cfg.pularAnimacao = dados?.pularAnimacao === true;
+        gravar();
+        desenhar();
       },
       avisar: dizer,
     });

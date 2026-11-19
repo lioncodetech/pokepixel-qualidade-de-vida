@@ -2743,6 +2743,23 @@ um lote de 10 demora dez vezes mais do que um lote de 1. Não é animação de C
 encurtar de fora: ela espera o botão aparecer, até meio minuto, em vez de desistir achando que a
 tela não respondeu.
 
+### Pular a animação do sorteio
+
+Uma caixinha no painel, **desligada por padrão**. Marcada, as cartas aparecem viradas na hora.
+
+Ela é o único lugar deste pacote que **substitui uma função do jogo** — e por isso vem desligada e
+está escrita aqui em vez de acontecer calada. O que entra no lugar é a cópia exata do atalho que o
+próprio jogo já usa: a primeira linha da animação dele é "se o movimento estiver reduzido, mostre
+a carta e saia". Quem liga **Efeitos de animação → desligado** nas configurações de acessibilidade
+do Windows consegue o mesmo efeito sem extensão nenhuma, só que para todos os sites.
+
+Desmarcar vale na hora, inclusive no meio de uma compra: a escolha é lida a cada carta, não uma vez
+ao abrir o jogo. E só o sorteio do Cassino é trocado — evolução, shiny, subida de nível, pesca e as
+outras seguem como o jogo as escreveu.
+
+Vale pelo tempo: cada carta leva 1.660 ms e elas viram uma depois da outra, então um lote de 10 são
+cerca de 17 segundos. Em 500 Eevees, são 50 lotes — perto de catorze minutos só de animação.
+
 ### Como ela sabe que acabou o dinheiro
 
 Lendo o saldo antes de cada rodada. Se o saldo não paga nem um Eevee, ela para e diz onde parou.
